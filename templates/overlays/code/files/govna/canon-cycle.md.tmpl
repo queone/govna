@@ -1,17 +1,17 @@
 # Canon-cycle doctrine
 
-**Status note:** this document describes govna's intended canon-update workflow, built on `govna drift-scan` and `govna render-canon`. `render-canon` is implemented; `drift-scan` is not yet (see `plan.md`). Until `drift-scan` ships, canon updates propagate by an adopting agent reading govna's source directly (per `plan.md`'s Product Direction) rather than through the automated flow described below.
+This document describes govna's canon-update workflow, built on `govna drift-scan` and `govna render-canon`.
 
-govna initiates canon updates and ships them as overlay-tracked files; consumers will detect updates via `govna drift-scan` and adopt them per the workflow below, once that command exists. Both sections of this doc apply at every cycle.
+govna initiates canon updates and ships them as overlay-tracked files; consumers detect updates via `govna drift-scan` and adopt them per the workflow below. Both sections of this doc apply at every cycle.
 
 ## govna-side commitments
 
 What govna commits to when shipping canon updates:
 
 1. **Semver classification.** Canon updates ship under the semver rule canonized in `AGENTS.md` Base Rules. AGENTS.md is authoritative for the PATCH/MINOR criteria and examples; this commitment is the pointer.
-2. **Registry maintenance.** Format-defining and Expected-divergence registries are govna-maintained. Additions ride along in the same AC that introduces a new format-defining or per-repo-stub file. See `govna/drift-scan.md` `## Format-defining files` and `## Expected-divergence registry` (design intent, drift-scan not yet built).
+2. **Registry maintenance.** Format-defining and Expected-divergence registries are govna-maintained. Additions ride along in the same AC that introduces a new format-defining or per-repo-stub file. See `govna/drift-scan.md` `## Format-defining files` and `## Expected-divergence registry`.
 3. **Breaking-change protocol.** Removals or shape changes that would clobber a consumer's existing extensions ship as MINOR with a CHANGELOG note flagging the consumer-side migration cost.
-4. **drift-scan as the alerting surface.** drift-scan is intended as govna's tool for surfacing canon updates to consumers, once built. The canon-coherence precondition will run canon-only; consumers running drift-scan against a non-coherent canon would get a hard-fail report routed to the govna maintainer.
+4. **drift-scan as the alerting surface.** drift-scan is govna's tool for surfacing canon updates to consumers. The canon-coherence precondition runs canon-only; consumers running drift-scan against a non-coherent canon get a hard-fail report routed to the govna maintainer.
 
 ## Metadata and retired routing marker
 
@@ -22,7 +22,7 @@ What govna commits to when shipping canon updates:
 
 ## Consumer-side workflow
 
-What consumers will do when receiving canon updates, once `drift-scan` exists:
+What consumers do when receiving canon updates:
 
 1. **The whole-file rule.** When canon ships an update to a file the consumer tracks, the consumer adopts canon's content as a whole-file baseline rather than hand-merging only the changed hunks. Hand-merging produces a third local variant that persists as drift across every future sync, compounding merge cost; whole-file snapshot keeps each file at a clean canon baseline so future syncs are hunk-additive.
 2. **Application — pure-canon files.** Whole-file overwrite from canon. Typical examples: `govna/roles.md`, `govna/ac-template.md`, `govna/README.md`.
@@ -34,7 +34,7 @@ What consumers will do when receiving canon updates, once `drift-scan` exists:
 
 ## Canon-owned vs repo-owned handling
 
-- Apply these rules whenever drift-scan surfaces a canon-owned or repo-owned divergence (once drift-scan exists).
+- Apply these rules whenever drift-scan surfaces a canon-owned or repo-owned divergence.
 - Treat canon-owned violations as govna feedback.
 - Report canon-owned violations upstream to the govna maintainer.
 - Skip local patches of canon-owned text.
@@ -44,4 +44,4 @@ What consumers will do when receiving canon updates, once `drift-scan` exists:
 - Report the violation upstream.
 - Skip local rewrites of canon-owned text unless an explicit AC declares intentional divergence.
 
-Note: drift-scan is intended to provide the diff payload; the consumer agent's review is the classifier. Local patches of canon-owned text create drift. Inside the govna repo itself, both ownership paths apply: canon-owned template/source files need canon fixes; govna-local docs can be edited as local repo work.
+Note: drift-scan provides the diff payload; the consumer agent's review is the classifier. Local patches of canon-owned text create drift. Inside the govna repo itself, both ownership paths apply: canon-owned template/source files need canon fixes; govna-local docs can be edited as local repo work.

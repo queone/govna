@@ -10,7 +10,7 @@ Coding agents bring general habits — preambles, autonomous commits, scope cree
 
 The `### Session Entry` subsection of `AGENTS.md` is that signal. Six imperative bullets initialize an agent's behavior before substantive work begins: name the contract, define what counts as substantive, summarize the gate set, fix the conflict-resolution order, and require an observable readiness checkpoint. The subsection is short and austere by design; it does not restate the rules that live deeper in `AGENTS.md`, only the framing an agent needs at the moment of session entry.
 
-The value of session-entry framing is reducing drift, not eliminating it. Even capable models will miss edge cases. Drift-scan catches what slips through (see below) — once it exists; see the caveat under Drift-Scan Verification.
+The value of session-entry framing is reducing drift, not eliminating it. Even capable models will miss edge cases. Drift-scan catches what slips through (see below).
 
 ## LLM-Agent Behavior Assumptions
 
@@ -35,15 +35,15 @@ The checkpoint is not enforced automatically. It is a human-visible signal that 
 
 ## Drift-Scan Verification
 
-No prompt structure eliminates the need to verify. `govna drift-scan` is the intended enforcement loop — comparing a repo's current governance artifacts against what the templates would produce now, surfacing divergence the Director should resolve. **`govna drift-scan` does not exist yet** (see `plan.md`); until it ships, this section describes design intent, not current capability.
+No prompt structure eliminates the need to verify. `govna drift-scan` is the enforcement loop — comparing a repo's current governance artifacts against what the templates would produce now, surfacing divergence the Director should resolve.
 
-Drift-scan is intended to address three classes of slip the session-entry rule cannot cover by itself:
+Drift-scan addresses three classes of slip the session-entry rule cannot cover by itself:
 
 - **Canon-coherence violations** inside the govna source — where `AGENTS.md`, `templates/base/AGENTS.md`, and overlay templates have drifted apart.
 - **Adoption drift** in consumer repos — where the consumer's `AGENTS.md` has aged relative to current govna templates and the consumer agent should cherry-pick improvements.
 - **Local rule decay** — where the consumer added Project Rules and either contradicted base canon or let them rot.
 
-The session-entry rule shapes what an agent does within a session. Drift-scan, once built, keeps the across-session and across-repo picture honest. Both are needed.
+The session-entry rule shapes what an agent does within a session. Drift-scan keeps the across-session and across-repo picture honest. Both are needed.
 
 ## Canon Versus Local Flexibility
 
@@ -57,4 +57,4 @@ Inside that constraint, adopted repos retain meaningful room:
 
 The boundary is sharp: **canon is constrained; local is open**. An adopted agent must follow the canon contract; it can also follow whatever local rules the consumer has added, in the order specified by the conflict-resolution rule (user-in-scope > `AGENTS.md` > referenced docs > model defaults).
 
-If a consumer believes a base canon rule is wrong, the path is to propose a change to govna upstream — not to rewrite the rule locally and let drift-scan complain about it forever (once drift-scan exists to complain at all).
+If a consumer believes a base canon rule is wrong, the path is to propose a change to govna upstream — not to rewrite the rule locally and let drift-scan complain about it forever.

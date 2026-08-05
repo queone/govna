@@ -8,11 +8,11 @@ Provide a self-contained template repo for governed `CODE` and `DOC` repositorie
 
 This repo is early in its port from governa's mature Go implementation — most of the surface area described below is not built yet. Currently:
 
-- a CLI skeleton dispatches five governed subcommands (`apply`, `drift-scan`, `rm`, `deps`, `render-canon`), all still stubs printing "not yet implemented", plus a real `version`/`ver`/`--version` surface
+- a CLI skeleton dispatches five governed subcommands (`apply`, `drift-scan`, `rm`, `deps`, `render-canon`); `render-canon` and `drift-scan` are implemented, `apply`/`rm`/`deps` remain stubs printing "not yet implemented", plus a real `version`/`ver`/`--version` surface
 - `build.sh` + `tests/build_cli.sh` provide the canonical Rust-stack build/release tooling, adopted from governa's own canonical tooling and renamed to govna's identifiers
 - `govna/` carries the root governance canon docs (`ac-template.md`, `development-guidelines.md`, `drift-scan.md`, `roles.md`, `canon-cycle.md`, `code-stacks.md`, `development-cycle.md`, `operator-contract-rationale.md`, `build-release.md`, `README.md`) — largely still governa's real mature-implementation content (embedded FS, `cmd/governa/main.go`, specific Go function names), not yet rewritten to describe govna's own implementation; each gets rewritten when its corresponding feature actually ports, per `plan.md`
 
-None of the embedded-template machinery that will eventually back `render-canon`/`apply`/`drift-scan` exists yet.
+The embedded-template machinery backing `render-canon` and `drift-scan` is implemented; `apply` still has none.
 
 ## Current Platform
 
@@ -28,7 +28,7 @@ None of the embedded-template machinery that will eventually back `render-canon`
 
 ## Data And Control Flow
 
-A user runs `govna <subcommand>`. Today only `version`/`ver`/`--version` produce real output; `apply`/`drift-scan`/`rm`/`deps`/`render-canon` print "not yet implemented" to stderr and exit 1. There is no embedded template store, no filesystem-writing logic, and no drift/adoption state yet — all of that is future AC work (see `plan.md`).
+A user runs `govna <subcommand>`. `version`/`ver`/`--version`, `render-canon`, and `drift-scan` produce real output; `apply`/`rm`/`deps` print "not yet implemented" to stderr and exit 1. The embedded template store backs both `render-canon` and `drift-scan`; there is no `apply`-side bootstrap/filesystem-writing logic yet — that remains future AC work (see `plan.md`).
 
 ## AC Lifecycle Control Flow
 
@@ -38,7 +38,7 @@ Acceptance Criteria are non-runtime control artifacts for non-trivial changes. A
 
 ## Architecture Notes
 
-- generated repos (once `apply`/`render-canon` exist) must remain self-contained and must not depend on this repo at runtime
+- generated repos (once `apply` exists) must remain self-contained and must not depend on this repo at runtime
 - this repo treats itself as a governed `CODE` repo, but does not re-bootstrap itself through `apply` (governa's own convention for its source repo; moot for now regardless, since `apply` doesn't exist yet)
 - `build.sh` is the canonical build/release tool; implementation lives in shell, not Rust
 - ACs control non-trivial change flow but are not runtime architecture
