@@ -1,6 +1,6 @@
 [package]
 name = "govna"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
@@ -12,6 +12,18 @@ clap = { version = "4", features = ["derive"] }
 # Embeds templates/ into the binary at compile time (AC4). No extra features:
 # the whole folder is embedded unfiltered, so include/exclude patterns aren't needed.
 rust-embed = "8"
+# drift-scan (AC5): anchored multi-pattern matching for preserve markers,
+# name-reference extraction, and adoption-commit detection. std has no regex
+# support at all, so this isn't a "prefer stdlib" call.
+regex = "1"
+# drift-scan (AC5): --json report output. No JSON support in std.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# drift-scan (AC5): SHA-256 body-hash for the emission edit-detection marker
+# (AC5 In Scope names SHA-256 explicitly but omitted this dependency — an
+# implementation-only gap, not a scope change). Already a transitive
+# dependency via rust-embed; declaring it directly since drift-scan uses it too.
+sha2 = "0.11"
 
 [[bin]]
 name = "govna"

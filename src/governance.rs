@@ -113,22 +113,32 @@ pub fn render_canonical_files(cfg: &Config) -> Result<Vec<WriteOp>, String> {
 /// target). `govna/metadata.txt` wins when present; otherwise a fallback
 /// heuristic (Jekyll marker vs. a strong CODE manifest).
 pub fn detect_flavor(dir: &Path) -> Result<RepoType, String> {
+    Ok(detect_flavor_with_source(dir)?.0)
+}
+
+/// Same resolution as `detect_flavor`, also reporting which tier resolved
+/// it (`"metadata"` or `"fallback"`) — public surface for `drift-scan`
+/// (AC5), which reports the source in its emitted report header.
+pub fn detect_flavor_with_source(dir: &Path) -> Result<(RepoType, &'static str), String> {
     if let Some(metadata) = read_repo_metadata(dir)? {
         let repo_type = metadata
             .get("repo_type")
             .ok_or_else(|| "invalid govna/metadata.txt: missing repo_type".to_string())?;
         return match repo_type.as_str() {
-            "CODE" => Ok(RepoType::Code),
-            "DOC" => Ok(RepoType::Doc),
+            "CODE" => Ok((RepoType::Code, "metadata")),
+            "DOC" => Ok((RepoType::Doc, "metadata")),
             other => Err(format!(
                 "invalid govna/metadata.txt: unknown repo_type {other:?}"
             )),
         };
     }
-    detect_fallback_flavor(dir)
+    detect_fallback_flavor(dir).map(|t| (t, "fallback"))
 }
 
-fn read_repo_metadata(dir: &Path) -> Result<Option<BTreeMap<String, String>>, String> {
+/// Reads and parses `<dir>/govna/metadata.txt`. Public surface for
+/// `drift-scan` (AC5), which needs the full parsed record (govna_version,
+/// code_stack) for its report header, not just the repo_type `detect_flavor` uses.
+pub fn read_repo_metadata(dir: &Path) -> Result<Option<BTreeMap<String, String>>, String> {
     let path = dir.join("govna").join("metadata.txt");
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,

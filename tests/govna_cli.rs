@@ -5,14 +5,16 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
-fn version_flag_is_exact() {
-    let output = Command::new(env!("CARGO_BIN_EXE_govna"))
-        .arg("--version")
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    assert_eq!(output.stdout, b"govna v0.2.0\n");
-    assert!(output.stderr.is_empty());
+fn version_aliases_are_all_single_line_and_identical() {
+    for arg in ["--version", "version", "ver", "v"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_govna"))
+            .arg(arg)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.3.0\n", "arg={arg}");
+        assert!(output.stderr.is_empty(), "arg={arg}");
+    }
 }
 
 #[test]
@@ -504,6 +506,441 @@ fn root_has_no_self_referential_metadata() {
 // AT13 [Manual] — Director reads the rewritten govna/*.md root docs end-to-end and
 // confirms the prose is accurate for govna's actual implementation. No automated
 // coverage possible; tracked here as a marker only.
+
+// ── drift-scan (AC5) fixtures ───────────────────────────────────────────────
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A fresh `render-canon --flavor code --stack Rust` output, `git init`'d
+/// but with nothing committed yet — so `git log` is empty for every path,
+/// giving any subsequently-edited file a true zero-commit-history state
+/// (`ClearSync`-eligible). A single full commit would *not* achieve this:
+/// every file in that commit already has one entry in its own history.
+fn rendered_code_fixture_no_commit() -> PathBuf {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["render-canon", "--flavor", "code", "--stack", "Rust", "."])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    git(&dir, &["init", "-q"]);
+    dir
+}
+
+/// Same as `rendered_code_fixture_no_commit`, plus one initial commit of
+/// the full render — the baseline most ATs build on.
+fn rendered_code_fixture() -> PathBuf {
+    let dir = rendered_code_fixture_no_commit();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "AC0: initial fixture render"]);
+    dir
+}
+
+fn drift_scan_json(dir: &Path) -> serde_json::Value {
+    let out = govna()
+        .args(["drift-scan", "--json"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
+        panic!(
+            "invalid JSON: {e}\n{}",
+            String::from_utf8_lossy(&out.stdout)
+        )
+    })
+}
+
+fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a serde_json::Value> {
+    report["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["relpath"] == relpath)
+}
+
+// AT1: drift-scan refuses to run against govna's own source checkout —
+// proves refuse_govna_source runs before require_govna_adopted, even though
+// this repo would otherwise pass the positive adoption check (it has
+// AGENTS.md + govna/ac-template.md). Safe against the real repo: the
+// self-check is the very first thing run_inner does, before any writes.
+#[test]
+fn drift_scan_refuses_govna_source() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = govna()
+        .arg("drift-scan")
+        .current_dir(repo_root)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
+}
+
+// AT2: no AGENTS.md at all fails require_govna_adopted's exact wording.
+#[test]
+fn drift_scan_requires_agents_md() {
+    let dir = new_fixture();
+    git(&dir, &["init", "-q"]);
+    let out = govna()
+        .arg("drift-scan")
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("is not a govna-adopted repo"));
+}
+
+// AT3: passes require_govna_adopted (AGENTS.md + govna/ac-template.md) but
+// has no .git/ — fails on the git-worktree requirement before classification.
+#[test]
+fn drift_scan_requires_git_worktree() {
+    let dir = new_fixture();
+    fs::write(dir.join("AGENTS.md"), "# AGENTS.md\n").unwrap();
+    fs::create_dir_all(dir.join("govna")).unwrap();
+    fs::write(dir.join("govna/ac-template.md"), "template\n").unwrap();
+    let out = govna()
+        .arg("drift-scan")
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not a git worktree"));
+}
+
+// AT4: fresh, unmodified fixture — everything Match (or, byte-equal right
+// after a fresh render, plan.md/arch.md also Match; they only classify
+// ExpectedDivergence once actually customized), zero sync/migration/routing
+// entries, "No sync items." in the emitted stub.
+#[test]
+fn drift_scan_fresh_fixture_all_match() {
+    let dir = rendered_code_fixture();
+    let report = drift_scan_json(&dir);
+    for f in report["files"].as_array().unwrap() {
+        assert_eq!(f["classification"], "match", "{f}");
+    }
+    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
+    let stub = read(&stub_path);
+    assert!(stub.contains("No sync items."), "{stub}");
+}
+
+// AT5: a committed edit to a non-format-defining file with git history
+// classifies Ambiguity, routed to Routing Decisions (not silently synced).
+#[test]
+fn drift_scan_ambiguity_routes_to_review() {
+    let dir = rendered_code_fixture();
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{}\nextra line\n", read(&dir.join("govna/roles.md"))),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "edit roles"]);
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "govna/roles.md").unwrap();
+    assert_eq!(fr["classification"], "ambiguity");
+    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
+    let stub = read(&stub_path);
+    assert!(stub.contains("### Routing Decisions"));
+    assert!(stub.contains("govna/roles.md"));
+}
+
+// AT6: format-defining override. AGENTS.md edited above its canon-zone
+// boundary, with committed history (raw classification Ambiguity — a
+// zero-history ClearSync raw classification would ALSO force to sync, but
+// the "Format-defining file routing" note only fires when the override
+// actually changes the outcome, i.e. raw != ClearSync/MissingTarget; this
+// scenario exercises that real branch, not a vacuous one).
+#[test]
+fn drift_scan_format_defining_forces_sync() {
+    let dir = rendered_code_fixture();
+    let agents = read(&dir.join("AGENTS.md"));
+    let edited = agents.replacen(
+        "## Governed Sections",
+        "## Governed Sections\nextra canon-zone line",
+        1,
+    );
+    fs::write(dir.join("AGENTS.md"), edited).unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "edit AGENTS.md canon zone"]);
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "AGENTS.md").unwrap();
+    assert_eq!(fr["classification"], "ambiguity");
+    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
+    let stub = read(&stub_path);
+    assert!(stub.contains("### Format-defining file routing"), "{stub}");
+    assert!(
+        stub.contains("`AGENTS.md` — raw classification: ambiguity; forced to sync."),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("- `AGENTS.md` — ambiguity (format-defining)"),
+        "{stub}"
+    );
+}
+
+// AT7: a preserve marker in CHANGELOG.md suppresses sync — classifies
+// Preserve, routed to Out Of Scope with the marker citation shown.
+#[test]
+fn drift_scan_preserve_marker_routes_to_out_of_scope() {
+    let dir = rendered_code_fixture();
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{}\nextra line\n", read(&dir.join("govna/roles.md"))),
+    )
+    .unwrap();
+    let changelog = read(&dir.join("CHANGELOG.md"));
+    fs::write(
+        dir.join("CHANGELOG.md"),
+        format!("{changelog}\n| 0.0.1 | preserve govna/roles.md |\n"),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "preserve marker"]);
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "govna/roles.md").unwrap();
+    assert_eq!(fr["classification"], "preserve");
+    assert_eq!(fr["preserve_markers"][0], "preserve govna/roles.md");
+    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
+    let stub = read(&stub_path);
+    assert!(stub.contains("## Out Of Scope"));
+    assert!(stub.contains("preserve govna/roles.md"));
+}
+
+// AT8: mixed-content boundary. An edit strictly below `## Project Practices`
+// (the repo-owned tail) classifies Match — canon-zone byte-equal, not a
+// false divergence.
+#[test]
+fn drift_scan_mixed_content_below_boundary_matches() {
+    let dir = rendered_code_fixture();
+    let guidelines = read(&dir.join("govna/development-guidelines.md"));
+    fs::write(
+        dir.join("govna/development-guidelines.md"),
+        format!("{guidelines}\nextra local note\n"),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "edit below boundary"]);
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "govna/development-guidelines.md").unwrap();
+    assert_eq!(fr["classification"], "match", "{fr}");
+}
+
+// AT9: re-running immediately (unedited stub) reuses the same AC number;
+// editing the stub's body then re-running fails with the edit-detection
+// guard's exact wording.
+#[test]
+fn drift_scan_idempotent_reuse_and_edit_detection_guard() {
+    let dir = rendered_code_fixture();
+    let report1 = drift_scan_json(&dir);
+    let stub_rel = report1["emitted"]["ac_stub"].as_str().unwrap().to_string();
+    let report2 = drift_scan_json(&dir);
+    assert_eq!(
+        report1["emitted"]["ac_stub"], report2["emitted"]["ac_stub"],
+        "AC number should be reused"
+    );
+
+    let stub_path = dir.join(&stub_rel);
+    let tampered = format!("{}\ntampered\n", read(&stub_path));
+    fs::write(&stub_path, tampered).unwrap();
+    let out = govna()
+        .arg("drift-scan")
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains("has been edited since last drift-scan emission")
+    );
+}
+
+// AT10: cross-flavor orphan detection. A repo rendered DOC then re-rendered
+// CODE over the same directory leaves DOC-only files orphaned; scanning
+// with --flavor code classifies all of them target-has-no-canon.
+#[test]
+fn drift_scan_cross_flavor_orphans() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["render-canon", "--flavor", "doc", "."])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = govna()
+        .args(["render-canon", "--flavor", "code", "--stack", "Rust", "."])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    git(&dir, &["init", "-q"]);
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "doc-then-code fixture"]);
+
+    let report = drift_scan_json(&dir);
+    for orphan in [
+        "govna/editing-cycle.md",
+        "govna/editing-guidelines.md",
+        "govna/release.md",
+    ] {
+        let fr =
+            file_result(&report, orphan).unwrap_or_else(|| panic!("{orphan} missing from report"));
+        assert_eq!(
+            fr["classification"], "target-has-no-canon",
+            "{orphan}: {fr}"
+        );
+    }
+}
+
+// AT11: name-reference body scan. A target-only file (no canon counterpart
+// in either flavor) referenced via a backticked path from a divergent,
+// git-tracked file classifies target-has-no-canon via the name-reference
+// branch, not silently dropped.
+#[test]
+fn drift_scan_name_referenced_target_only_file() {
+    let dir = rendered_code_fixture();
+    fs::write(dir.join("scripts.sh"), "custom helper script\n").unwrap();
+    let roles = read(&dir.join("govna/roles.md"));
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{roles}\nSee `../scripts.sh` for details.\n"),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(
+        &dir,
+        &["commit", "-q", "-m", "add referenced target-only file"],
+    );
+
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "scripts.sh")
+        .unwrap_or_else(|| panic!("scripts.sh missing from report: {report}"));
+    assert_eq!(fr["classification"], "target-has-no-canon");
+    assert!(
+        fr["canon_ref"]
+            .as_str()
+            .unwrap()
+            .contains("name-referenced")
+    );
+}
+
+// AT12: --json output is valid JSON, deserializes to the expected shape,
+// and canon_content never appears in it.
+#[test]
+fn drift_scan_json_output_shape() {
+    let dir = rendered_code_fixture();
+    let report = drift_scan_json(&dir);
+    assert!(report["header"]["canon_sha"].is_string());
+    assert!(report["files"].is_array());
+    assert!(!report["files"].as_array().unwrap().is_empty());
+    let raw = serde_json::to_string(&report).unwrap();
+    assert!(!raw.contains("canon_content"), "{raw}");
+}
+
+// AT13: `drift-scan extra-arg` fails with the exact "no positional
+// arguments accepted" wording.
+#[test]
+fn drift_scan_rejects_positional_args() {
+    let dir = rendered_code_fixture();
+    let out = govna()
+        .args(["drift-scan", "extra-arg"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("no positional arguments accepted"));
+}
+
+// AT14 [Manual] — Director runs drift-scan against a real, organically-
+// drifted consumer repo and confirms the emitted AC stub reads sensibly
+// end-to-end. No automated fixture substitutes for a genuinely messy real
+// repo; tracked here as a marker only.
+
+// CLI surface beyond the ATs above (closure-audit gap, not a named AT):
+// --repo-name overrides the basename-of-cwd default.
+#[test]
+fn drift_scan_repo_name_override() {
+    let dir = rendered_code_fixture();
+    let out = govna()
+        .args([
+            "drift-scan",
+            "--json",
+            "--repo-name",
+            "totally-different-name",
+        ])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["header"]["repo_name"], "totally-different-name");
+}
+
+// CLI surface beyond the ATs above (closure-audit gap, not a named AT):
+// --diff-lines truncates a long diff and reports the omitted-line count.
+#[test]
+fn drift_scan_diff_lines_truncates() {
+    let dir = rendered_code_fixture();
+    let long_addition: String = (0..50).map(|i| format!("extra line {i}\n")).collect();
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{}\n{long_addition}", read(&dir.join("govna/roles.md"))),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "long edit"]);
+
+    let out = govna()
+        .args(["drift-scan", "--json", "--diff-lines", "5"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let fr = file_result(&report, "govna/roles.md").unwrap();
+    let diff = fr["diff"].as_str().unwrap();
+    assert!(diff.contains("more lines truncated"), "{diff}");
+    assert!(
+        diff.split('\n').count() < 55,
+        "expected truncation, got {} lines",
+        diff.split('\n').count()
+    );
+}
 
 // Flavor resolution beyond the ATs above (closure-audit gap, not a named AT):
 // govna/metadata.txt takes priority over manifest inference when present.

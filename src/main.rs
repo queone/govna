@@ -1,12 +1,15 @@
+mod driftscan;
+mod emission;
 mod governance;
 mod templates;
 
 use governance::{Config, RepoType};
 use std::env;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const PROGRAM_VERSION: &str = "0.2.0";
+const PROGRAM_VERSION: &str = "0.3.0";
 const SOURCE_REPO: &str = "github.com/queone/govna";
 
 fn main() -> ExitCode {
@@ -18,18 +21,15 @@ fn main() -> ExitCode {
     };
 
     match subcmd.as_str() {
-        // Required by build.sh's compiled-utility validation: exactly
+        // Also required by build.sh's compiled-utility validation: exactly
         // "govna v<version>" plus a newline on stdout, nothing on stderr.
-        "--version" => {
+        "--version" | "version" | "ver" | "v" => {
             println!("govna v{PROGRAM_VERSION}");
             ExitCode::SUCCESS
         }
-        "version" | "ver" => {
-            println!("govna v{PROGRAM_VERSION}\nsource: {SOURCE_REPO}");
-            ExitCode::SUCCESS
-        }
         "render-canon" => run_render_canon(&args[2..]),
-        "apply" | "drift-scan" | "rm" | "deps" => {
+        "drift-scan" => driftscan::run_cli(&args[2..]),
+        "apply" | "rm" | "deps" => {
             eprintln!("govna {subcmd}: not yet implemented");
             ExitCode::from(1)
         }
@@ -45,33 +45,136 @@ fn main() -> ExitCode {
     }
 }
 
+// ── color ────────────────────────────────────────────────────────────────
+
+// Matches governa-color's gating exactly: enabled (NO_COLOR unset, TERM !=
+// dumb, stderr a TTY) AND 256-color capable (COLORTERM truecolor/24bit, or
+// TERM containing 256color) — see ~/code/governa-color/color.go's `wrap`.
+fn color_enabled() -> bool {
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+    if std::env::var("TERM").map(|t| t == "dumb").unwrap_or(false) {
+        return false;
+    }
+    if !std::io::stderr().is_terminal() {
+        return false;
+    }
+    matches!(
+        std::env::var("COLORTERM").as_deref(),
+        Ok("truecolor") | Ok("24bit")
+    ) || std::env::var("TERM")
+        .map(|t| t.contains("256color"))
+        .unwrap_or(false)
+}
+
+fn colorize(code: &str, s: &str) -> String {
+    if color_enabled() {
+        format!("\x1b[{code}m{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
+}
+
+// governa-color Bold(Whi5(...)): 256-color white (231), bold.
+fn bold_white(s: &str) -> String {
+    if color_enabled() {
+        format!("\x1b[1m\x1b[38;5;231m{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
+}
+
+// governa-color Gra5: 256-color index 245.
+fn dark_gray(s: &str) -> String {
+    colorize("38;5;245", s)
+}
+
+/// 2-space indent, description aligned at column 38 — matches
+/// `govna/development-guidelines.md`'s CLI Usage Formatting convention and
+/// build.sh's own `_emit_usage_line`.
+fn usage_line(flag: &str, desc: &str) -> String {
+    let prefix_len = 2 + flag.chars().count();
+    let pad = if prefix_len < 38 { 38 - prefix_len } else { 2 };
+    format!("  {flag}{}{desc}", " ".repeat(pad))
+}
+
 fn print_usage() {
-    eprintln!("govna v{PROGRAM_VERSION}");
-    eprintln!("Repo governance templates — {SOURCE_REPO}");
+    eprintln!("{} v{PROGRAM_VERSION}", bold_white("govna"));
+    eprintln!(
+        "{}",
+        dark_gray(&format!("Repo governance templates — {SOURCE_REPO}"))
+    );
     eprintln!();
-    eprintln!("Usage: govna <command> [options]");
+    eprintln!("{} govna <command> [options]", bold_white("Usage:"));
     eprintln!();
-    eprintln!("  apply         apply governance template to a repo (not yet implemented)");
-    eprintln!("  drift-scan    scan an adopted repo against govna canon (not yet implemented)");
-    eprintln!("  rm            emit cleanup AC for removing govna canon (not yet implemented)");
-    eprintln!("  deps          report direct dependency freshness (not yet implemented)");
-    eprintln!("  render-canon  render flavor-specific canon files into a target directory");
-    eprintln!("  --version     print version");
-    eprintln!("  version, ver  print version and source info");
-    eprintln!("  help, h       show this help");
+    eprintln!(
+        "{}",
+        usage_line(
+            "apply",
+            "apply governance template to a repo (not yet implemented)"
+        )
+    );
+    eprintln!(
+        "{}",
+        usage_line("drift-scan", "scan an adopted repo against govna canon")
+    );
+    eprintln!(
+        "{}",
+        usage_line(
+            "rm",
+            "emit cleanup AC for removing govna canon (not yet implemented)"
+        )
+    );
+    eprintln!(
+        "{}",
+        usage_line(
+            "deps",
+            "report direct dependency freshness (not yet implemented)"
+        )
+    );
+    eprintln!(
+        "{}",
+        usage_line(
+            "render-canon",
+            "render flavor-specific canon files into a target directory"
+        )
+    );
+    eprintln!(
+        "{}",
+        usage_line("version, ver, v, --version", "print version")
+    );
+    eprintln!("{}", usage_line("help, h", "show this help"));
+    eprintln!();
+    eprintln!("Run 'govna <command> -h' for command-specific flags.");
 }
 
 fn print_render_canon_usage() {
     eprintln!(
-        "Usage: govna render-canon [--flavor code|doc] [--stack <name>] [--module-path <path>] <target>"
+        "{} govna render-canon [--flavor code|doc] [--stack <name>] [--module-path <path>] <target>",
+        bold_white("Usage:")
     );
     eprintln!();
-    eprintln!("  -f, --flavor code|doc    select consumer flavor (default: inferred from cwd)");
     eprintln!(
-        "  -s, --stack <name>       select CODE stack (default: inferred from cwd manifests)"
+        "{}",
+        usage_line(
+            "-f, --flavor code|doc",
+            "select consumer flavor (default: inferred from cwd)"
+        )
     );
     eprintln!(
-        "  -m, --module-path <path> module path for Go CODE canon (default: read from cwd's go.mod)"
+        "{}",
+        usage_line(
+            "-s, --stack <name>",
+            "select CODE stack (default: inferred from cwd manifests)"
+        )
+    );
+    eprintln!(
+        "{}",
+        usage_line(
+            "-m, --module-path <path>",
+            "module path for Go CODE canon (default: read from cwd's go.mod)"
+        )
     );
     eprintln!();
     eprintln!("Render canon files into <target>/ in flat repo-relative layout. Canon files only —");

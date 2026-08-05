@@ -6,10 +6,10 @@ A gradual port of [governa](https://github.com/queone/governa) from Go to Rust. 
 
 | Command | Status |
 | --- | --- |
-| `version`, `ver` | implemented |
+| `version`, `ver`, `v`, `--version` | implemented |
 | `-h`, `--help`, `-?`, `help`, `h` | implemented |
 | `apply` | not yet implemented |
-| `drift-scan` | not yet implemented |
+| `drift-scan` | implemented |
 | `rm` | not yet implemented |
 | `deps` | not yet implemented |
 | `render-canon` | implemented |
