@@ -1,14 +1,17 @@
 [package]
 name = "govna"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-# Reserved for future per-subcommand flag parsing (e.g. render-canon's
-# --flavor/--stack/--module-path). AC2's top-level dispatch is hand-rolled
-# against std::env::args() for exact stream/exit-code parity with governa's
-# Go CLI, so clap isn't invoked yet.
+# Reserved for a future subcommand whose flag surface doesn't need governa's
+# exact stream/exit-code parity. render-canon (AC4) stayed hand-rolled against
+# std::env::args(), matching AC2's top-level dispatch, since AT8 needs exact
+# help-text control that clap's own conventions would fight.
 clap = { version = "4", features = ["derive"] }
+# Embeds templates/ into the binary at compile time (AC4). No extra features:
+# the whole folder is embedded unfiltered, so include/exclude patterns aren't needed.
+rust-embed = "8"
 
 [[bin]]
 name = "govna"

@@ -12,7 +12,7 @@ A gradual port of [governa](https://github.com/queone/governa) from Go to Rust. 
 | `drift-scan` | not yet implemented |
 | `rm` | not yet implemented |
 | `deps` | not yet implemented |
-| `render-canon` | not yet implemented |
+| `render-canon` | implemented |
 
 ## Build
 

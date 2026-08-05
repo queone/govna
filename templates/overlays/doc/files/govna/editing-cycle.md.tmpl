@@ -1,4 +1,4 @@
-# Development Cycle
+# Editing Cycle
 
 This repo uses an acceptance-criteria-first workflow.
 
@@ -21,7 +21,6 @@ This repo uses an acceptance-criteria-first workflow.
 
 - `AGENTS.md`
 - `README.md`
-- `arch.md`
 - `plan.md`
 - `govna/`
 
@@ -31,14 +30,13 @@ This repo uses an acceptance-criteria-first workflow.
 2. **Draft an acceptance-criteria doc.** Start from `govna/ac-template.md` (see preamble for the monotonic-numbering rule); save as `govna/ac<N>-<slug>.md`.
 3. **Audit the draft.** Challenge the AC, repository behavior, referenced documentation, scope, edge cases, omissions, and testability without editing the AC or repository. Pause for explicit Director advancement to Refine.
 4. **Refine the AC.** Resolve Audit findings and settle Director decisions by editing the AC. Pause when a decision remains unresolved; treat the AC as implementation-ready only after explicit Director confirmation to Implement.
-5. **Implement the settled scope.** Implement code, tests, and direct doc updates together; run validation, adversarial verification, defect correction, and the closure audit. Pause for Ratify.
+5. **Implement the settled scope.** Implement content, structure, and direct doc updates together; run validation, adversarial verification, defect correction, and the closure audit. Pause for Ratify.
 6. **Ratify the delivered AC.** The Director reviews and accepts the delivered work; return contract or scope feedback to Refine and implementation-only feedback to Implement.
-7. **Perform Package only when explicitly requested.** Accept standalone `Package`, `package`, `pack`, or `prep` only after Ratify acceptance; follow `govna/build-release.md` for the existing checklist and implementation.
+7. **Perform Package only when explicitly requested.** Accept standalone `Package`, `package`, `pack`, or `prep` only after Ratify acceptance; follow `govna/release.md` for the existing checklist and implementation.
 
 ## Notes
 
 - keep roadmap decisions in `plan.md`
-- keep architecture changes in `arch.md`
 - keep repo-level governance in `AGENTS.md`
 - record follow-on ideas in `plan.md` under `Ideas To Explore` with an `IE<N>:` prefix (pre-rubric idea or pointer to a drafted AC stub)
 - remove IE entries when the underlying idea is closed — rejected, retired, or (for AC-pointers) the pointed-to AC has shipped

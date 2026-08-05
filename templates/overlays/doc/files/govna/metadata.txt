@@ -1,0 +1,3 @@
+schema_version = 1
+govna_version = {{GOVNA_VERSION}}
+repo_type = DOC
