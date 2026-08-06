@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.5.2\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.6.0\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -1311,7 +1311,8 @@ fn rm_stub(dir: &Path) -> String {
 }
 
 // AT1: fresh unmodified fixture — pure-canon files list as `delete file`,
-// CLAUDE.md lists as `delete symlink`, both stub and diffs files written.
+// CLAUDE.md lists as `delete symlink`. No companion diffs file (AC10 Part C
+// — rm no longer emits one).
 #[test]
 fn rm_fresh_fixture_pure_canon_deletes() {
     let dir = rendered_code_fixture();
@@ -1323,9 +1324,9 @@ fn rm_fresh_fixture_pure_canon_deletes() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("ac1-govna-rm-"), "{stdout}");
-    assert!(stdout.contains("-diffs.md"), "{stdout}");
+    assert!(!stdout.contains("-diffs.md"), "{stdout}");
     assert!(dir.join("govna/ac1-govna-rm-v0.1.0.md").is_file());
-    assert!(dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md").is_file());
+    assert!(!dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md").exists());
 
     let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
     assert!(
@@ -1406,8 +1407,9 @@ fn rm_target_only_file_kept() {
     );
 }
 
-// AT6: an edited non-hybrid canon file routes to Review as ambiguity with a
-// full unified diff, not a silent delete.
+// AT6: an edited non-hybrid canon file routes to Review as ambiguity, with
+// an on-demand comparison recipe embedded in the bullet (AC10 Part C — no
+// pre-computed diff, no companion diffs file).
 #[test]
 fn rm_edited_canon_file_routes_to_ambiguity() {
     let dir = rendered_code_fixture();
@@ -1430,9 +1432,13 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
         stub.contains("`govna/roles.md` is consumer-edited canon file"),
         "{stub}"
     );
-    let diffs = read(&dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md"));
-    assert!(diffs.contains("## `govna/roles.md`"), "{diffs}");
-    assert!(diffs.contains("extra line"), "{diffs}");
+    assert!(
+        stub.contains(
+            "Compare with: `govna render-canon --flavor code --stack Rust <scratch> && diff -ru <scratch>/govna/roles.md govna/roles.md`"
+        ),
+        "{stub}"
+    );
+    assert!(!dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md").exists());
 }
 
 // AT7: re-running unedited reuses the same AC number for both files;
@@ -1530,4 +1536,414 @@ fn rm_rejects_positional_args() {
         .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("no positional arguments accepted"));
+}
+
+// ── migrate-from-governa (AC10 Part A) + hunk-merge (AC10 Part B) ──────────
+
+fn governa_metadata_fixture(code_stack: Option<&str>) -> PathBuf {
+    let dir = new_fixture();
+    fs::create_dir_all(dir.join("governa")).unwrap();
+    let mut content = "schema_version = 1\ngovna_version = v0.1.0\nrepo_type = CODE\n".to_string();
+    if let Some(stack) = code_stack {
+        content.push_str(&format!("code_stack = {stack}\n"));
+    }
+    fs::write(dir.join("governa/metadata.txt"), content).unwrap();
+    dir
+}
+
+/// Writes an executable `governa` stub script into `dir` (prepend `dir` to
+/// `PATH` to make it discoverable). `render_canon_ok`: when true, `render-canon`
+/// writes `governa/roles.md` with `roles_content` into the target and exits 0;
+/// when false, `--version` still succeeds but `render-canon` exits 1
+/// (simulating an unsupported stack or bad-flag failure).
+fn fake_governa_binary(dir: &Path, render_canon_ok: bool, roles_content: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let script_path = dir.join("governa");
+    // Matches governa's real CLI: `version` is a subcommand, not a `--version`
+    // flag — `governa --version` actually exits non-zero on the real binary.
+    let script = if render_canon_ok {
+        format!(
+            "#!/bin/bash\nif [ \"$1\" = \"version\" ]; then\n  echo 'governa v0.160.2'\n  exit 0\nfi\nif [ \"$1\" = \"render-canon\" ]; then\n  target=\"${{@: -1}}\"\n  mkdir -p \"$target/governa\"\n  printf '%s' '{roles_content}' > \"$target/governa/roles.md\"\n  exit 0\nfi\nexit 1\n"
+        )
+    } else {
+        "#!/bin/bash\nif [ \"$1\" = \"version\" ]; then\n  echo 'governa v0.160.2'\n  exit 0\nfi\nexit 1\n"
+            .to_string()
+    };
+    fs::write(&script_path, script).unwrap();
+    let mut perms = fs::metadata(&script_path).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&script_path, perms).unwrap();
+}
+
+fn path_with(prefix: &Path) -> String {
+    format!(
+        "{}:{}",
+        prefix.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+/// The real PATH with any directory containing a `governa` binary filtered
+/// out — used for crude-tier tests. A plain empty-directory PATH override
+/// would also hide `git` (and every other tool `govna` shells out to), so
+/// this only removes what's specifically being tested as absent.
+fn path_without_governa() -> String {
+    let real_path = std::env::var_os("PATH").unwrap_or_default();
+    let filtered: Vec<_> = std::env::split_paths(&real_path)
+        .filter(|p| !p.join("governa").exists())
+        .collect();
+    std::env::join_paths(filtered)
+        .unwrap()
+        .to_string_lossy()
+        .into_owned()
+}
+
+// AT1: governa/metadata.txt carries repo_type/code_stack; apply (no flags,
+// no manifest file) resolves CODE/Rust from it instead of failing to infer.
+#[test]
+fn apply_migration_carries_over_legacy_metadata() {
+    let dir = governa_metadata_fixture(Some("Rust"));
+    let out = govna().arg("apply").current_dir(&dir).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    assert!(metadata.contains("repo_type = CODE\n"), "{metadata}");
+    assert!(metadata.contains("code_stack = Rust\n"), "{metadata}");
+}
+
+// AT2: precise tier. A fake `governa` binary on PATH renders roles.md;
+// byte-identical target file classifies confirmed-safe, a differing one
+// classifies needs-review with the exact on-demand recipe, not a diff.
+#[test]
+fn apply_migration_precise_tier_classifies_via_fake_governa() {
+    let stub_dir = new_fixture();
+    fake_governa_binary(&stub_dir, true, "stock roles content\n");
+
+    let dir = governa_metadata_fixture(Some("Rust"));
+    fs::write(dir.join("governa/roles.md"), "stock roles content\n").unwrap();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_with(&stub_dir))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let ac = read(&dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    assert!(
+        ac.contains("- `governa/roles.md` — confirmed safe; confirmed byte-identical"),
+        "{ac}"
+    );
+
+    let dir2 = governa_metadata_fixture(Some("Rust"));
+    fs::write(dir2.join("governa/roles.md"), "edited roles content\n").unwrap();
+    let out2 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir2)
+        .env("PATH", path_with(&stub_dir))
+        .output()
+        .unwrap();
+    assert!(
+        out2.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
+    let ac2 = read(&dir2.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    assert!(
+        ac2.contains(
+            "Compare with: `governa render-canon --flavor code --stack Rust <scratch> && diff -ru <scratch>/governa/roles.md governa/roles.md`"
+        ),
+        "{ac2}"
+    );
+}
+
+// AT3: crude tier. No `governa` binary on PATH at all: governa/roles.md
+// (has a govna/ equivalent, since apply just wrote one) flags "likely
+// superseded"; a file with no govna equivalent flags "no equivalent".
+#[test]
+fn apply_migration_crude_tier_fallback_no_governa_binary() {
+    let dir = governa_metadata_fixture(Some("Rust"));
+    fs::write(dir.join("governa/roles.md"), "old roles\n").unwrap();
+    fs::write(dir.join("governa/ac3-custom-thing.md"), "custom\n").unwrap();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_without_governa())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let ac = read(&dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    assert!(
+        ac.contains("- `governa/roles.md` — likely superseded; likely superseded by `govna/roles.md`; compare manually before removing."),
+        "{ac}"
+    );
+    assert!(
+        ac.contains(
+            "- `governa/ac3-custom-thing.md` — keep; no govna equivalent; may be repo-owned content."
+        ),
+        "{ac}"
+    );
+}
+
+// AT4: a `governa` binary that succeeds on --version but fails on
+// render-canon (e.g. unsupported stack) falls back to the crude path —
+// apply does not error or crash.
+#[test]
+fn apply_migration_falls_back_when_render_canon_fails() {
+    let stub_dir = new_fixture();
+    fake_governa_binary(&stub_dir, false, "");
+
+    let dir = governa_metadata_fixture(Some("Rust"));
+    fs::write(dir.join("governa/roles.md"), "old roles\n").unwrap();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_with(&stub_dir))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let ac = read(&dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    assert!(ac.contains("likely superseded by `govna/roles.md`"), "{ac}");
+}
+
+// AT5: re-running apply unedited reuses the same migration-AC number;
+// editing it and re-running fails with the edit-detection guard's wording.
+#[test]
+fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
+    let dir = governa_metadata_fixture(Some("Rust"));
+    fs::write(dir.join("governa/roles.md"), "old roles\n").unwrap();
+    let out1 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_without_governa())
+        .output()
+        .unwrap();
+    assert!(out1.status.success());
+    assert!(
+        dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md")
+            .is_file()
+    );
+
+    let out2 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_without_governa())
+        .output()
+        .unwrap();
+    assert!(out2.status.success());
+    assert!(
+        !dir.join("govna/ac3-govna-migrate-from-governa-v0.1.0.md")
+            .exists(),
+        "should reuse ac2, not allocate ac3"
+    );
+
+    let ac_path = dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md");
+    let tampered = format!("{}\ntampered\n", read(&ac_path));
+    fs::write(&ac_path, tampered).unwrap();
+    let out3 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_without_governa())
+        .output()
+        .unwrap();
+    assert!(!out3.status.success());
+    assert!(String::from_utf8_lossy(&out3.stderr).contains("has been edited since last emission"));
+}
+
+fn count_migration_acs(dir: &Path) -> usize {
+    fs::read_dir(dir.join("govna"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .contains("migrate-from-governa")
+        })
+        .count()
+}
+
+// AT6: no governa/ directory at all — no migration AC emitted, behavior
+// identical to a plain apply. Self-terminating: once governa/ is removed,
+// re-running apply emits no further migration AC. Counts migration-AC
+// files rather than asserting specific numbers, since each re-`apply` also
+// allocates a new (non-reused) adoption AC, shifting subsequent numbers.
+#[test]
+fn apply_migration_noop_without_governa_dir_and_self_terminates() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(count_migration_acs(&dir), 0);
+
+    fs::create_dir_all(dir.join("governa")).unwrap();
+    fs::write(
+        dir.join("governa/metadata.txt"),
+        "schema_version = 1\ngovna_version = v0.1.0\nrepo_type = CODE\ncode_stack = Rust\n",
+    )
+    .unwrap();
+    let out2 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out2.status.success());
+    assert_eq!(count_migration_acs(&dir), 1);
+
+    fs::remove_dir_all(dir.join("governa")).unwrap();
+    let out3 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out3.status.success());
+    assert_eq!(
+        count_migration_acs(&dir),
+        1,
+        "no new migration AC once governa/ is gone"
+    );
+}
+
+// AT7: Part B — existing-mode apply on a repo whose AGENTS.md has extra
+// bullets under ## Project Rules preserves them byte-for-byte; everything
+// above the boundary matches fresh canon.
+#[test]
+fn apply_hunk_merges_agents_md_preserving_extra_bullets() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let original = read(&dir.join("AGENTS.md"));
+    let customized = format!("{original}- A repo-specific extra rule.\n");
+    fs::write(dir.join("AGENTS.md"), &customized).unwrap();
+
+    let out2 = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out2.status.success());
+    let merged = read(&dir.join("AGENTS.md"));
+    assert!(
+        merged.contains("- A repo-specific extra rule.\n"),
+        "{merged}"
+    );
+    let boundary_pos = merged.find("## Project Rules").unwrap();
+    assert!(
+        merged[..boundary_pos].contains("## Governed Sections"),
+        "{merged}"
+    );
+}
+
+// AT8: Part B — existing-mode apply on an unmodified repo is a no-op merge:
+// output byte-identical to a fresh write.
+#[test]
+fn apply_hunk_merge_idempotent_when_unmodified() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let first = read(&dir.join("AGENTS.md"));
+
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let second = read(&dir.join("AGENTS.md"));
+    assert_eq!(first, second);
+}
+
+// AT9: Part B — existing-mode apply leaves a customized README.md/CHANGELOG.md
+// completely untouched (no boundary to merge on for either).
+#[test]
+fn apply_skips_readme_and_changelog_when_existing() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    fs::write(dir.join("README.md"), "my custom readme\n").unwrap();
+    fs::write(dir.join("CHANGELOG.md"), "my custom changelog\n").unwrap();
+
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(read(&dir.join("README.md")), "my custom readme\n");
+    assert_eq!(read(&dir.join("CHANGELOG.md")), "my custom changelog\n");
+}
+
+// AT10: Part B — new-mode apply (fresh empty dir) is unaffected: writes
+// AGENTS.md/README.md/CHANGELOG.md/development-guidelines.md fresh.
+#[test]
+fn apply_new_mode_unaffected_by_hunk_merge_logic() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(dir.join("AGENTS.md").is_file());
+    assert!(dir.join("README.md").is_file());
+    assert!(dir.join("CHANGELOG.md").is_file());
+    assert!(dir.join("govna/development-guidelines.md").is_file());
+}
+
+// AT11: Part B — an AGENTS.md missing the ## Project Rules boundary
+// entirely falls back to blind overwrite with a printed warning, rather
+// than silently skipping or crashing.
+#[test]
+fn apply_falls_back_to_overwrite_when_boundary_missing() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    fs::write(dir.join("AGENTS.md"), "no boundary heading here\n").unwrap();
+
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("has no `## Project Rules` boundary"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let agents = read(&dir.join("AGENTS.md"));
+    assert!(agents.contains("## Governed Sections"), "{agents}");
 }

@@ -22,15 +22,15 @@ The embedded-template machinery backs `render-canon`, `drift-scan`, and `apply` 
 ## Major Components
 
 - `src/main.rs`: CLI entry point — subcommand dispatch, usage/help text, the real `version`/`ver`/`--version` surface, `render-canon` implementation, stub for `deps`
-- `src/apply.rs`: `apply` implementation — mode detection, repo-shape assessment, config resolution, canon write via `governance::render_canonical_files`, adoption-AC emission, optional `git init`
-- `src/rm.rs`: `rm` implementation — canon rendering, classification (In Scope/Out Of Scope/Review) against the target's actual files, emits a removal AC and a companion diffs file; deletes nothing itself
+- `src/apply.rs`: `apply` implementation — mode detection, repo-shape assessment, config resolution, canon write via `governance::render_canonical_files` (hunk-merging `mixed_content_boundary`-registered hybrid files in existing mode instead of blind overwrite, skipping `README.md`/`CHANGELOG.md` when they already exist), adoption-AC emission, optional `git init`, and governa-managed-repo migration tracking (legacy-metadata carry-over, plus an emitted migration AC — precise via a live `governa render-canon` comparison when the `governa` binary is available, crude enumeration otherwise)
+- `src/rm.rs`: `rm` implementation — canon rendering, classification (In Scope/Out Of Scope/Review) against the target's actual files, emits a single removal AC; deletes nothing itself. Review items carry an on-demand `govna render-canon`/`diff -ru` recipe rather than a pre-computed diff — no companion diffs file
 - `build.sh`: self-contained Bash script for local validation (`./build.sh`), release staging (`./build.sh prep …`), and release orchestration (`./build.sh vX.Y.Z "…"`); isolates Cargo compilation in an invocation-owned external target dir under `$TMPDIR`, deleted after each run
 - `tests/govna_cli.rs` + `tests/build_cli.sh`: Rust integration tests (declared-binary CLI contract: `--version` exactness, usage/exit-code behavior) and the build-tooling's own smoke-test harness
 - `govna/`: root governance canon docs — see System Summary for current-vs-aspirational content status
 
 ## Data And Control Flow
 
-A user runs `govna <subcommand>`. `version`/`ver`/`--version`, `render-canon`, `drift-scan`, `apply`, and `rm` produce real output; `deps` prints "not yet implemented" to stderr and exits 1. `apply` bootstraps the current directory: writes the full canon set, a `CLAUDE.md` symlink, and a `govna/ac<N>-govna-apply.md` adoption record; `--init-git` optionally initializes git. `rm` plans (but does not perform) canon removal: it emits `govna/ac<N>-govna-rm-<version>.md` and a companion `-diffs.md` for Director review.
+A user runs `govna <subcommand>`. `version`/`ver`/`--version`, `render-canon`, `drift-scan`, `apply`, and `rm` produce real output; `deps` prints "not yet implemented" to stderr and exits 1. `apply` bootstraps the current directory: writes the full canon set (hunk-merging hybrid files rather than overwriting them when they already exist), a `CLAUDE.md` symlink, and a `govna/ac<N>-govna-apply.md` adoption record; `--init-git` optionally initializes git. When a `governa/` directory is detected, `apply` also emits `govna/ac<N>-govna-migrate-from-governa-<version>.md` tracking its review and removal. `rm` plans (but does not perform) canon removal: it emits `govna/ac<N>-govna-rm-<version>.md`, with on-demand comparison commands in place of pre-computed diffs, for Director review.
 
 ## AC Lifecycle Control Flow
 

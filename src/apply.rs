@@ -12,6 +12,7 @@
 //! unresolvable required param hard-fails with actionable guidance instead,
 //! matching `render-canon`'s existing convention.
 
+use crate::driftscan;
 use crate::emission;
 use crate::governance::{self, RepoType};
 use crate::{SymlinkOutcome, write_canon_file, write_claude_symlink};
@@ -172,6 +173,17 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     let assessment = assess_target(&cwd)?;
     print_assessment(&cwd, &assessment);
 
+    // Part A: a governa-managed repo's own metadata is a deliberate prior
+    // configuration, preferred over re-guessing — but only when govna's own
+    // metadata isn't already present (an already-migrated repo always wins)
+    // and no explicit flag was given.
+    let governa_managed = detect_governa_managed(&cwd);
+    let legacy_metadata = if governa_managed && !cwd.join("govna/metadata.txt").is_file() {
+        read_governa_metadata(&cwd)
+    } else {
+        None
+    };
+
     let flavor_input = cfg.flavor.trim();
     let repo_type = if !flavor_input.is_empty() {
         if flavor_input == "code" {
@@ -179,6 +191,15 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         } else {
             RepoType::Doc
         }
+    } else if let Some(repo_type) = legacy_metadata
+        .as_ref()
+        .and_then(|(rt, _)| match rt.as_str() {
+            "CODE" => Some(RepoType::Code),
+            "DOC" => Some(RepoType::Doc),
+            _ => None,
+        })
+    {
+        repo_type
     } else {
         governance::detect_flavor(&cwd)
             .map_err(|e| format!("apply: infer flavor from cwd: {e} (use --flavor to override)"))?
@@ -187,6 +208,11 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     let mut stack = cfg.stack.clone();
     let mut module_path = cfg.module_path.clone();
     if repo_type == RepoType::Code {
+        if stack.is_empty()
+            && let Some((_, code_stack)) = &legacy_metadata
+        {
+            stack = code_stack.clone();
+        }
         if stack.is_empty() {
             stack = governance::infer_stack(&cwd)
                 .unwrap_or_default()
@@ -227,9 +253,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 
     for op in &ops {
         let dest = cwd.join(&op.rel_path);
-        write_canon_file(&dest, &op.content)
-            .map_err(|e| format!("apply: write {}: {e}", dest.display()))?;
-        println!("write {} (canon file)", op.rel_path);
+        write_canon_op(&dest, op, mode)?;
     }
 
     match write_claude_symlink(&cwd, true)? {
@@ -247,11 +271,382 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     std::fs::write(&stub_path, stub_body).map_err(|e| format!("apply: write {stub_rel}: {e}"))?;
     println!("write {stub_rel} (adoption record)");
 
+    // Runs after the adoption AC is written so migration-AC numbering (via
+    // allocate_ac_number's own fallback scan) sees it and doesn't collide.
+    if governa_managed {
+        handle_governa_migration(&cwd, repo_type, &gcfg.stack, &gcfg.module_path)?;
+    }
+
     if cfg.init_git {
         maybe_init_git(&cwd)?;
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+// ── write (Part B: hybrid-file awareness) ───────────────────────────────────
+
+/// Writes one canon op to `dest`, applying the same hybrid-file care `rm`
+/// already has read-only: in existing mode, a `mixed_content_boundary`-
+/// registered file gets hunk-merged (fresh canon zone + preserved existing
+/// repo-owned tail) instead of blindly overwritten; `README.md`/`CHANGELOG.md`
+/// (hybrid but with no registered boundary to merge on) are skipped entirely
+/// when they already exist. New-mode writes, and every other file, are
+/// unaffected — always written fresh, exactly as before this existed.
+fn write_canon_op(dest: &Path, op: &governance::WriteOp, mode: &str) -> Result<(), String> {
+    let exists = dest.is_file();
+
+    if mode == "existing" && exists {
+        if matches!(op.rel_path.as_str(), "README.md" | "CHANGELOG.md") {
+            println!("skip {} (existing content preserved)", op.rel_path);
+            return Ok(());
+        }
+        if let Some(boundary) = driftscan::mixed_content_boundary(&op.rel_path) {
+            let existing = std::fs::read_to_string(dest)
+                .map_err(|e| format!("apply: read {}: {e}", dest.display()))?;
+            match try_hunk_merge(&existing, &op.content, boundary) {
+                Some(merged) => {
+                    write_canon_file(dest, &merged)
+                        .map_err(|e| format!("apply: write {}: {e}", dest.display()))?;
+                    println!("write {} (canon file, merged)", op.rel_path);
+                    return Ok(());
+                }
+                None => {
+                    eprintln!(
+                        "warning: {} has no `{boundary}` boundary; overwriting whole file",
+                        op.rel_path
+                    );
+                }
+            }
+        }
+    }
+
+    write_canon_file(dest, &op.content)
+        .map_err(|e| format!("apply: write {}: {e}", dest.display()))?;
+    println!("write {} (canon file)", op.rel_path);
+    Ok(())
+}
+
+/// Replaces only the canon zone (everything above `boundary`) with fresh
+/// content; preserves the boundary line and everything below it from
+/// `existing` exactly. Returns `None` if `boundary` isn't found in either
+/// string (`fresh` should always have it; `existing` might not, if the file
+/// has an unexpected/corrupted shape), signaling the caller to fall back.
+fn try_hunk_merge(existing: &str, fresh: &str, boundary: &str) -> Option<String> {
+    let canon_zone = driftscan::extract_canon_zone(fresh, boundary)?;
+    let existing_canon_len = driftscan::extract_canon_zone(existing, boundary)?.len();
+    let repo_owned = &existing[existing_canon_len..];
+    Some(format!("{canon_zone}{repo_owned}"))
+}
+
+// ── Part A: governa migration ───────────────────────────────────────────────
+
+const MIGRATE_MARKER_PREFIX: &str = "<!-- govna-migrate-from-governa: emitted-by govna ";
+
+fn detect_governa_managed(target: &Path) -> bool {
+    target.join("governa/metadata.txt").is_file() || target.join("governa/ac-template.md").is_file()
+}
+
+/// Minimal reader for governa's legacy `governa/metadata.txt` — same
+/// `key = value` shape as govna's own metadata, different directory name
+/// and version-key name (`governa_version` vs `govna_version`, irrelevant
+/// here). Returns `(repo_type, code_stack)` when `repo_type` was found;
+/// `code_stack` may be empty (DOC-flavor governa repos don't set it).
+fn read_governa_metadata(target: &Path) -> Option<(String, String)> {
+    let content = std::fs::read_to_string(target.join("governa/metadata.txt")).ok()?;
+    let mut repo_type = String::new();
+    let mut code_stack = String::new();
+    for line in content.lines() {
+        if let Some((key, value)) = line.split_once(" = ") {
+            match key.trim() {
+                "repo_type" => repo_type = value.trim().to_string(),
+                "code_stack" => code_stack = value.trim().to_string(),
+                _ => {}
+            }
+        }
+    }
+    if repo_type.is_empty() {
+        None
+    } else {
+        Some((repo_type, code_stack))
+    }
+}
+
+/// governa's real CLI only accepts `version`/`ver` as a subcommand — unlike
+/// govna's own `--version` flag support, `governa --version` is an unknown
+/// command and exits non-zero (verified against the real binary).
+fn governa_binary_available() -> bool {
+    Command::new("governa")
+        .arg("version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+struct MigrationItem {
+    path: String,
+    kind: &'static str,
+    reason: String,
+    recipe: Option<String>,
+}
+
+/// Enumerates the target's `governa/` tree and classifies it into
+/// (in_scope, out_of_scope, review) — mirroring `rm`'s own three-bucket
+/// shape. Precise tier (governa binary available and every step succeeds):
+/// byte-compares each file against governa's live-rendered canon. Crude
+/// tier (unavailable, or any step fails): no comparison, just flags
+/// presence of a same-path `govna/` equivalent. Never fails the calling
+/// `apply` — a precise-tier failure at any point silently degrades to crude.
+fn handle_governa_migration(
+    target: &Path,
+    repo_type: RepoType,
+    stack: &str,
+    module_path: &str,
+) -> Result<(), String> {
+    let governa_dir = target.join("governa");
+    if !governa_dir.is_dir() {
+        return Ok(());
+    }
+
+    let canon_version = format!("v{}", crate::templates::TEMPLATE_VERSION);
+    let (ac_num, reused) =
+        emission::allocate_ac_number(target, "govna-migrate-from-governa", &canon_version)?;
+    let stub_rel = format!("govna/ac{ac_num}-govna-migrate-from-governa-{canon_version}.md");
+    let stub_path = target.join(&stub_rel);
+
+    if reused && stub_path.exists() {
+        let unedited = emission::verify_unedited(&stub_path, MIGRATE_MARKER_PREFIX)?;
+        if !unedited {
+            return Err(format!(
+                "apply: {stub_rel} has been edited since last emission — delete or rename the emitted file before re-running"
+            ));
+        }
+    }
+
+    let flavor = match repo_type {
+        RepoType::Code => "code",
+        RepoType::Doc => "doc",
+    };
+
+    let mut governa_files: Vec<PathBuf> = Vec::new();
+    collect_files(&governa_dir, &governa_dir, &mut governa_files)?;
+    let mut governa_rel_paths: Vec<String> = governa_files
+        .iter()
+        .map(|p| format!("governa/{}", p.to_string_lossy()))
+        .collect();
+    governa_rel_paths.sort();
+
+    let scratch = try_precise_governa_render(flavor, stack, module_path);
+    let (in_scope, out_of_scope, review) = classify_governa_tree(
+        target,
+        &governa_rel_paths,
+        scratch.as_deref(),
+        flavor,
+        stack,
+    );
+    if let Some(dir) = &scratch {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    let stub_body = build_migration_stub(ac_num, &canon_version, &in_scope, &out_of_scope, &review);
+    emission::ensure_docs_dir(target, "apply")?;
+    emission::write_with_marker(
+        &stub_path,
+        MIGRATE_MARKER_PREFIX,
+        &canon_version,
+        &stub_body,
+    )?;
+    println!("write {stub_rel} (governa migration tracking)");
+
+    Ok(())
+}
+
+/// Attempts the precise tier: shells out to the real `governa` binary to
+/// render its current canon into a scratch directory. Returns `None` (and
+/// cleans up any partial scratch dir) on *any* failure — binary missing,
+/// `--version` failing, or `render-canon` itself erroring — never
+/// propagated as an `apply` error.
+fn try_precise_governa_render(flavor: &str, stack: &str, module_path: &str) -> Option<PathBuf> {
+    if !governa_binary_available() {
+        return None;
+    }
+    let scratch = std::env::temp_dir().join(format!(
+        "govna-governa-migrate-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let mut cmd = Command::new("governa");
+    cmd.arg("render-canon").arg("--flavor").arg(flavor);
+    if flavor == "code" && !stack.is_empty() {
+        cmd.arg("--stack").arg(stack);
+    }
+    if !module_path.is_empty() {
+        cmd.arg("--module-path").arg(module_path);
+    }
+    cmd.arg(&scratch);
+    let succeeded = cmd.output().map(|o| o.status.success()).unwrap_or(false);
+    if succeeded {
+        Some(scratch)
+    } else {
+        let _ = std::fs::remove_dir_all(&scratch);
+        None
+    }
+}
+
+fn governa_render_recipe(flavor: &str, stack: &str) -> String {
+    let mut cmd = format!("governa render-canon --flavor {flavor}");
+    if flavor == "code" && !stack.is_empty() {
+        let canonical = governance::canonical_stack(stack).unwrap_or(stack);
+        cmd.push_str(&format!(" --stack {canonical}"));
+    }
+    cmd.push_str(" <scratch>");
+    cmd
+}
+
+fn classify_governa_tree(
+    target: &Path,
+    governa_rel_paths: &[String],
+    scratch: Option<&Path>,
+    flavor: &str,
+    stack: &str,
+) -> (Vec<MigrationItem>, Vec<MigrationItem>, Vec<MigrationItem>) {
+    let mut in_scope = Vec::new();
+    let mut out_of_scope = Vec::new();
+    let mut review = Vec::new();
+
+    for path in governa_rel_paths {
+        match scratch {
+            Some(scratch_dir) => {
+                let scratch_file = scratch_dir.join(path);
+                match std::fs::read(&scratch_file) {
+                    Ok(governa_canon) => {
+                        let target_content = std::fs::read(target.join(path)).unwrap_or_default();
+                        if target_content == governa_canon {
+                            in_scope.push(MigrationItem {
+                                path: path.clone(),
+                                kind: "confirmed safe",
+                                reason: "confirmed byte-identical to governa's current canon"
+                                    .to_string(),
+                                recipe: None,
+                            });
+                        } else {
+                            let recipe = format!(
+                                "{} && diff -ru <scratch>/{path} {path}",
+                                governa_render_recipe(flavor, stack)
+                            );
+                            review.push(MigrationItem {
+                                path: path.clone(),
+                                kind: "needs review",
+                                reason: "confirmed different from governa's current canon"
+                                    .to_string(),
+                                recipe: Some(recipe),
+                            });
+                        }
+                    }
+                    Err(_) => {
+                        out_of_scope.push(MigrationItem {
+                            path: path.clone(),
+                            kind: "keep",
+                            reason: "no governa canon equivalent; may be repo-owned content"
+                                .to_string(),
+                            recipe: None,
+                        });
+                    }
+                }
+            }
+            None => {
+                let govna_equivalent = path
+                    .strip_prefix("governa/")
+                    .map(|rest| format!("govna/{rest}"));
+                let superseded = govna_equivalent
+                    .as_ref()
+                    .map(|p| target.join(p).is_file())
+                    .unwrap_or(false);
+                if superseded {
+                    in_scope.push(MigrationItem {
+                        path: path.clone(),
+                        kind: "likely superseded",
+                        reason: format!(
+                            "likely superseded by `{}`; compare manually before removing",
+                            govna_equivalent.unwrap()
+                        ),
+                        recipe: None,
+                    });
+                } else {
+                    out_of_scope.push(MigrationItem {
+                        path: path.clone(),
+                        kind: "keep",
+                        reason: "no govna equivalent; may be repo-owned content".to_string(),
+                        recipe: None,
+                    });
+                }
+            }
+        }
+    }
+
+    (in_scope, out_of_scope, review)
+}
+
+fn build_migration_stub(
+    ac_num: u32,
+    canon_version: &str,
+    in_scope: &[MigrationItem],
+    out_of_scope: &[MigrationItem],
+    review: &[MigrationItem],
+) -> String {
+    let mut b = String::new();
+    b.push_str(&format!("# AC{ac_num} Migrate From Governa\n\n"));
+    b.push_str(
+        "Track manual review and removal of the legacy `governa/` tree after `govna apply` wrote fresh govna canon alongside it.\n",
+    );
+    b.push_str("\n## Summary\n\n");
+    b.push_str(&format!(
+        "This repo was governa-managed. govna canon {canon_version} has been applied. This AC tracks review of `governa/`; govna does not compare its contents against governa's canon beyond what's noted per item below. Nothing under `governa/` is deleted automatically.\n"
+    ));
+    b.push_str("\n### Routing Decisions\n\n");
+    if review.is_empty() {
+        b.push_str("`None` — no items require comparison-based review.\n");
+    } else {
+        for (i, item) in review.iter().enumerate() {
+            let recipe = item.recipe.as_deref().unwrap_or("");
+            b.push_str(&format!(
+                "{}. `{}` is {}. Compare with: `{recipe}`. Choose: delete canon-shape only, keep entirely, or delete entirely.\n",
+                i + 1,
+                item.path,
+                item.reason
+            ));
+        }
+    }
+    b.push_str("\n## In Scope\n\n");
+    write_migration_list(&mut b, in_scope);
+    b.push_str("\n## Out Of Scope\n\n");
+    write_migration_list(&mut b, out_of_scope);
+    b.push_str("\n## Acceptance Tests\n\n");
+    b.push_str(
+        "**AT1** [Manual] — Director confirms every listed file was reviewed and either removed or intentionally kept.\n\n",
+    );
+    b.push_str(
+        "**AT2** [Automated] [Pre-release gate] — `governa/` no longer exists in the repo.\n",
+    );
+    b.push_str("\n## Status\n\n");
+    b.push_str("`PENDING` — Emitted by `govna apply`; awaiting Director review.\n");
+    b
+}
+
+fn write_migration_list(b: &mut String, items: &[MigrationItem]) {
+    if items.is_empty() {
+        b.push_str("- None.\n");
+        return;
+    }
+    for item in items {
+        b.push_str(&format!(
+            "- `{}` — {}; {}.\n",
+            item.path, item.kind, item.reason
+        ));
+    }
 }
 
 fn detect_apply_mode(target: &Path) -> &'static str {

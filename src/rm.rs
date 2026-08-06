@@ -5,10 +5,13 @@
 //! no `--target` flag — matches `drift-scan`'s cwd-only design). Renders
 //! the repo's canon (to know what *should* be there), classifies every
 //! canon file into In Scope (safe to delete), Out Of Scope (repo-owned,
-//! keep), or Review (needs a Director routing decision), and emits two
-//! files under `govna/`: the removal AC and a companion diffs file. `rm`
-//! deletes nothing itself — the actual removal is a later, separate
-//! Director-approved implementation pass against the emitted AC.
+//! keep), or Review (needs a Director routing decision), and emits one
+//! file under `govna/`: the removal AC. `rm` deletes nothing itself — the
+//! actual removal is a later, separate Director-approved implementation
+//! pass against the emitted AC. Review items don't carry a pre-computed
+//! diff (AC10 Part C) — each Routing Decision bullet embeds a ready-to-run
+//! comparison command instead, matching the "generate it when you need it"
+//! pattern `AGENTS.md`'s Drift-Scan Adoption section already documents.
 
 use crate::driftscan;
 use crate::emission;
@@ -198,22 +201,14 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     let canon_version = format!("v{}", templates::TEMPLATE_VERSION);
     let (ac_num, reused) = emission::allocate_ac_number(&cwd, "govna-rm", &canon_version)?;
     let stub_rel = format!("govna/ac{ac_num}-govna-rm-{canon_version}.md");
-    let diffs_rel = format!("govna/ac{ac_num}-govna-rm-{canon_version}-diffs.md");
     let stub_path = cwd.join(&stub_rel);
-    let diffs_path = cwd.join(&diffs_rel);
 
-    if reused {
-        for path in [&stub_path, &diffs_path] {
-            if path.exists() {
-                let unedited = emission::verify_unedited(path, RM_MARKER_PREFIX)?;
-                if !unedited {
-                    let rel = path.strip_prefix(&cwd).unwrap_or(path);
-                    return Err(format!(
-                        "rm: {} has been edited since last emission — delete or rename the emitted files before re-running",
-                        rel.display()
-                    ));
-                }
-            }
+    if reused && stub_path.exists() {
+        let unedited = emission::verify_unedited(&stub_path, RM_MARKER_PREFIX)?;
+        if !unedited {
+            return Err(format!(
+                "rm: {stub_rel} has been edited since last emission — delete or rename the emitted file before re-running"
+            ));
         }
     }
 
@@ -221,18 +216,16 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     let stub_body = build_stub(
         ac_num,
         &canon_version,
-        &diffs_rel,
+        &gcfg,
         &in_scope,
         &out_of_scope,
         &review,
     );
-    let diffs_body = build_diffs(ac_num, &canon_version, &review);
 
     emission::ensure_docs_dir(&cwd, "rm")?;
     emission::write_with_marker(&stub_path, RM_MARKER_PREFIX, &canon_version, &stub_body)?;
-    emission::write_with_marker(&diffs_path, RM_MARKER_PREFIX, &canon_version, &diffs_body)?;
 
-    println!("wrote {stub_rel} and {diffs_rel}");
+    println!("wrote {stub_rel}");
     Ok(ExitCode::SUCCESS)
 }
 
@@ -242,7 +235,6 @@ struct Routing {
     path: String,
     kind: &'static str,
     reason: String,
-    diff: String,
 }
 
 fn classify(
@@ -264,7 +256,6 @@ fn classify(
                 path: relpath.clone(),
                 kind: "keep",
                 reason: "repo-owned govna-adjacent content".to_string(),
-                diff: String::new(),
             });
             continue;
         }
@@ -275,7 +266,6 @@ fn classify(
                 path: relpath.clone(),
                 kind: "keep",
                 reason: format!("preserve marker: {}", markers.join(" | ")),
-                diff: String::new(),
             });
             continue;
         }
@@ -287,7 +277,6 @@ fn classify(
                 path: relpath.clone(),
                 kind: "hybrid",
                 reason: "mixed canon-shape and consumer content".to_string(),
-                diff: driftscan::unified_diff(canon_content, &content, relpath, 0),
             });
             continue;
         }
@@ -297,7 +286,6 @@ fn classify(
                 path: relpath.clone(),
                 kind: "delete file",
                 reason: "byte-equal govna canon".to_string(),
-                diff: String::new(),
             });
             continue;
         }
@@ -306,7 +294,6 @@ fn classify(
             path: relpath.clone(),
             kind: "ambiguity",
             reason: "consumer-edited canon file".to_string(),
-            diff: driftscan::unified_diff(canon_content, &content, relpath, 0),
         });
     }
 
@@ -317,7 +304,6 @@ fn classify(
             path: "CLAUDE.md".to_string(),
             kind: "delete symlink",
             reason: "govna compatibility link".to_string(),
-            diff: String::new(),
         });
     }
 
@@ -365,7 +351,6 @@ fn collect_target_only(
             path: rel_str,
             kind: "keep",
             reason: "target-only repo-owned file".to_string(),
-            diff: String::new(),
         });
     }
 }
@@ -375,7 +360,7 @@ fn collect_target_only(
 fn build_stub(
     ac_num: u32,
     canon_version: &str,
-    diffs_rel: &str,
+    gcfg: &governance::Config,
     in_scope: &[Routing],
     out_of_scope: &[Routing],
     review: &[Routing],
@@ -389,22 +374,22 @@ fn build_stub(
     b.push_str(&format!(
         "Extricate govna canon from this consumer repo without deleting consumer-owned content. Emitted by `govna rm` against canon {canon_version}. Implement only after the Director resolves the routing decisions below.\n"
     ));
-    b.push_str(&format!(
-        "\nUse `{diffs_rel}` for hunk-level guidance on hybrid files. Do not auto-delete routing-pending files until the Director chooses their routing.\n"
-    ));
+    b.push_str(
+        "\nCompare each routing-pending file yourself (see the command in each bullet below) before choosing how to route it. Do not auto-delete routing-pending files until the Director chooses their routing.\n",
+    );
     b.push_str("\n### Routing Decisions\n\n");
     if review.is_empty() {
         b.push_str("`None` — no review items.\n");
     } else {
+        let recipe = render_canon_recipe(gcfg);
         for (i, route) in review.iter().enumerate() {
             b.push_str(&format!(
-                "{}. `{}` is {}. Choose: delete canon-shape only, keep entirely, or delete entirely? See [{}]({}#{}).\n",
+                "{}. `{}` is {}. Compare with: `{recipe} && diff -ru <scratch>/{} {}`. Choose: delete canon-shape only, keep entirely, or delete entirely.\n",
                 i + 1,
                 route.path,
                 route.reason,
                 route.path,
-                diffs_rel,
-                anchor(&route.path)
+                route.path
             ));
         }
     }
@@ -420,23 +405,21 @@ fn build_stub(
     b
 }
 
-fn build_diffs(ac_num: u32, canon_version: &str, review: &[Routing]) -> String {
-    let mut b = String::new();
-    b.push_str(&format!(
-        "# AC{ac_num} Govna Removal Diffs from {canon_version}\n\n"
-    ));
-    if review.is_empty() {
-        b.push_str("No hybrid or ambiguity-classified files require hunk-level guidance.\n");
-        return b;
+/// Builds the `govna render-canon` half of a Routing Decision's on-demand
+/// comparison command — the flag exactly as it would need to be re-run to
+/// regenerate the canon this repo was compared against.
+fn render_canon_recipe(cfg: &governance::Config) -> String {
+    let flavor = match cfg.repo_type {
+        RepoType::Code => "code",
+        RepoType::Doc => "doc",
+    };
+    let mut cmd = format!("govna render-canon --flavor {flavor}");
+    if cfg.repo_type == RepoType::Code && !cfg.stack.is_empty() {
+        let canonical = governance::canonical_stack(&cfg.stack).unwrap_or(&cfg.stack);
+        cmd.push_str(&format!(" --stack {canonical}"));
     }
-    for route in review {
-        b.push_str(&format!("## `{}`\n\n", route.path));
-        b.push_str(&format!("Reason: {}.\n\n", route.reason));
-        b.push_str("```diff\n");
-        b.push_str(&route.diff);
-        b.push_str("\n```\n\n");
-    }
-    b
+    cmd.push_str(" <scratch>");
+    cmd
 }
 
 fn write_routing_list(b: &mut String, routes: &[Routing]) {
@@ -450,15 +433,4 @@ fn write_routing_list(b: &mut String, routes: &[Routing]) {
             route.path, route.kind, route.reason
         ));
     }
-}
-
-fn anchor(path: &str) -> String {
-    path.chars()
-        .filter_map(|c| match c {
-            '`' | '/' | '.' => None,
-            ' ' => Some('-'),
-            other => Some(other),
-        })
-        .collect::<String>()
-        .to_lowercase()
 }

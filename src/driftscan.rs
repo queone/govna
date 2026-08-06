@@ -520,7 +520,7 @@ fn is_format_defining(relpath: &str) -> bool {
     FORMAT_DEFINING_CANON_PATHS.contains(&relpath)
 }
 
-fn extract_canon_zone(content: &str, boundary: &str) -> Option<String> {
+pub(crate) fn extract_canon_zone(content: &str, boundary: &str) -> Option<String> {
     let mut acc = String::new();
     for line in content.split_inclusive('\n') {
         let trimmed = line.trim_end_matches(['\n', '\r']);
@@ -708,7 +708,7 @@ fn write_coherence_failure_report(failures: &[CoherenceFailure]) -> ExitCode {
 
 // ── diff / git evidence ─────────────────────────────────────────────────────
 
-pub(crate) fn unified_diff(canon: &str, target: &str, relpath: &str, max_lines: usize) -> String {
+fn unified_diff(canon: &str, target: &str, relpath: &str, max_lines: usize) -> String {
     if Command::new("diff").arg("--version").output().is_err() {
         return "[diff unavailable: install GNU/BSD diff and re-run]".to_string();
     }
