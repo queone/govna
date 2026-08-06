@@ -79,6 +79,8 @@ Sections above ## Project Practices are govna-maintained canon and update via ca
 - Use space-separated binary names for scoped builds.
 - Keep selected target order deterministic under the byte locale.
 - Keep Cargo compilation artifacts in the build-managed temporary target.
+- Reject a bare `cargo build`, `cargo check`, `cargo test`, or `cargo clippy` invocation outside `./build.sh`.
+- Pass an explicit `--target-dir` outside the repository for any diagnostic or corrective `cargo` exception.
 - Validate formatting and shared library code package-wide during scoped builds.
 - Limit binary checks, matching integration tests, release artifacts, and installation to selected targets.
 - Install all Cargo binary targets with tracked installation during a full build.

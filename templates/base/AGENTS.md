@@ -238,11 +238,13 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Run `./build.sh` as the first validation command in every validation cycle.
 - Use `./build.sh` for repository-wide formatting validation, testing, vetting, linting, static analysis, and compilation checks.
 - Do not invoke direct formatter, test, vet, lint, static-analysis, or repository-wide compilation commands before the first canonical build.
+- Do not run a direct compiler or build-tool command except within the diagnostic or corrective carve-out.
 - Run prerequisite implementation commands such as code generation, dependency maintenance, and migrations before validation as needed.
 - Use read-only inspection commands before validation when they do not claim repository health.
 - Use isolated binary smoke commands before validation only when they do not claim repository health.
 - Use a direct validation tool only to diagnose or correct a corresponding failure reported by the latest `./build.sh`.
 - Scope each direct diagnostic or corrective command to the reported failure.
+- Direct a diagnostic or corrective command's build output to an explicit path outside the repository.
 - Rerun `./build.sh` after any diagnostic or corrective command that changes files.
 - Rerun `./build.sh` before running an unrelated direct validation command.
 - Complete the validation cycle only after the final `./build.sh` succeeds.

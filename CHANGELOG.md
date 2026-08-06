@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.6.1 | AC11: prohibit bare cargo builds outside ./build.sh; require isolated target-dir |
 | 0.6.0 | AC10: apply migrates governa repos, hunk-merges hybrids; rm drops diffs file |
 | 0.5.2 | reject IE6 (updatecheck), close out the IE backlog |
 | 0.5.1 | reject IE8, generalize AC-number rule to also reserve IE numbers |
