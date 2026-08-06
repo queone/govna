@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.5.0 | AC9: implement rm; emit Director-reviewed cleanup AC for removing govna canon |
 | 0.4.1 | AC8: strip govna-source-only content from shipped CODE templates |
 | 0.4.0 | AC7: implement apply; deterministic bootstrap for new and existing repos |
 | 0.3.1 | AC6: document govna drift-scan, resolve stale not-yet-implemented framing |

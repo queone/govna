@@ -2,6 +2,7 @@ mod apply;
 mod driftscan;
 mod emission;
 mod governance;
+mod rm;
 mod templates;
 
 use governance::{Config, RepoType};
@@ -10,7 +11,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const PROGRAM_VERSION: &str = "0.4.1";
+const PROGRAM_VERSION: &str = "0.5.0";
 const SOURCE_REPO: &str = "github.com/queone/govna";
 
 fn main() -> ExitCode {
@@ -31,7 +32,8 @@ fn main() -> ExitCode {
         "render-canon" => run_render_canon(&args[2..]),
         "drift-scan" => driftscan::run_cli(&args[2..]),
         "apply" => apply::run_cli(&args[2..]),
-        "rm" | "deps" => {
+        "rm" => rm::run_cli(&args[2..]),
+        "deps" => {
             eprintln!("govna {subcmd}: not yet implemented");
             ExitCode::from(1)
         }
@@ -120,10 +122,7 @@ fn print_usage() {
     );
     eprintln!(
         "{}",
-        usage_line(
-            "rm",
-            "emit cleanup AC for removing govna canon (not yet implemented)"
-        )
+        usage_line("rm", "emit cleanup AC for removing govna canon")
     );
     eprintln!(
         "{}",

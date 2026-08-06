@@ -72,6 +72,7 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Require explicit approval for: governance files, CI/release config, secrets handling, external integrations.
 - Edit only the files listed in the AC's `## In Scope` section, even after the user has authorized implementation.
 - Apply the drift-scan effective-scope exception in `### Drift-Scan Adoption` when a Director resolves an `ambiguity` item as `sync` (see that subsection).
+- Apply the same effective-implementation-scope principle to any other emitted-AC tool with Director-resolved routing decisions (e.g., `rm`'s Routing Decisions) — the named target is in scope once resolved, even when absent from `## In Scope`.
 - Stop and ask when a request is ambiguous, or when the change is hard to reverse.
 - Wait for explicit user request before preparing, executing, publishing, deploying, or distributing — including drafting commit messages, commit commands, version bumps, or release notes.
 - **Leave every `git commit` for the user to execute. No EXCEPTION.**

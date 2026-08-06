@@ -503,10 +503,10 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 
 // ── classification algorithm ────────────────────────────────────────────────
 
-const EXPECTED_DIVERGENCE_PATHS: &[&str] = &["plan.md", "arch.md"];
+pub(crate) const EXPECTED_DIVERGENCE_PATHS: &[&str] = &["plan.md", "arch.md"];
 const FORMAT_DEFINING_CANON_PATHS: &[&str] = &["govna/ac-template.md", "AGENTS.md"];
 
-fn mixed_content_boundary(relpath: &str) -> Option<&'static str> {
+pub(crate) fn mixed_content_boundary(relpath: &str) -> Option<&'static str> {
     match relpath {
         "AGENTS.md" => Some("## Project Rules"),
         "govna/development-guidelines.md" | "govna/editing-guidelines.md" => {
@@ -708,7 +708,7 @@ fn write_coherence_failure_report(failures: &[CoherenceFailure]) -> ExitCode {
 
 // ── diff / git evidence ─────────────────────────────────────────────────────
 
-fn unified_diff(canon: &str, target: &str, relpath: &str, max_lines: usize) -> String {
+pub(crate) fn unified_diff(canon: &str, target: &str, relpath: &str, max_lines: usize) -> String {
     if Command::new("diff").arg("--version").output().is_err() {
         return "[diff unavailable: install GNU/BSD diff and re-run]".to_string();
     }

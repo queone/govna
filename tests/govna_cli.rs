@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.4.1\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.5.0\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -28,7 +28,7 @@ fn no_args_exits_with_usage_error() {
 #[test]
 fn unimplemented_subcommand_exits_one() {
     let output = Command::new(env!("CARGO_BIN_EXE_govna"))
-        .arg("rm")
+        .arg("deps")
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -1285,4 +1285,249 @@ fn apply_adoption_ac_has_required_sections() {
     }
     assert!(ac.contains("- `AGENTS.md` (canon file)"), "{ac}");
     assert!(ac.contains("- `CLAUDE.md` (agent alias link)"), "{ac}");
+}
+
+// ── rm (AC9) fixtures ────────────────────────────────────────────────────────
+//
+// Reuses `rendered_code_fixture()` (render-canon-based, no adoption AC) as
+// the baseline rather than an `apply`-based fixture: `apply` would write its
+// own `govna/ac1-govna-apply.md`, which itself matches the `^ac(\d+)-`
+// AC-numbering scan and would bump rm's first allocation to ac2 instead of
+// ac1 — a real cross-command interaction, not just a test-fixture quirk.
+
+fn rm_stub(dir: &Path) -> String {
+    let out = govna().arg("rm").current_dir(dir).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stub_rel = stdout
+        .split_whitespace()
+        .find(|w| w.contains("govna-rm-") && !w.contains("-diffs"))
+        .unwrap_or_else(|| panic!("no stub filename in stdout: {stdout}"));
+    read(&dir.join(stub_rel))
+}
+
+// AT1: fresh unmodified fixture — pure-canon files list as `delete file`,
+// CLAUDE.md lists as `delete symlink`, both stub and diffs files written.
+#[test]
+fn rm_fresh_fixture_pure_canon_deletes() {
+    let dir = rendered_code_fixture();
+    let out = govna().arg("rm").current_dir(&dir).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("ac1-govna-rm-"), "{stdout}");
+    assert!(stdout.contains("-diffs.md"), "{stdout}");
+    assert!(dir.join("govna/ac1-govna-rm-v0.1.0.md").is_file());
+    assert!(dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md").is_file());
+
+    let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
+    assert!(
+        stub.contains("- `govna/roles.md` — delete file; byte-equal govna canon."),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("- `CLAUDE.md` — delete symlink; govna compatibility link."),
+        "{stub}"
+    );
+}
+
+// AT2: hybrid files always route to Routing Decisions, even unmodified.
+#[test]
+fn rm_hybrid_files_always_route_to_review() {
+    let dir = rendered_code_fixture();
+    let stub = rm_stub(&dir);
+    for path in [
+        "AGENTS.md",
+        "README.md",
+        "CHANGELOG.md",
+        "govna/development-guidelines.md",
+    ] {
+        assert!(
+            stub.contains(&format!(
+                "`{path}` is mixed canon-shape and consumer content"
+            )),
+            "{path} missing from Routing Decisions:\n{stub}"
+        );
+    }
+}
+
+// AT3: plan.md/arch.md list under Out Of Scope as repo-owned govna-adjacent content.
+#[test]
+fn rm_expected_divergence_files_kept() {
+    let dir = rendered_code_fixture();
+    let stub = rm_stub(&dir);
+    for path in ["plan.md", "arch.md"] {
+        assert!(
+            stub.contains(&format!(
+                "- `{path}` — keep; repo-owned govna-adjacent content."
+            )),
+            "{path}:\n{stub}"
+        );
+    }
+}
+
+// AT4: a preserve marker routes that file to Out Of Scope, not In Scope or Review.
+#[test]
+fn rm_preserve_marker_routes_to_keep() {
+    let dir = rendered_code_fixture();
+    let changelog = read(&dir.join("CHANGELOG.md"));
+    fs::write(
+        dir.join("CHANGELOG.md"),
+        format!("{changelog}\n| 0.0.1 | preserve govna/roles.md |\n"),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "preserve marker"]);
+    let stub = rm_stub(&dir);
+    assert!(
+        stub.contains("- `govna/roles.md` — keep; preserve marker: preserve govna/roles.md."),
+        "{stub}"
+    );
+}
+
+// AT5: a target-only file lists under Out Of Scope as target-only repo-owned file.
+#[test]
+fn rm_target_only_file_kept() {
+    let dir = rendered_code_fixture();
+    fs::write(dir.join("custom-notes.md"), "local notes\n").unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "add local file"]);
+    let stub = rm_stub(&dir);
+    assert!(
+        stub.contains("- `custom-notes.md` — keep; target-only repo-owned file."),
+        "{stub}"
+    );
+}
+
+// AT6: an edited non-hybrid canon file routes to Review as ambiguity with a
+// full unified diff, not a silent delete.
+#[test]
+fn rm_edited_canon_file_routes_to_ambiguity() {
+    let dir = rendered_code_fixture();
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{}\nextra line\n", read(&dir.join("govna/roles.md"))),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "edit roles"]);
+
+    let out = govna().arg("rm").current_dir(&dir).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
+    assert!(
+        stub.contains("`govna/roles.md` is consumer-edited canon file"),
+        "{stub}"
+    );
+    let diffs = read(&dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md"));
+    assert!(diffs.contains("## `govna/roles.md`"), "{diffs}");
+    assert!(diffs.contains("extra line"), "{diffs}");
+}
+
+// AT7: re-running unedited reuses the same AC number for both files;
+// editing either fails with the edit-detection guard's exact wording.
+#[test]
+fn rm_idempotent_reuse_and_edit_detection_guard() {
+    let dir = rendered_code_fixture();
+    let out1 = govna().arg("rm").current_dir(&dir).output().unwrap();
+    assert!(out1.status.success());
+    let stdout1 = String::from_utf8_lossy(&out1.stdout).to_string();
+
+    let out2 = govna().arg("rm").current_dir(&dir).output().unwrap();
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout).to_string();
+    assert_eq!(stdout1, stdout2, "AC number should be reused");
+
+    let stub_path = dir.join("govna/ac1-govna-rm-v0.1.0.md");
+    let tampered = format!("{}\ntampered\n", read(&stub_path));
+    fs::write(&stub_path, tampered).unwrap();
+    let out3 = govna().arg("rm").current_dir(&dir).output().unwrap();
+    assert!(!out3.status.success());
+    assert!(String::from_utf8_lossy(&out3.stderr).contains("has been edited since last emission"));
+}
+
+// AT8: rm against govna's own source checkout refuses with a non-zero exit.
+#[test]
+fn rm_refuses_govna_source() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = govna().arg("rm").current_dir(repo_root).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
+}
+
+// AT9: no AGENTS.md fails require_govna_adopted's exact wording; no .git/
+// fails the git-worktree requirement.
+#[test]
+fn rm_requires_adoption_and_git_worktree() {
+    let dir = new_fixture();
+    git(&dir, &["init", "-q"]);
+    let out = govna().arg("rm").current_dir(&dir).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("is not a govna-adopted repo"));
+
+    let dir2 = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "doc"])
+        .current_dir(&dir2)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let out = govna().arg("rm").current_dir(&dir2).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not a git worktree"));
+}
+
+// AT10: --flavor override is honored — forcing --flavor doc on an
+// otherwise CODE-shaped fixture drives classification off DOC's smaller
+// canon set (govna/editing-guidelines.md, not development-guidelines.md).
+#[test]
+fn rm_flavor_override_changes_canon_set() {
+    let dir = rendered_code_fixture();
+    let out = govna()
+        .args(["rm", "--flavor", "doc"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
+    // Under DOC's canon (forced via --flavor), development-guidelines.md
+    // isn't a canon path at all — it becomes target-only, not a hybrid
+    // Routing Decision the way it is under CODE's canon.
+    assert!(
+        stub.contains("- `govna/development-guidelines.md` — keep; target-only repo-owned file."),
+        "{stub}"
+    );
+    assert!(
+        !stub.contains("`govna/development-guidelines.md` is mixed canon-shape"),
+        "{stub}"
+    );
+}
+
+// AT11: `rm extra-arg` fails with the exact "no positional arguments
+// accepted" wording.
+#[test]
+fn rm_rejects_positional_args() {
+    let dir = rendered_code_fixture();
+    let out = govna()
+        .args(["rm", "extra-arg"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("no positional arguments accepted"));
 }

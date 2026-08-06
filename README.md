@@ -10,7 +10,7 @@ A gradual port of [governa](https://github.com/queone/governa) from Go to Rust. 
 | `-h`, `--help`, `-?`, `help`, `h` | implemented |
 | `apply` | implemented |
 | `drift-scan` | implemented |
-| `rm` | not yet implemented |
+| `rm` | implemented |
 | `deps` | not yet implemented |
 | `render-canon` | implemented |
 
