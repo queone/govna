@@ -83,9 +83,9 @@ Existing governance artifacts are overwritten directly on repeat runs; mixed-con
 
 #### Migrating from governa
 
-Tell an agent to run `govna apply` inside a repo currently managed by governa. `apply` auto-detects a governa-managed target (`governa/metadata.txt` or `governa/ac-template.md` present), carries the legacy repo-type and stack metadata forward when govna's own metadata isn't already present, and emits a `govna/ac<N>-govna-migrate-from-governa-<version>.md` tracking AC covering the legacy `governa/` tree. No special flag needed — this happens automatically as part of a normal `govna apply` run.
+Tell an agent to run `govna apply` inside a repo currently managed by governa. `apply` auto-detects a governa-managed target (`governa/metadata.txt` or `governa/ac-template.md` present), carries the legacy repo-type and stack metadata forward when govna's own metadata isn't already present, and adds a `## Migration findings` section to the same adoption AC (`govna/ac<N>-govna-apply-<version>.md`) covering the legacy `governa/` tree — one file, not a separate tracking AC. No special flag needed — this happens automatically as part of a normal `govna apply` run.
 
-The tracking AC compares against a live `governa render-canon` output when the `governa` binary is available on `PATH`, falling back to a plain file enumeration otherwise. Nothing under `governa/` is deleted automatically — review and removal are Director-driven, tracked by the emitted AC.
+The migration findings compare against a live `governa render-canon` output when the `governa` binary is available on `PATH`, falling back to a plain file enumeration otherwise. Nothing under `governa/` is deleted automatically — review and removal are Director-driven, tracked in that section.
 
 ### `drift-scan`
 

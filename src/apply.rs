@@ -249,30 +249,72 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 
     let ops = governance::render_canonical_files(&gcfg).map_err(|e| format!("apply: {e}"))?;
 
+    let mut outcomes: Vec<WriteOutcome> = Vec::with_capacity(ops.len());
     for op in &ops {
         let dest = cwd.join(&op.rel_path);
-        write_canon_op(&dest, op, mode)?;
+        outcomes.push(write_canon_op(&dest, op, mode)?);
     }
 
-    match write_claude_symlink(&cwd, true)? {
+    let symlink_outcome = write_claude_symlink(&cwd, true)?;
+    match &symlink_outcome {
         SymlinkOutcome::Created => println!("symlink CLAUDE.md -> AGENTS.md"),
         SymlinkOutcome::Skipped => eprintln!(
             "warning: CLAUDE.md exists as a regular file; expected symlink to AGENTS.md — delete the file and re-run to create the symlink"
         ),
     }
 
-    let ac_num = emission::next_ac_number(&cwd)?;
-    let stub_rel = format!("govna/ac{ac_num}-govna-apply.md");
-    let stub_path = cwd.join(&stub_rel);
-    let stub_body = render_apply_ac(ac_num, &gcfg, &ops);
-    emission::ensure_docs_dir(&cwd, "apply")?;
-    std::fs::write(&stub_path, stub_body).map_err(|e| format!("apply: write {stub_rel}: {e}"))?;
-    println!("write {stub_rel} (adoption record)");
+    // Part B: computed before AC-number allocation so the same, single AC
+    // number covers both the adoption content and (when present) the
+    // Migration findings section — no separate migration AC/number anymore.
+    let migration = if governa_managed {
+        compute_migration_findings(&cwd, repo_type, &gcfg.stack, &gcfg.module_path)?
+    } else {
+        None
+    };
 
-    // Runs after the adoption AC is written so migration-AC numbering (via
-    // allocate_ac_number's own fallback scan) sees it and doesn't collide.
-    if governa_managed {
-        handle_governa_migration(&cwd, repo_type, &gcfg.stack, &gcfg.module_path)?;
+    let (ac_num, stub_rel, reused) = if let Some(m) = &migration {
+        let (n, reused) = emission::allocate_ac_number(&cwd, "govna-apply", &m.canon_version)?;
+        (
+            n,
+            format!("govna/ac{n}-govna-apply-{}.md", m.canon_version),
+            reused,
+        )
+    } else {
+        let n = emission::next_ac_number(&cwd)?;
+        (n, format!("govna/ac{n}-govna-apply.md"), false)
+    };
+    let stub_path = cwd.join(&stub_rel);
+
+    if reused && stub_path.exists() {
+        let unedited = emission::verify_unedited(&stub_path, APPLY_MARKER_PREFIX)?;
+        if !unedited {
+            return Err(format!(
+                "apply: {stub_rel} has been edited since last emission — delete or rename the emitted file before re-running"
+            ));
+        }
+    }
+
+    let stub_body = render_apply_ac(
+        ac_num,
+        &gcfg,
+        &ops,
+        &outcomes,
+        &symlink_outcome,
+        migration.as_ref(),
+    );
+    emission::ensure_docs_dir(&cwd, "apply")?;
+    if let Some(m) = &migration {
+        emission::write_with_marker(
+            &stub_path,
+            APPLY_MARKER_PREFIX,
+            &m.canon_version,
+            &stub_body,
+        )?;
+        println!("write {stub_rel} (adoption record + migration tracking)");
+    } else {
+        std::fs::write(&stub_path, stub_body)
+            .map_err(|e| format!("apply: write {stub_rel}: {e}"))?;
+        println!("write {stub_rel} (adoption record)");
     }
 
     if cfg.init_git {
@@ -284,6 +326,18 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 
 // ── write (Part B: hybrid-file awareness) ───────────────────────────────────
 
+/// The real outcome of a single `write_canon_op` call — threaded into the
+/// emitted adoption AC so its `## In Scope` listing reflects what actually
+/// happened, not a blanket assumption every op was a fresh write.
+enum WriteOutcome {
+    Written,
+    /// A `mixed_content_boundary` file had no matching boundary, so it fell
+    /// back to a blind overwrite (with a printed warning) instead of a merge.
+    WrittenFallback,
+    Skipped,
+    Merged,
+}
+
 /// Writes one canon op to `dest`, applying the same hybrid-file care `rm`
 /// already has read-only: in existing mode, a `mixed_content_boundary`-
 /// registered file gets hunk-merged (fresh canon zone + preserved existing
@@ -292,7 +346,11 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 /// content with no registered boundary to merge on) are skipped entirely
 /// when they already exist. New-mode writes, and every other file, are
 /// unaffected — always written fresh, exactly as before this existed.
-fn write_canon_op(dest: &Path, op: &governance::WriteOp, mode: &str) -> Result<(), String> {
+fn write_canon_op(
+    dest: &Path,
+    op: &governance::WriteOp,
+    mode: &str,
+) -> Result<WriteOutcome, String> {
     let exists = dest.is_file();
 
     if mode == "existing" && exists {
@@ -300,7 +358,7 @@ fn write_canon_op(dest: &Path, op: &governance::WriteOp, mode: &str) -> Result<(
             || driftscan::EXPECTED_DIVERGENCE_PATHS.contains(&op.rel_path.as_str())
         {
             println!("skip {} (existing content preserved)", op.rel_path);
-            return Ok(());
+            return Ok(WriteOutcome::Skipped);
         }
         if let Some(boundary) = driftscan::mixed_content_boundary(&op.rel_path) {
             let existing = std::fs::read_to_string(dest)
@@ -310,13 +368,17 @@ fn write_canon_op(dest: &Path, op: &governance::WriteOp, mode: &str) -> Result<(
                     write_canon_file(dest, &merged)
                         .map_err(|e| format!("apply: write {}: {e}", dest.display()))?;
                     println!("write {} (canon file, merged)", op.rel_path);
-                    return Ok(());
+                    return Ok(WriteOutcome::Merged);
                 }
                 None => {
                     eprintln!(
                         "warning: {} has no `{boundary}` boundary; overwriting whole file",
                         op.rel_path
                     );
+                    write_canon_file(dest, &op.content)
+                        .map_err(|e| format!("apply: write {}: {e}", dest.display()))?;
+                    println!("write {} (canon file)", op.rel_path);
+                    return Ok(WriteOutcome::WrittenFallback);
                 }
             }
         }
@@ -325,7 +387,7 @@ fn write_canon_op(dest: &Path, op: &governance::WriteOp, mode: &str) -> Result<(
     write_canon_file(dest, &op.content)
         .map_err(|e| format!("apply: write {}: {e}", dest.display()))?;
     println!("write {} (canon file)", op.rel_path);
-    Ok(())
+    Ok(WriteOutcome::Written)
 }
 
 /// Replaces only the canon zone (everything above `boundary`) with fresh
@@ -342,7 +404,7 @@ fn try_hunk_merge(existing: &str, fresh: &str, boundary: &str) -> Option<String>
 
 // ── Part A: governa migration ───────────────────────────────────────────────
 
-const MIGRATE_MARKER_PREFIX: &str = "<!-- govna-migrate-from-governa: emitted-by govna ";
+const APPLY_MARKER_PREFIX: &str = "<!-- govna-apply: emitted-by govna ";
 
 fn detect_governa_managed(target: &Path) -> bool {
     target.join("governa/metadata.txt").is_file() || target.join("governa/ac-template.md").is_file()
@@ -391,6 +453,16 @@ struct MigrationItem {
     recipe: Option<String>,
 }
 
+/// Everything `render_apply_ac` needs to render a `## Migration findings`
+/// section into the single, merged adoption AC (Part B) — no longer written
+/// as a separate file/AC number.
+struct MigrationFindings {
+    canon_version: String,
+    in_scope: Vec<MigrationItem>,
+    out_of_scope: Vec<MigrationItem>,
+    review: Vec<MigrationItem>,
+}
+
 /// Enumerates the target's `governa/` tree and classifies it into
 /// (in_scope, out_of_scope, review) — mirroring `rm`'s own three-bucket
 /// shape. Precise tier (governa binary available and every step succeeds):
@@ -398,32 +470,21 @@ struct MigrationItem {
 /// tier (unavailable, or any step fails): no comparison, just flags
 /// presence of a same-path `govna/` equivalent. Never fails the calling
 /// `apply` — a precise-tier failure at any point silently degrades to crude.
-fn handle_governa_migration(
+/// Returns `None` when `target` has no `governa/` directory at all (no
+/// migration to track), regardless of what the earlier metadata-based
+/// `governa_managed` detection found.
+fn compute_migration_findings(
     target: &Path,
     repo_type: RepoType,
     stack: &str,
     module_path: &str,
-) -> Result<(), String> {
+) -> Result<Option<MigrationFindings>, String> {
     let governa_dir = target.join("governa");
     if !governa_dir.is_dir() {
-        return Ok(());
+        return Ok(None);
     }
 
     let canon_version = format!("v{}", crate::templates::CANON_VERSION);
-    let (ac_num, reused) =
-        emission::allocate_ac_number(target, "govna-migrate-from-governa", &canon_version)?;
-    let stub_rel = format!("govna/ac{ac_num}-govna-migrate-from-governa-{canon_version}.md");
-    let stub_path = target.join(&stub_rel);
-
-    if reused && stub_path.exists() {
-        let unedited = emission::verify_unedited(&stub_path, MIGRATE_MARKER_PREFIX)?;
-        if !unedited {
-            return Err(format!(
-                "apply: {stub_rel} has been edited since last emission — delete or rename the emitted file before re-running"
-            ));
-        }
-    }
-
     let flavor = match repo_type {
         RepoType::Code => "code",
         RepoType::Doc => "doc",
@@ -449,17 +510,12 @@ fn handle_governa_migration(
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    let stub_body = build_migration_stub(ac_num, &canon_version, &in_scope, &out_of_scope, &review);
-    emission::ensure_docs_dir(target, "apply")?;
-    emission::write_with_marker(
-        &stub_path,
-        MIGRATE_MARKER_PREFIX,
-        &canon_version,
-        &stub_body,
-    )?;
-    println!("write {stub_rel} (governa migration tracking)");
-
-    Ok(())
+    Ok(Some(MigrationFindings {
+        canon_version,
+        in_scope,
+        out_of_scope,
+        review,
+    }))
 }
 
 /// Attempts the precise tier: shells out to the real `governa` binary to
@@ -589,52 +645,6 @@ fn classify_governa_tree(
     }
 
     (in_scope, out_of_scope, review)
-}
-
-fn build_migration_stub(
-    ac_num: u32,
-    canon_version: &str,
-    in_scope: &[MigrationItem],
-    out_of_scope: &[MigrationItem],
-    review: &[MigrationItem],
-) -> String {
-    let mut b = String::new();
-    b.push_str(&format!("# AC{ac_num} Migrate From Governa\n\n"));
-    b.push_str(
-        "Track manual review and removal of the legacy `governa/` tree after `govna apply` wrote fresh govna canon alongside it.\n",
-    );
-    b.push_str("\n## Summary\n\n");
-    b.push_str(&format!(
-        "This repo was governa-managed. govna canon {canon_version} has been applied. This AC tracks review of `governa/`; govna does not compare its contents against governa's canon beyond what's noted per item below. Nothing under `governa/` is deleted automatically.\n"
-    ));
-    b.push_str("\n### Routing Decisions\n\n");
-    if review.is_empty() {
-        b.push_str("`None` — no items require comparison-based review.\n");
-    } else {
-        for (i, item) in review.iter().enumerate() {
-            let recipe = item.recipe.as_deref().unwrap_or("");
-            b.push_str(&format!(
-                "{}. `{}` is {}. Compare with: `{recipe}`. Choose: delete canon-shape only, keep entirely, or delete entirely.\n",
-                i + 1,
-                item.path,
-                item.reason
-            ));
-        }
-    }
-    b.push_str("\n## In Scope\n\n");
-    write_migration_list(&mut b, in_scope);
-    b.push_str("\n## Out Of Scope\n\n");
-    write_migration_list(&mut b, out_of_scope);
-    b.push_str("\n## Acceptance Tests\n\n");
-    b.push_str(
-        "**AT1** [Manual] — Director confirms every listed file was reviewed and either removed or intentionally kept.\n\n",
-    );
-    b.push_str(
-        "**AT2** [Automated] [Pre-release gate] — `governa/` no longer exists in the repo.\n",
-    );
-    b.push_str("\n## Status\n\n");
-    b.push_str("`PENDING` — Emitted by `govna apply`; awaiting Director review.\n");
-    b
 }
 
 fn write_migration_list(b: &mut String, items: &[MigrationItem]) {
@@ -873,7 +883,14 @@ fn print_assessment(target: &Path, a: &Assessment) {
 
 // ── adoption AC ──────────────────────────────────────────────────────────────
 
-fn render_apply_ac(ac_num: u32, cfg: &governance::Config, ops: &[governance::WriteOp]) -> String {
+fn render_apply_ac(
+    ac_num: u32,
+    cfg: &governance::Config,
+    ops: &[governance::WriteOp],
+    outcomes: &[WriteOutcome],
+    symlink_outcome: &SymlinkOutcome,
+    migration: Option<&MigrationFindings>,
+) -> String {
     let flavor = match cfg.repo_type {
         RepoType::Code => "CODE",
         RepoType::Doc => "DOC",
@@ -887,15 +904,60 @@ fn render_apply_ac(ac_num: u32, cfg: &governance::Config, ops: &[governance::Wri
     ));
     b.push_str("## Summary\n\n");
     b.push_str(&format!(
-        "Applied govna v{} governance template ({flavor} overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.\n\n",
+        "Applied govna v{} governance template ({flavor} overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.\n",
         crate::templates::CANON_VERSION
     ));
-    b.push_str("## In Scope\n\n");
-    b.push_str("Files written by govna apply:\n\n");
-    for op in ops {
-        b.push_str(&format!("- `{}` (canon file)\n", op.rel_path));
+    if migration.is_some() {
+        b.push_str(
+            "\nThis repo was governa-managed; the legacy `governa/` tree's review and removal is tracked in `## Migration findings` below.\n",
+        );
     }
-    b.push_str("- `CLAUDE.md` (agent alias link)\n");
+    b.push_str("\n## In Scope\n\n");
+    b.push_str("Files written by govna apply:\n\n");
+    for (op, outcome) in ops.iter().zip(outcomes.iter()) {
+        let label = match outcome {
+            WriteOutcome::Written => "written".to_string(),
+            WriteOutcome::WrittenFallback => {
+                "written — no boundary found, blind overwrite; see warning".to_string()
+            }
+            WriteOutcome::Skipped => "existing content preserved".to_string(),
+            WriteOutcome::Merged => "canon zone merged, existing tail preserved".to_string(),
+        };
+        b.push_str(&format!("- `{}` ({label})\n", op.rel_path));
+    }
+    match symlink_outcome {
+        SymlinkOutcome::Created => b.push_str("- `CLAUDE.md` (agent alias link)\n"),
+        SymlinkOutcome::Skipped => b.push_str(
+            "- `CLAUDE.md` (existing regular file preserved — not a symlink, see warning)\n",
+        ),
+    }
+
+    if let Some(m) = migration {
+        b.push_str("\n## Migration findings\n\n");
+        b.push_str(&format!(
+            "This repo was governa-managed. govna canon {} has been applied. This AC tracks review of `governa/`; govna does not compare its contents against governa's canon beyond what's noted per item below. Nothing under `governa/` is deleted automatically.\n",
+            m.canon_version
+        ));
+        b.push_str("\n### Routing Decisions\n\n");
+        if m.review.is_empty() {
+            b.push_str("`None` — no items require comparison-based review.\n");
+        } else {
+            for (i, item) in m.review.iter().enumerate() {
+                let recipe = item.recipe.as_deref().unwrap_or("");
+                b.push_str(&format!(
+                    "{}. `{}` is {}. Compare with: `{recipe}`. Choose: delete canon-shape only, keep entirely, or delete entirely.\n",
+                    i + 1,
+                    item.path,
+                    item.reason
+                ));
+            }
+        }
+        b.push_str("\n### In Scope (legacy governa/ tree)\n\n");
+        write_migration_list(&mut b, &m.in_scope);
+        b.push_str("\n### Out Of Scope (legacy governa/ tree)\n\n");
+        write_migration_list(&mut b, &m.out_of_scope);
+    }
+
     b.push_str("\n## Out Of Scope\n\n");
     b.push_str("- All applied files are consumer-owned and can be freely modified\n");
     b.push_str(
@@ -905,11 +967,30 @@ fn render_apply_ac(ac_num: u32, cfg: &governance::Config, ops: &[governance::Wri
         "- Future govna improvements can be adopted by having a coding agent read the govna repo and cherry-pick useful changes\n",
     );
     b.push_str("\n## Acceptance Tests\n\n");
-    b.push_str("**AT1** [Manual] — Verify AGENTS.md exists and sections match repo needs.\n\n");
+    b.push_str(
+        "**AT1** [Manual] — Director reads AGENTS.md and confirms it reflects this repo's actual practices; adjust any section that doesn't.\n\n",
+    );
     b.push_str(
         "**AT2** [Manual] — Verify govna/roles.md reflects the repo's delivery model (Operator + Director).\n\n",
     );
-    b.push_str("**AT3** [Manual] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n");
+    match symlink_outcome {
+        SymlinkOutcome::Created => {
+            b.push_str("**AT3** [Manual] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n");
+        }
+        SymlinkOutcome::Skipped => {
+            b.push_str(
+                "**AT3** [Manual] — CLAUDE.md exists as a regular file, not a symlink to AGENTS.md; this apply left it untouched (see the warning above) — resolve manually if a symlink is needed here.\n\n",
+            );
+        }
+    }
+    if migration.is_some() {
+        b.push_str(
+            "**AT4** [Manual] — Director confirms every listed `governa/` file was reviewed and either removed or intentionally kept.\n\n",
+        );
+        b.push_str(
+            "**AT5** [Automated] [Pre-release gate] — `governa/` no longer exists in the repo.\n\n",
+        );
+    }
     b.push_str("## Status\n\n");
     b.push_str("`PENDING` — review applied governance and adapt to repo needs.\n");
     b

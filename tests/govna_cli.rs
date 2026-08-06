@@ -1293,7 +1293,7 @@ fn apply_adoption_ac_has_required_sections() {
     ] {
         assert!(ac.contains(heading), "{heading} missing:\n{ac}");
     }
-    assert!(ac.contains("- `AGENTS.md` (canon file)"), "{ac}");
+    assert!(ac.contains("- `AGENTS.md` (written)"), "{ac}");
     assert!(ac.contains("- `CLAUDE.md` (agent alias link)"), "{ac}");
 }
 
@@ -1624,6 +1624,43 @@ fn apply_migration_carries_over_legacy_metadata() {
     assert!(metadata.contains("code_stack = Rust\n"), "{metadata}");
 }
 
+// AC16 AT5: a governa-managed apply emits exactly one AC file (not two,
+// adoption + migration merged), with a ## Migration findings section.
+#[test]
+fn apply_migration_emits_single_merged_ac() {
+    let dir = governa_metadata_fixture(Some("Rust"));
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .env("PATH", path_without_governa())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let ac_files: Vec<_> = fs::read_dir(dir.join("govna"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.starts_with("ac") && name.chars().nth(2).is_some_and(|c| c.is_ascii_digit())
+        })
+        .collect();
+    assert_eq!(
+        ac_files.len(),
+        1,
+        "expected exactly one AC file: {ac_files:?}"
+    );
+
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
+    assert!(ac.contains("## Migration findings"), "{ac}");
+    assert!(ac.contains("## In Scope"), "{ac}");
+    assert!(ac.contains("### In Scope (legacy governa/ tree)"), "{ac}");
+}
+
 // AT2: precise tier. A fake `governa` binary on PATH renders roles.md;
 // byte-identical target file classifies confirmed-safe, a differing one
 // classifies needs-review with the exact on-demand recipe, not a diff.
@@ -1645,7 +1682,7 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
     assert!(
         ac.contains("- `governa/roles.md` — confirmed safe; confirmed byte-identical"),
         "{ac}"
@@ -1664,7 +1701,7 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
         "{}",
         String::from_utf8_lossy(&out2.stderr)
     );
-    let ac2 = read(&dir2.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    let ac2 = read(&dir2.join("govna/ac1-govna-apply-v0.1.0.md"));
     assert!(
         ac2.contains(
             "Compare with: `governa render-canon --flavor code --stack Rust <scratch> && diff -ru <scratch>/governa/roles.md governa/roles.md`"
@@ -1692,7 +1729,7 @@ fn apply_migration_crude_tier_fallback_no_governa_binary() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
     assert!(
         ac.contains("- `governa/roles.md` — likely superseded; likely superseded by `govna/roles.md`; compare manually before removing."),
         "{ac}"
@@ -1726,12 +1763,13 @@ fn apply_migration_falls_back_when_render_canon_fails() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
     assert!(ac.contains("likely superseded by `govna/roles.md`"), "{ac}");
 }
 
-// AT5: re-running apply unedited reuses the same migration-AC number;
-// editing it and re-running fails with the edit-detection guard's wording.
+// AT5: re-running apply unedited reuses the same merged apply+migration-AC
+// number; editing it and re-running fails with the edit-detection guard's
+// wording.
 #[test]
 fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
     let dir = governa_metadata_fixture(Some("Rust"));
@@ -1743,10 +1781,7 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
         .output()
         .unwrap();
     assert!(out1.status.success());
-    assert!(
-        dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md")
-            .is_file()
-    );
+    assert!(dir.join("govna/ac1-govna-apply-v0.1.0.md").is_file());
 
     let out2 = govna()
         .args(["apply", "-f", "code", "-s", "rust"])
@@ -1756,12 +1791,11 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
         .unwrap();
     assert!(out2.status.success());
     assert!(
-        !dir.join("govna/ac3-govna-migrate-from-governa-v0.1.0.md")
-            .exists(),
-        "should reuse ac2, not allocate ac3"
+        !dir.join("govna/ac2-govna-apply-v0.1.0.md").exists(),
+        "should reuse ac1, not allocate ac2"
     );
 
-    let ac_path = dir.join("govna/ac2-govna-migrate-from-governa-v0.1.0.md");
+    let ac_path = dir.join("govna/ac1-govna-apply-v0.1.0.md");
     let tampered = format!("{}\ntampered\n", read(&ac_path));
     fs::write(&ac_path, tampered).unwrap();
     let out3 = govna()
@@ -1774,15 +1808,14 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
     assert!(String::from_utf8_lossy(&out3.stderr).contains("has been edited since last emission"));
 }
 
+/// Counts merged apply+migration ACs — the versioned `govna-apply-v...`
+/// filename shape, distinct from the unversioned `govna-apply.md` a plain
+/// (non-governa-managed) apply writes.
 fn count_migration_acs(dir: &Path) -> usize {
     fs::read_dir(dir.join("govna"))
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .contains("migrate-from-governa")
-        })
+        .filter(|e| e.file_name().to_string_lossy().contains("govna-apply-v"))
         .count()
 }
 
@@ -1991,5 +2024,165 @@ fn apply_preserves_existing_arch_and_plan_content() {
     assert!(
         stdout.contains("skip plan.md (existing content preserved)"),
         "{stdout}"
+    );
+}
+
+// ── AC16: apply-AC fidelity, DOC closure-audit wording, single migration AC ─
+
+// AC16 AT1: new-mode apply labels every canon file "(written)" in the
+// emitted AC's ## In Scope — the common case, no skips/merges to report yet.
+#[test]
+fn apply_new_mode_labels_every_file_written() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    assert!(ac.contains("- `AGENTS.md` (written)"), "{ac}");
+    assert!(ac.contains("- `README.md` (written)"), "{ac}");
+    assert!(!ac.contains("existing content preserved"), "{ac}");
+    assert!(!ac.contains("merged"), "{ac}");
+}
+
+// AC16 AT2: existing-mode apply's emitted AC correctly labels
+// README.md/CHANGELOG.md/arch.md/plan.md as preserved, not written —
+// regression test for the exact defect the `bits` audit found (the emitted
+// AC previously claimed these were written when the run actually skipped
+// them).
+#[test]
+fn apply_existing_mode_ac_labels_preserved_files_correctly() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    fs::write(dir.join("README.md"), "my custom readme\n").unwrap();
+    fs::write(dir.join("CHANGELOG.md"), "my custom changelog\n").unwrap();
+    fs::write(dir.join("arch.md"), "my custom architecture notes\n").unwrap();
+    fs::write(dir.join("plan.md"), "my custom roadmap\n").unwrap();
+
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let ac = read(&dir.join("govna/ac2-govna-apply.md"));
+    for path in ["README.md", "CHANGELOG.md", "arch.md", "plan.md"] {
+        assert!(
+            ac.contains(&format!("- `{path}` (existing content preserved)")),
+            "{path} not labeled preserved:\n{ac}"
+        );
+    }
+    assert!(ac.contains("- `AGENTS.md` (canon zone merged"), "{ac}");
+}
+
+// AC16 AT3: AT1's reworded manual-review wording, and AT3's two distinct
+// wordings depending on the real CLAUDE.md symlink outcome.
+#[test]
+fn apply_ac_at1_is_manual_review_wording() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    assert!(
+        ac.contains(
+            "Director reads AGENTS.md and confirms it reflects this repo's actual practices"
+        ),
+        "{ac}"
+    );
+    assert!(!ac.contains("match repo needs"), "{ac}");
+}
+
+#[test]
+fn apply_ac_at3_reflects_symlink_conflict() {
+    let dir = new_fixture();
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("CLAUDE.md"), "not a symlink\n").unwrap();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    assert!(
+        ac.contains("CLAUDE.md exists as a regular file, not a symlink to AGENTS.md"),
+        "{ac}"
+    );
+    assert!(
+        !ac.contains("Verify CLAUDE.md is a symlink to AGENTS.md."),
+        "{ac}"
+    );
+}
+
+// AC16 AT4: the closure-audit bullet forks by flavor — DOC no longer
+// contains CODE/data-pipeline vocabulary, and DOC's render differs from
+// CODE's at that exact bullet.
+#[test]
+fn render_canon_doc_closure_audit_bullet_has_no_code_vocabulary() {
+    let code_dir = new_fixture();
+    let doc_dir = new_fixture();
+    govna()
+        .args([
+            "render-canon",
+            "--flavor",
+            "code",
+            "--stack",
+            "rust",
+            code_dir.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    govna()
+        .args(["render-canon", "--flavor", "doc", doc_dir.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let code_agents = read(&code_dir.join("AGENTS.md"));
+    let doc_agents = read(&doc_dir.join("AGENTS.md"));
+    for term in [
+        "provider/API fetch",
+        "normalized-table write",
+        "durable snapshot",
+        "freshness gate",
+    ] {
+        assert!(
+            !doc_agents.contains(term),
+            "DOC should not contain {term}:\n{doc_agents}"
+        );
+        assert!(
+            code_agents.contains(term),
+            "CODE should still contain {term}"
+        );
+    }
+    assert!(doc_agents.contains("published page"), "{doc_agents}");
+}
+
+// AC16 AT5b: a mixed_content_boundary file with no matching boundary falls
+// back to a blind overwrite, and the emitted AC labels it distinctly from a
+// clean fresh write.
+#[test]
+fn apply_boundary_fallback_labeled_distinctly_in_ac() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    fs::write(dir.join("AGENTS.md"), "no boundary heading here\n").unwrap();
+
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let ac = read(&dir.join("govna/ac2-govna-apply.md"));
+    assert!(
+        ac.contains("- `AGENTS.md` (written — no boundary found, blind overwrite; see warning)"),
+        "{ac}"
     );
 }
