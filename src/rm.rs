@@ -197,7 +197,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         .map(|op| (op.rel_path, op.content))
         .collect();
 
-    let canon_version = format!("v{}", templates::TEMPLATE_VERSION);
+    let canon_version = format!("v{}", templates::CANON_VERSION);
     let (ac_num, reused) = emission::allocate_ac_number(&cwd, "govna-rm", &canon_version)?;
     let stub_rel = format!("govna/ac{ac_num}-govna-rm-{canon_version}.md");
     let stub_path = cwd.join(&stub_rel);

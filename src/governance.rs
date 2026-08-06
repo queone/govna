@@ -57,8 +57,8 @@ pub fn render_canonical_files(cfg: &Config) -> Result<Vec<WriteOp>, String> {
     );
     placeholders.insert("{{MODULE_PATH}}", module_path);
     placeholders.insert(
-        "{{GOVNA_VERSION}}",
-        format!("v{}", templates::TEMPLATE_VERSION),
+        "{{CANON_VERSION}}",
+        format!("v{}", templates::CANON_VERSION),
     );
     placeholders.insert("{{CODE_STACK}}", value_or_default(&canonical_stack, "TBD"));
 
@@ -136,7 +136,7 @@ pub fn detect_flavor_with_source(dir: &Path) -> Result<(RepoType, &'static str),
 }
 
 /// Reads and parses `<dir>/govna/metadata.txt`. Public surface for
-/// `drift-scan` (AC5), which needs the full parsed record (govna_version,
+/// `drift-scan` (AC5), which needs the full parsed record (canon_version,
 /// code_stack) for its report header, not just the repo_type `detect_flavor` uses.
 pub fn read_repo_metadata(dir: &Path) -> Result<Option<BTreeMap<String, String>>, String> {
     let path = dir.join("govna").join("metadata.txt");

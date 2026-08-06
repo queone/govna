@@ -5,14 +5,24 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
+// Compares against Cargo.toml's version (env!("CARGO_PKG_VERSION")), not a
+// hardcoded duplicate, so a forgotten PROGRAM_VERSION bump fails loudly
+// instead of two stale copies silently agreeing with each other. This only
+// holds because govna is single-utility (one [[bin]], package version and
+// PROGRAM_VERSION kept in lockstep by design) — a multi-utility repo must
+// compare a printed version against that specific utility's own
+// PROGRAM_VERSION declaration, not the shared package version (AGENTS.md's
+// Project Rules and build.sh's own multi-utility handling treat those as
+// deliberately independent).
 fn version_aliases_are_all_single_line_and_identical() {
+    let expected = format!("govna v{}\n", env!("CARGO_PKG_VERSION"));
     for arg in ["--version", "version", "ver", "v"] {
         let output = Command::new(env!("CARGO_BIN_EXE_govna"))
             .arg(arg)
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.7.1\n", "arg={arg}");
+        assert_eq!(output.stdout, expected.as_bytes(), "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -64,7 +74,7 @@ fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
 }
 
-// AT1: DOC flavor renders; metadata has repo_type = DOC, no code_stack, a govna_version line.
+// AT1: DOC flavor renders; metadata has repo_type = DOC, no code_stack, a canon_version line.
 #[test]
 fn render_canon_doc_flavor_metadata() {
     let cwd = new_fixture();
@@ -83,7 +93,7 @@ fn render_canon_doc_flavor_metadata() {
     let metadata = read(&target.join("govna/metadata.txt"));
     assert!(metadata.contains("repo_type = DOC\n"), "{metadata}");
     assert!(!metadata.contains("code_stack"), "{metadata}");
-    assert!(metadata.contains("govna_version = v"), "{metadata}");
+    assert!(metadata.contains("canon_version = v"), "{metadata}");
 }
 
 // AT2: cwd with Cargo.toml infers Rust; case-insensitive --stack override matches.
@@ -950,7 +960,7 @@ fn render_canon_metadata_txt_wins_over_manifest_inference() {
     fs::create_dir_all(cwd.join("govna")).unwrap();
     fs::write(
         cwd.join("govna/metadata.txt"),
-        "schema_version = 1\ngovna_version = v0.1.0\nrepo_type = DOC\n",
+        "schema_version = 1\ncanon_version = v0.1.0\nrepo_type = DOC\n",
     )
     .unwrap();
     let target = new_fixture();

@@ -350,7 +350,7 @@ fn detect_governa_managed(target: &Path) -> bool {
 
 /// Minimal reader for governa's legacy `governa/metadata.txt` — same
 /// `key = value` shape as govna's own metadata, different directory name
-/// and version-key name (`governa_version` vs `govna_version`, irrelevant
+/// and version-key name (`governa_version` vs `canon_version`, irrelevant
 /// here). Returns `(repo_type, code_stack)` when `repo_type` was found;
 /// `code_stack` may be empty (DOC-flavor governa repos don't set it).
 fn read_governa_metadata(target: &Path) -> Option<(String, String)> {
@@ -409,7 +409,7 @@ fn handle_governa_migration(
         return Ok(());
     }
 
-    let canon_version = format!("v{}", crate::templates::TEMPLATE_VERSION);
+    let canon_version = format!("v{}", crate::templates::CANON_VERSION);
     let (ac_num, reused) =
         emission::allocate_ac_number(target, "govna-migrate-from-governa", &canon_version)?;
     let stub_rel = format!("govna/ac{ac_num}-govna-migrate-from-governa-{canon_version}.md");
@@ -882,13 +882,13 @@ fn render_apply_ac(ac_num: u32, cfg: &governance::Config, ops: &[governance::Wri
     b.push_str(&format!("# AC{ac_num} Govna Apply\n\n"));
     b.push_str(&format!(
         "Applied govna v{} governance template ({flavor} overlay) to {}.\n\n",
-        crate::templates::TEMPLATE_VERSION,
+        crate::templates::CANON_VERSION,
         cfg.repo_name
     ));
     b.push_str("## Summary\n\n");
     b.push_str(&format!(
         "Applied govna v{} governance template ({flavor} overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.\n\n",
-        crate::templates::TEMPLATE_VERSION
+        crate::templates::CANON_VERSION
     ));
     b.push_str("## In Scope\n\n");
     b.push_str("Files written by govna apply:\n\n");

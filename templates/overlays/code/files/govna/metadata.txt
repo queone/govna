@@ -1,4 +1,4 @@
 schema_version = 1
-govna_version = {{GOVNA_VERSION}}
+canon_version = {{CANON_VERSION}}
 repo_type = CODE
 code_stack = {{CODE_STACK}}

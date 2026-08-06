@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.8.0 | AC15: rename govna_version to canon_version, fix test version drift |
 | 0.7.1 | AC14: fix apply overwriting arch.md/plan.md on re-apply |
 | 0.7.0 | AC12: canonical docs finalized, deps removed, governa framing rescinded |
 | 0.6.1 | AC11: prohibit bare cargo builds outside ./build.sh; require isolated target-dir |

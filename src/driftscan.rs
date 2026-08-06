@@ -122,8 +122,8 @@ pub struct ReportHeader {
     pub flavor_source: String,
     #[serde(rename = "repo_name")]
     pub repo_name: String,
-    #[serde(rename = "govna_version", skip_serializing_if = "String::is_empty")]
-    pub govna_version: String,
+    #[serde(rename = "canon_version", skip_serializing_if = "String::is_empty")]
+    pub canon_version: String,
     #[serde(rename = "code_stack", skip_serializing_if = "String::is_empty")]
     pub code_stack: String,
 }
@@ -308,7 +308,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     }
 
     let sha = if cfg.override_canon_id.is_empty() {
-        format!("v{}", templates::TEMPLATE_VERSION)
+        format!("v{}", templates::CANON_VERSION)
     } else {
         cfg.override_canon_id.clone()
     };
@@ -404,7 +404,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
             flavor: flavor.clone(),
             flavor_source,
             repo_name: repo_name.clone(),
-            govna_version: metadata.get("govna_version").cloned().unwrap_or_default(),
+            canon_version: metadata.get("canon_version").cloned().unwrap_or_default(),
             code_stack: metadata.get("code_stack").cloned().unwrap_or_default(),
         },
         files: Vec::new(),
