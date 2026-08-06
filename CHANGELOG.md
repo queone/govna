@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.5.2 | reject IE6 (updatecheck), close out the IE backlog |
 | 0.5.1 | reject IE8, generalize AC-number rule to also reserve IE numbers |
 | 0.5.0 | AC9: implement rm; emit Director-reviewed cleanup AC for removing govna canon |
 | 0.4.1 | AC8: strip govna-source-only content from shipped CODE templates |
