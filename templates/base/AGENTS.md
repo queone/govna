@@ -262,8 +262,8 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 
 - Label each acceptance test with source axis (`[Automated]` / `[Manual]`) and timing axis (`[Pre-release gate]` default; `[Post-release verification]` explicit). See `govna/ac-template.md`.
 - Name test identifiers, output labels, comments, and errors by behavior.
-- Reserve AC, AT, Class, Part, and Round numbers for CHANGELOG rows, commit messages, and `Historical:` comments.
-- Treat every Markdown documentation file as out of bounds for bare AC, AT, Class, Part, and Round numbers.
+- Reserve AC, AT, Class, Part, Round, and IE numbers for CHANGELOG rows, commit messages, `plan.md`'s own `IE<N>:` bullets, and `Historical:` comments.
+- Treat every Markdown documentation file as out of bounds for bare AC, AT, Class, Part, Round, and IE numbers, except `plan.md`'s own `IE<N>:` bullets.
 - Use the `Historical:` prefix on a comment only when it references a shipped AC and the context aids the reader; delete the reference if no longer relevant.
 
 ### Code Style and Conventions

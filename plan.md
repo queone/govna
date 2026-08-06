@@ -10,4 +10,3 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 
 - IE3: Port `deps` — report direct dependency freshness
 - IE6: Port `updatecheck` — governa's binary self-checks for a newer release on every invocation (`internal/updatecheck`, called via `defer updatecheck.Check(programVersion)` in governa's `main()`); govna has no equivalent yet
-- IE8: Reconcile `templates/overlays/doc/files/AGENTS.md.tmpl` against root `AGENTS.md` — the DOC overlay copy is missing whole sections present in root (`### Build Verification`, `### AC Mechanics`, `### Errors`, `### Versioning and Dependencies`, `### Code Style and Conventions`) plus assorted rewording elsewhere, apparently never updated since those sections were added to root. Surfaced during AC6's Audit (2026-08-05), out of that AC's drift-scan-only scope

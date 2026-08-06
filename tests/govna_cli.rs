@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.5.0\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.5.1\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }

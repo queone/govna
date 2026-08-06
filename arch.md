@@ -47,6 +47,7 @@ Acceptance Criteria are non-runtime control artifacts for non-trivial changes. A
 - `govna/roles.md` defines the two-role model (Operator, Director) that supplements the shared governance contract
 - justify every added crate in the governing AC (per `govna/code-stacks.md`); `clap` is currently the only external dependency, and is itself unused pending real flag-parsing work
 - do not blind-rename `governa` → `govna` in the `govna/` canon docs' prose describing mature Go-implementation specifics — rewrite each doc's content when its corresponding feature actually ports (see `plan.md`)
+- `templates/overlays/doc/files/AGENTS.md.tmpl` deliberately carries a narrower `## Base Rules` than root/CODE's — it omits `### Build Verification`, `### AC Mechanics`, `### Errors`, `### Versioning and Dependencies`, and `### Code Style and Conventions` entirely. This is intentional, not staleness: DOC-flavor consumers are typically free-form documentation repos with no build pipeline, no installable utilities, and no code-style surface for those sections to govern. Considered and rejected — do not re-flag this gap without a concrete DOC consumer scenario the current contract actually fails.
 
 ## Conventions
 
