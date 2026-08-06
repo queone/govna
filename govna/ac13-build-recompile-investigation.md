@@ -24,7 +24,7 @@ Investigation (infra, template-code-only if a safe fix is found). A single `./bu
 
 - Any change that causes `cargo clippy` or `cargo test` to run with fewer features/targets than `--all-targets --all-features` today — that would weaken existing verification, not just speed it up.
 - Any change to the release binaries' build flags or optimization profile.
-- Introducing a new build-acceleration dependency (e.g. `sccache`, `cargo-nextest`) unless explicitly approved by the Director as a separate follow-on decision; this AC may recommend one but not add it silently.
+- Introducing a new build-acceleration dependency (e.g. `sccache`, `cargo-nextest`) — considered and explicitly declined for now (Director decision, this AC's own Follow-Up section): the real expectation is upstream Rust/Cargo/Clippy tooling improvement (the Rust project's own Clippy-optimization work is already underway), not govna routing around the problem with a new dependency. Not queued as a follow-on AC.
 - Editing any consumer repo's local `Cargo.toml` directly (e.g. `rkit`'s) — this AC's output is a canon template change and/or documented guidance; consumers adopt it through their normal drift-scan/apply cycle.
 
 ## Investigation Findings
@@ -59,6 +59,23 @@ No combination of the three phases (Clippy, Test, Release build) can be made to 
 
 If this becomes a real pain point later, the durable fix is `sccache` (compiler-cache, not a `build.sh`-logic change) — a separate, explicit Director decision per this AC's Out Of Scope, not something this investigation should default into.
 
+## Follow-Up: Internet Research (frozen, then resumed at Director's request)
+
+Community prior art exists, with a real caveat, and direct measurement on this repo doesn't support it:
+
+- A widely-cited post ([Reilly Wood, "How to Make Rust CI 2-3x Faster"](https://www.reillywood.com/blog/rust-faster-ci/)) reports that running Clippy *after* `cargo build` (not before) let Clippy reuse `cargo build`'s artifacts, saving ~5 minutes per CI run — matching this AC's own `Compiling`-count asymmetry (clippy-after-test needed only +10 vs. test-after-clippy needing +37). But the post carries its own update: *"(Dec 2024: I've been told that this doesn't work anymore. Possible that something's changed in Cargo/Rust)"*.
+- The official [Rust Project Goals: Optimizing Clippy & linting (2024H2)](https://rust-lang.github.io/rust-project-goals/2024h2/optimize-clippy.html) confirms Clippy can run "up to 2.5 times the time" of a plain `cargo check`, and the Rust project's own roadmap for closing that gap is about reducing Clippy's own per-crate overhead (proc-macro expansion, MSRV checks, incremental linting) — not about cross-command artifact sharing with `cargo test`/`cargo build`. No stable mechanism for that sharing is documented as available today.
+- Given the "broken as of Dec 2024" caveat, the only trustworthy answer is a direct measurement on this repo's actual toolchain, not a two-year-old blog claim either way. Ran two full timed trials of each order (current: Clippy→Test→Release; reordered: Test→Clippy→Release), cold target-dir each time, via direct `cargo` invocations under the diagnostic carve-out:
+
+| Trial | Current order (Clippy→Test→Release) | Reordered (Test→Clippy→Release) |
+|---|---|---|
+| 1 | 13.5s | 19.6s |
+| 2 | 12.9s | 11.9s |
+
+Run-to-run variance for the *same* ordering (11.9s–19.6s across the reordered trials) exceeds the difference between orderings in either trial. Whatever asymmetry shows up in `Compiling`-line counts does not translate into a reliable, reproducible wall-clock improvement on this machine — consistent with the "doesn't work anymore" report, though not a clean confirmation of it either; the honest read is that the effect, if any, is smaller than this repo's measurement noise. No reordering change is recommended on this evidence.
+
+**Revised conclusion: still no fix recommended for `build.sh`/the template.** The externally-documented, currently-viable path for this class of problem is `sccache` (or equivalent compiler cache) — already named in this AC's Out Of Scope as requiring a separate, explicit Director decision, and that assessment is now corroborated by community practice rather than just this AC's own reasoning. Reordering the three phases is not a safe recommendation given the measured variance.
+
 ## Acceptance Tests
 
 **AT1** [Manual] [Pre-release gate] — This AC's findings section states, for each of the three (or six, counting scoped-build variants) cargo invocations, whether its recompilation relative to the prior step is inherent to Cargo's profile/feature isolation or incidental, with supporting evidence (`Compiling`-line counts from `./build.sh`'s own phase output, `--timings` output, a nightly unit-graph diff if available, or equivalent). Audit's baseline run against govna's own repo (23/37/48 compiles across Clippy/Test/Build, 0 on a clippy repeat) is available as a reference point, not a substitute for Implement's own run.
@@ -69,4 +86,4 @@ If this becomes a real pain point later, the durable fix is `sccache` (compiler-
 
 ## Status
 
-`DEFERRED` — frozen at Director's request pending a more exhaustive internet search for a viable mitigation (e.g. `sccache` or alternatives) before Ratify. Investigation Findings section stands as evidence gathered so far, not a final conclusion; do not delete or resume without explicit Director direction.
+`DEFERRED` — parked as a skeleton at Director's request, tracked via `IE14` in `plan.md`. Investigation and internet-research findings are complete and stand as the durable record (see Investigation Findings and Follow-Up sections) — no `build.sh`/template fix identified, `sccache` explicitly declined for now. Not deleted at Package since it's not shipping; resume only on explicit Director direction.
