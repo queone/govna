@@ -3,8 +3,8 @@
 //! Runs against the current working directory (no positional arguments,
 //! no `--target` flag — govna-consistent with `drift-scan`'s cwd-only
 //! design, unlike governa's `-t/--target`). Writes the full canon set via
-//! `governance::render_canonical_files` (already built by `render-canon`,
-//! AC4), a `CLAUDE.md` symlink, and a `govna/ac<N>-govna-apply.md` adoption
+//! `governance::render_canonical_files` (already built by `render-canon`),
+//! a `CLAUDE.md` symlink, and a `govna/ac<N>-govna-apply.md` adoption
 //! record. No interactive prompting (govna's primary consumer is an AI
 //! agent invoking the CLI non-interactively, not a terminal user) — an
 //! unresolvable required param hard-fails with actionable guidance instead,

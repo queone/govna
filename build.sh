@@ -899,6 +899,35 @@ _validate_git_state() {
   fi
 }
 
+# Only meaningful for a repo shaped like govna itself: one that embeds and
+# ships its own canon templates, tracked by a literal CANON_VERSION constant
+# independent of PROGRAM_VERSION. Silently no-ops for every other Rust
+# consumer of this same script — mirrors the Go stack template's analogous
+# internal/templates/version.go TemplateVersion detection.
+_validate_canon_version_bump() {
+  local canon_src='src/templates.rs' tag old_canon new_canon
+  [ -f "$canon_src" ] || return 0
+  grep -Eq 'const[[:space:]]+CANON_VERSION[[:space:]]*:[[:space:]]*&str[[:space:]]*=[[:space:]]*"[^"]+"' \
+    "$canon_src" || return 0
+
+  tag=$(_latest_tag) || true
+  [ -n "$tag" ] || return 0
+
+  git diff --quiet "$tag" -- templates/ 2>/dev/null && return 0
+
+  new_canon=$(grep -Eo 'CANON_VERSION[[:space:]]*:[[:space:]]*&str[[:space:]]*=[[:space:]]*"[^"]+"' \
+    "$canon_src" | grep -Eo '"[^"]+"' | tr -d '"')
+  old_canon=$(git show "$tag:$canon_src" 2>/dev/null |
+    grep -Eo 'CANON_VERSION[[:space:]]*:[[:space:]]*&str[[:space:]]*=[[:space:]]*"[^"]+"' |
+    grep -Eo '"[^"]+"' | tr -d '"')
+
+  if [ "$old_canon" = "$new_canon" ]; then
+    _failure "$(printf 'prep: templates/ changed since %s but CANON_VERSION in %s is still %s — bump it before running prep' \
+      "$tag" "$canon_src" "$new_canon")"
+    return 1
+  fi
+}
+
 _cargo_version_info() {
   local manifest="$1"
   if [ ! -f "$manifest" ]; then
@@ -1032,6 +1061,7 @@ prep_run() {
   local stripped="${version#v}" current refs acfiles file
   _validate_release_inputs prep "$version" "$message" || return 1
   _validate_git_state prep "$version" || return 1
+  _validate_canon_version_bump || return 1
   current=$(_cargo_version_info Cargo.toml) || {
     _failure "$(printf 'prep: %s' "$current")"
     return 1

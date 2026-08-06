@@ -8,7 +8,7 @@
 //! file under `govna/`: the removal AC. `rm` deletes nothing itself — the
 //! actual removal is a later, separate Director-approved implementation
 //! pass against the emitted AC. Review items don't carry a pre-computed
-//! diff (AC10 Part C) — each Routing Decision bullet embeds a ready-to-run
+//! diff — each Routing Decision bullet embeds a ready-to-run
 //! comparison command instead, matching the "generate it when you need it"
 //! pattern `AGENTS.md`'s Drift-Scan Adoption section already documents.
 

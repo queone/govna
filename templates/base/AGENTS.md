@@ -286,17 +286,4 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names the Claude 
 
 ## Project Rules
 
-- Keep the repository/package release version separate from each installable utility version in multi-utility repositories.
-- Declare exactly one explicit strict stable SemVer version for each installable utility in multi-utility repositories.
-- Require each installable utility's `--version` invocation to exit 0, write exactly `<utility-id> [v]<MAJOR.MINOR.PATCH>` plus its newline to stdout, and write nothing to stderr.
-- Validate every utility declaration before compiling.
-- Validate each compiled utility's `--version` result before installing that utility.
-- Validate every compiled utility's `--version` result before writing release metadata.
-- Preserve independent utility versions during repository release prep; never overwrite them automatically.
-- End every successful build with the actionable `==> To release, run:` heading and the canonical release command when the repository has a next release tag.
-- Keep generated repos self-contained — every dependency lives in the generated repo itself.
-- Track forward-looking work in `plan.md` only via IE entries (pre-rubric IEs or AC-pointers, per `plan.md`'s docstring).
-- Limit `plan.md` structure to its existing top-level sections (`## Product Direction`, `## Ideas To Explore`); add new content only as IE bullets.
-- Draft skeleton AC stubs first for every multi-AC track, then register one AC-pointer IE per stub.
-- Remove each AC-pointer IE when its AC ships and the AC file is deleted at release prep.
-- Skip the IE entirely (at Director's discretion) when an AC is drafted and implemented inside a single cycle.
+- Follow existing repo patterns unless an approved improvement says otherwise.

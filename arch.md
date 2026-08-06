@@ -41,6 +41,7 @@ Acceptance Criteria are non-runtime control artifacts for non-trivial changes. A
 - generated repos must remain self-contained and must not depend on this repo at runtime
 - this repo treats itself as a governed `CODE` repo but does not re-bootstrap itself through `apply`; `apply` refuses to run against govna's own source checkout, per `emission::refuse_govna_source`
 - `build.sh` is the canonical build/release tool; implementation lives in shell, not Rust
+- `build.sh` and `templates/overlays/code/stacks/rust/build.sh.tmpl` are byte-identical except for one deliberate exception: govna's own `build.sh` carries a `_validate_canon_version_bump` check (fails `prep` if `templates/` changed since the last tag but `CANON_VERSION` didn't) that the shipped template omits — `CANON_VERSION`/`templates/` are concepts specific to a repo that embeds and ships its own canon, meaningless for an ordinary Rust CODE consumer, so it isn't propagated
 - ACs control non-trivial change flow but are not runtime architecture
 - `govna/roles.md` defines the two-role model (Operator, Director) that supplements the shared governance contract
 - justify every added crate in the governing AC (per `govna/code-stacks.md`); `clap` is currently the only external dependency, and is itself unused pending real flag-parsing work

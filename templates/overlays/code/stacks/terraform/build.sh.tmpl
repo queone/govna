@@ -146,7 +146,7 @@ _byte_len() { LC_ALL=C printf '%s' "$1" | LC_ALL=C wc -c | tr -d ' '; }
 # Processed in LC_ALL=C so iteration is per byte. NUL cannot occur in a CLI
 # argument, so byte 0 need not be handled.
 #
-# Bounded output-parity exception (AC147 Part F): invalid-UTF-8 high bytes
+# Bounded output-parity exception: invalid-UTF-8 high bytes
 # (e.g. 0xff) and non-printable Unicode runes (e.g. U+200B) are passed through
 # rather than \xHH/\uXXXX-escaped, because full strconv.Quote Unicode
 # classification is not portable in Bash 3.2. This affects only the %q *display*

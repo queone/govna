@@ -117,8 +117,8 @@ pub fn detect_flavor(dir: &Path) -> Result<RepoType, String> {
 }
 
 /// Same resolution as `detect_flavor`, also reporting which tier resolved
-/// it (`"metadata"` or `"fallback"`) — public surface for `drift-scan`
-/// (AC5), which reports the source in its emitted report header.
+/// it (`"metadata"` or `"fallback"`) — public surface for `drift-scan`,
+/// which reports the source in its emitted report header.
 pub fn detect_flavor_with_source(dir: &Path) -> Result<(RepoType, &'static str), String> {
     if let Some(metadata) = read_repo_metadata(dir)? {
         let repo_type = metadata
@@ -136,7 +136,7 @@ pub fn detect_flavor_with_source(dir: &Path) -> Result<(RepoType, &'static str),
 }
 
 /// Reads and parses `<dir>/govna/metadata.txt`. Public surface for
-/// `drift-scan` (AC5), which needs the full parsed record (canon_version,
+/// `drift-scan`, which needs the full parsed record (canon_version,
 /// code_stack) for its report header, not just the repo_type `detect_flavor` uses.
 pub fn read_repo_metadata(dir: &Path) -> Result<Option<BTreeMap<String, String>>, String> {
     let path = dir.join("govna").join("metadata.txt");

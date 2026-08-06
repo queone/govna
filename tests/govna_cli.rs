@@ -74,7 +74,7 @@ fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
 }
 
-// AT1: DOC flavor renders; metadata has repo_type = DOC, no code_stack, a canon_version line.
+// DOC flavor renders; metadata has repo_type = DOC, no code_stack, a canon_version line.
 #[test]
 fn render_canon_doc_flavor_metadata() {
     let cwd = new_fixture();
@@ -96,7 +96,7 @@ fn render_canon_doc_flavor_metadata() {
     assert!(metadata.contains("canon_version = v"), "{metadata}");
 }
 
-// AT2: cwd with Cargo.toml infers Rust; case-insensitive --stack override matches.
+// cwd with Cargo.toml infers Rust; case-insensitive --stack override matches.
 #[test]
 fn render_canon_infers_rust_and_accepts_case_insensitive_override() {
     let cwd = new_fixture();
@@ -141,7 +141,7 @@ fn render_canon_infers_rust_and_accepts_case_insensitive_override() {
     assert!(read(&explicit_target.join("govna/metadata.txt")).contains("code_stack = Rust"));
 }
 
-// AT3: cwd with Package.swift infers Swift; case-insensitive --stack override matches.
+// cwd with Package.swift infers Swift; case-insensitive --stack override matches.
 #[test]
 fn render_canon_infers_swift_and_accepts_case_insensitive_override() {
     let cwd = new_fixture();
@@ -186,7 +186,7 @@ fn render_canon_infers_swift_and_accepts_case_insensitive_override() {
     assert!(read(&explicit_target.join("govna/metadata.txt")).contains("code_stack = Swift"));
 }
 
-// AT4: DOC flavor rejects --stack.
+// DOC flavor rejects --stack.
 #[test]
 fn render_canon_doc_rejects_stack() {
     let cwd = new_fixture();
@@ -207,7 +207,7 @@ fn render_canon_doc_rejects_stack() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("applies only to CODE canon"));
 }
 
-// AT5: module-path is Go-only — rejected for DOC and for non-Go CODE stacks.
+// module-path is Go-only — rejected for DOC and for non-Go CODE stacks.
 #[test]
 fn render_canon_module_path_rejected_outside_go_code() {
     let cwd = new_fixture();
@@ -247,7 +247,7 @@ fn render_canon_module_path_rejected_outside_go_code() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("applies only to Go CODE canon"));
 }
 
-// AT6: Go module path read from go.mod; explicit --module-path overrides it.
+// Go module path read from go.mod; explicit --module-path overrides it.
 #[test]
 fn render_canon_go_module_path_and_override() {
     let cwd = new_fixture();
@@ -300,7 +300,7 @@ fn render_canon_go_module_path_and_override() {
     assert!(readme.starts_with("# override"), "{readme}");
 }
 
-// AT7: .gitignore carries the stack ignore block; development-guidelines.md carries the
+// .gitignore carries the stack ignore block; development-guidelines.md carries the
 // stack guideline block above ## Project Practices.
 #[test]
 fn render_canon_stitches_gitignore_and_guidelines() {
@@ -333,7 +333,7 @@ fn render_canon_stitches_gitignore_and_guidelines() {
     assert!(rust_pos < boundary_pos, "{guidelines}");
 }
 
-// AT8: help output documents --stack and --module-path.
+// help output documents --stack and --module-path.
 #[test]
 fn render_canon_help_documents_flags() {
     let out = govna().args(["render-canon", "--help"]).output().unwrap();
@@ -343,7 +343,7 @@ fn render_canon_help_documents_flags() {
     assert!(stderr.contains("-m, --module-path <path>"), "{stderr}");
 }
 
-// AT9: AGENTS.md and govna/*.md are fully substituted — no leftover {{...}} tokens.
+// AGENTS.md and govna/*.md are fully substituted — no leftover {{...}} tokens.
 // Deliberately scoped to these two paths, not all rendered output: the Go stack's
 // build.sh legitimately contains `{{.Path}}` (Go's own `go list -f` syntax).
 #[test]
@@ -376,7 +376,7 @@ fn render_canon_output_is_fully_substituted() {
     }
 }
 
-// AT10: DOC's rendered AGENTS.md differs from CODE's and references DOC-specific docs —
+// DOC's rendered AGENTS.md differs from CODE's and references DOC-specific docs —
 // proves the DOC overlay's AGENTS.md.tmpl overrides base/AGENTS.md, per the
 // last-write-wins output-precedence rule, rather than base silently winning for both flavors.
 #[test]
@@ -431,7 +431,7 @@ fn render_canon_doc_agents_overrides_base() {
     );
 }
 
-// AT11: CLAUDE.md is a symlink to AGENTS.md, for both flavors (govna's deliberate
+// CLAUDE.md is a symlink to AGENTS.md, for both flavors (govna's deliberate
 // divergence from governa parity — governa's own render-canon never creates this).
 #[test]
 fn render_canon_creates_claude_symlink() {
@@ -452,7 +452,7 @@ fn render_canon_creates_claude_symlink() {
     assert_eq!(link_target, Path::new("AGENTS.md"));
 }
 
-// AT12: govna's own root docs no longer carry stale governa Go-implementation tokens;
+// govna's own root docs no longer carry stale governa Go-implementation tokens;
 // .gitignore and development-guidelines.md carry the Rust stitching; README shows
 // render-canon as implemented.
 #[test]
@@ -503,7 +503,7 @@ fn root_docs_have_no_stale_governa_tokens() {
     );
 }
 
-// AT14: govna's own repo root carries no self-referential govna/metadata.txt,
+// govna's own repo root carries no self-referential govna/metadata.txt,
 // matching governa's own precedent (verified via governa's git history: it has
 // never once committed a self-referential metadata.txt at its own root — the
 // only copies that exist anywhere in its history are the two template sources).
@@ -513,11 +513,11 @@ fn root_has_no_self_referential_metadata() {
     assert!(!repo_root.join("govna/metadata.txt").exists());
 }
 
-// AT13 [Manual] — Director reads the rewritten govna/*.md root docs end-to-end and
+// [Manual] — Director reads the rewritten govna/*.md root docs end-to-end and
 // confirms the prose is accurate for govna's actual implementation. No automated
 // coverage possible; tracked here as a marker only.
 
-// ── drift-scan (AC5) fixtures ───────────────────────────────────────────────
+// ── drift-scan fixtures ─────────────────────────────────────────────────────
 
 fn git(dir: &Path, args: &[&str]) {
     let out = Command::new("git")
@@ -589,7 +589,7 @@ fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a s
         .find(|f| f["relpath"] == relpath)
 }
 
-// AT1: drift-scan refuses to run against govna's own source checkout —
+// drift-scan refuses to run against govna's own source checkout —
 // proves refuse_govna_source runs before require_govna_adopted, even though
 // this repo would otherwise pass the positive adoption check (it has
 // AGENTS.md + govna/ac-template.md). Safe against the real repo: the
@@ -606,7 +606,7 @@ fn drift_scan_refuses_govna_source() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
 }
 
-// AT2: no AGENTS.md at all fails require_govna_adopted's exact wording.
+// no AGENTS.md at all fails require_govna_adopted's exact wording.
 #[test]
 fn drift_scan_requires_agents_md() {
     let dir = new_fixture();
@@ -620,7 +620,7 @@ fn drift_scan_requires_agents_md() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("is not a govna-adopted repo"));
 }
 
-// AT3: passes require_govna_adopted (AGENTS.md + govna/ac-template.md) but
+// passes require_govna_adopted (AGENTS.md + govna/ac-template.md) but
 // has no .git/ — fails on the git-worktree requirement before classification.
 #[test]
 fn drift_scan_requires_git_worktree() {
@@ -637,7 +637,7 @@ fn drift_scan_requires_git_worktree() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a git worktree"));
 }
 
-// AT4: fresh, unmodified fixture — everything Match (or, byte-equal right
+// fresh, unmodified fixture — everything Match (or, byte-equal right
 // after a fresh render, plan.md/arch.md also Match; they only classify
 // ExpectedDivergence once actually customized), zero sync/migration/routing
 // entries, "No sync items." in the emitted stub.
@@ -653,7 +653,7 @@ fn drift_scan_fresh_fixture_all_match() {
     assert!(stub.contains("No sync items."), "{stub}");
 }
 
-// AT5: a committed edit to a non-format-defining file with git history
+// a committed edit to a non-format-defining file with git history
 // classifies Ambiguity, routed to Routing Decisions (not silently synced).
 #[test]
 fn drift_scan_ambiguity_routes_to_review() {
@@ -674,7 +674,7 @@ fn drift_scan_ambiguity_routes_to_review() {
     assert!(stub.contains("govna/roles.md"));
 }
 
-// AT6: format-defining override. AGENTS.md edited above its canon-zone
+// format-defining override. AGENTS.md edited above its canon-zone
 // boundary, with committed history (raw classification Ambiguity — a
 // zero-history ClearSync raw classification would ALSO force to sync, but
 // the "Format-defining file routing" note only fires when the override
@@ -708,7 +708,7 @@ fn drift_scan_format_defining_forces_sync() {
     );
 }
 
-// AT7: a preserve marker in CHANGELOG.md suppresses sync — classifies
+// a preserve marker in CHANGELOG.md suppresses sync — classifies
 // Preserve, routed to Out Of Scope with the marker citation shown.
 #[test]
 fn drift_scan_preserve_marker_routes_to_out_of_scope() {
@@ -736,7 +736,7 @@ fn drift_scan_preserve_marker_routes_to_out_of_scope() {
     assert!(stub.contains("preserve govna/roles.md"));
 }
 
-// AT8: mixed-content boundary. An edit strictly below `## Project Practices`
+// mixed-content boundary. An edit strictly below `## Project Practices`
 // (the repo-owned tail) classifies Match — canon-zone byte-equal, not a
 // false divergence.
 #[test]
@@ -755,7 +755,7 @@ fn drift_scan_mixed_content_below_boundary_matches() {
     assert_eq!(fr["classification"], "match", "{fr}");
 }
 
-// AT9: re-running immediately (unedited stub) reuses the same AC number;
+// re-running immediately (unedited stub) reuses the same AC number;
 // editing the stub's body then re-running fails with the edit-detection
 // guard's exact wording.
 #[test]
@@ -784,7 +784,7 @@ fn drift_scan_idempotent_reuse_and_edit_detection_guard() {
     );
 }
 
-// AT10: cross-flavor orphan detection. A repo rendered DOC then re-rendered
+// cross-flavor orphan detection. A repo rendered DOC then re-rendered
 // CODE over the same directory leaves DOC-only files orphaned; scanning
 // with --flavor code classifies all of them target-has-no-canon.
 #[test]
@@ -829,7 +829,7 @@ fn drift_scan_cross_flavor_orphans() {
     }
 }
 
-// AT11: name-reference body scan. A target-only file (no canon counterpart
+// name-reference body scan. A target-only file (no canon counterpart
 // in either flavor) referenced via a backticked path from a divergent,
 // git-tracked file classifies target-has-no-canon via the name-reference
 // branch, not silently dropped.
@@ -861,7 +861,7 @@ fn drift_scan_name_referenced_target_only_file() {
     );
 }
 
-// AT12: --json output is valid JSON, deserializes to the expected shape,
+// --json output is valid JSON, deserializes to the expected shape,
 // and canon_content never appears in it.
 #[test]
 fn drift_scan_json_output_shape() {
@@ -874,7 +874,7 @@ fn drift_scan_json_output_shape() {
     assert!(!raw.contains("canon_content"), "{raw}");
 }
 
-// AT13: `drift-scan extra-arg` fails with the exact "no positional
+// `drift-scan extra-arg` fails with the exact "no positional
 // arguments accepted" wording.
 #[test]
 fn drift_scan_rejects_positional_args() {
@@ -888,7 +888,7 @@ fn drift_scan_rejects_positional_args() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("no positional arguments accepted"));
 }
 
-// AT14 [Manual] — Director runs drift-scan against a real, organically-
+// [Manual] — Director runs drift-scan against a real, organically-
 // drifted consumer repo and confirms the emitted AC stub reads sensibly
 // end-to-end. No automated fixture substitutes for a genuinely messy real
 // repo; tracked here as a marker only.
@@ -1027,9 +1027,9 @@ fn render_canon_infers_terraform_from_tf_glob() {
     assert!(read(&target.join("govna/metadata.txt")).contains("code_stack = Terraform"));
 }
 
-// ── apply (AC7) fixtures ────────────────────────────────────────────────────
+// ── apply fixtures ──────────────────────────────────────────────────────────
 
-// AT1: fresh empty target, apply -f code -s rust: writes AGENTS.md, CLAUDE.md
+// fresh empty target, apply -f code -s rust: writes AGENTS.md, CLAUDE.md
 // symlink, metadata.txt (repo_type = CODE / code_stack = Rust), and
 // govna/ac1-govna-apply.md; exits 0.
 #[test]
@@ -1054,7 +1054,7 @@ fn apply_fresh_code_target() {
     assert!(dir.join("govna/ac1-govna-apply.md").is_file());
 }
 
-// AT2: fresh empty target, apply -f doc: writes the DOC-overlay set (no
+// fresh empty target, apply -f doc: writes the DOC-overlay set (no
 // --stack required) and govna/ac1-govna-apply.md; exits 0.
 #[test]
 fn apply_fresh_doc_target() {
@@ -1074,7 +1074,7 @@ fn apply_fresh_doc_target() {
     assert!(dir.join("govna/ac1-govna-apply.md").is_file());
 }
 
-// AT3: no flags, target has CODE manifests present — infers flavor and stack
+// no flags, target has CODE manifests present — infers flavor and stack
 // without erroring.
 #[test]
 fn apply_infers_flavor_and_stack_from_manifest() {
@@ -1089,7 +1089,7 @@ fn apply_infers_flavor_and_stack_from_manifest() {
     assert!(read(&dir.join("govna/metadata.txt")).contains("code_stack = Rust"));
 }
 
-// AT4: no resolvable flavor signal and no -f flag exits non-zero with an
+// no resolvable flavor signal and no -f flag exits non-zero with an
 // actionable error.
 #[test]
 fn apply_unresolvable_flavor_errors() {
@@ -1100,7 +1100,7 @@ fn apply_unresolvable_flavor_errors() {
     assert!(stderr.contains("--flavor"), "{stderr}");
 }
 
-// AT5: re-running apply against a target that already has AGENTS.md prints
+// re-running apply against a target that already has AGENTS.md prints
 // the existing-governance-files warning and allocates the adoption AC's
 // number above the pre-existing govna/ac1-govna-apply.md (not ac1 again).
 #[test]
@@ -1136,7 +1136,7 @@ fn apply_reapply_bumps_ac_number() {
     assert!(dir.join("govna/ac2-govna-apply.md").is_file());
 }
 
-// AT5b: a fresh target with no .git/ at all (no --init-git passed) still
+// a fresh target with no .git/ at all (no --init-git passed) still
 // succeeds and allocates ac1 — regression coverage for next_ac_number's
 // git-error tolerance (verified during Audit: a target with no .git/ at
 // all produces a different git stderr than "no commits yet", and the
@@ -1158,7 +1158,7 @@ fn apply_fresh_target_without_git_succeeds() {
     assert!(dir.join("govna/ac1-govna-apply.md").is_file());
 }
 
-// AT6: CLAUDE.md already present as a regular (non-symlink) file with
+// CLAUDE.md already present as a regular (non-symlink) file with
 // content — apply warns and leaves it untouched rather than deleting it.
 #[test]
 fn apply_preserves_existing_regular_claude_file() {
@@ -1182,7 +1182,7 @@ fn apply_preserves_existing_regular_claude_file() {
     assert_eq!(read(&dir.join("CLAUDE.md")), "hand-written content\n");
 }
 
-// AT7: --init-git on a target with no .git/ runs git init; a second run
+// --init-git on a target with no .git/ runs git init; a second run
 // against a target that already has .git/ prints a skip line and does not
 // re-init.
 #[test]
@@ -1217,7 +1217,7 @@ fn apply_init_git_then_skips_on_rerun() {
     );
 }
 
-// AT8: apply against govna's own source checkout refuses with a non-zero
+// apply against govna's own source checkout refuses with a non-zero
 // exit, mirroring drift-scan's existing refusal test. Safe against the
 // real repo: refuse_govna_source is the very first thing run_inner does.
 #[test]
@@ -1232,9 +1232,9 @@ fn apply_refuses_govna_source() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
 }
 
-// ── govna-source-only content exclusion (AC8) ───────────────────────────────
+// ── govna-source-only content exclusion ─────────────────────────────────────
 
-// AT5: a freshly apply'd CODE target's rendered AGENTS.md and
+// a freshly apply'd CODE target's rendered AGENTS.md and
 // development-guidelines.md don't carry govna-source-only content that
 // references paths no consumer repo has.
 #[test]
@@ -1268,7 +1268,7 @@ fn apply_excludes_govna_source_only_content() {
     );
 }
 
-// AT9: the written govna/ac<N>-govna-apply.md contains all five required
+// the written govna/ac<N>-govna-apply.md contains all five required
 // sections and lists every written file path under ## In Scope.
 #[test]
 fn apply_adoption_ac_has_required_sections() {
@@ -1297,7 +1297,7 @@ fn apply_adoption_ac_has_required_sections() {
     assert!(ac.contains("- `CLAUDE.md` (agent alias link)"), "{ac}");
 }
 
-// ── rm (AC9) fixtures ────────────────────────────────────────────────────────
+// ── rm fixtures ──────────────────────────────────────────────────────────────
 //
 // Reuses `rendered_code_fixture()` (render-canon-based, no adoption AC) as
 // the baseline rather than an `apply`-based fixture: `apply` would write its
@@ -1320,9 +1320,9 @@ fn rm_stub(dir: &Path) -> String {
     read(&dir.join(stub_rel))
 }
 
-// AT1: fresh unmodified fixture — pure-canon files list as `delete file`,
-// CLAUDE.md lists as `delete symlink`. No companion diffs file (AC10 Part C
-// — rm no longer emits one).
+// fresh unmodified fixture — pure-canon files list as `delete file`,
+// CLAUDE.md lists as `delete symlink`. No companion diffs file (rm no
+// longer emits one).
 #[test]
 fn rm_fresh_fixture_pure_canon_deletes() {
     let dir = rendered_code_fixture();
@@ -1335,10 +1335,10 @@ fn rm_fresh_fixture_pure_canon_deletes() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("ac1-govna-rm-"), "{stdout}");
     assert!(!stdout.contains("-diffs.md"), "{stdout}");
-    assert!(dir.join("govna/ac1-govna-rm-v0.1.0.md").is_file());
-    assert!(!dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md").exists());
+    assert!(dir.join("govna/ac1-govna-rm-v0.2.0.md").is_file());
+    assert!(!dir.join("govna/ac1-govna-rm-v0.2.0-diffs.md").exists());
 
-    let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
+    let stub = read(&dir.join("govna/ac1-govna-rm-v0.2.0.md"));
     assert!(
         stub.contains("- `govna/roles.md` — delete file; byte-equal govna canon."),
         "{stub}"
@@ -1349,7 +1349,7 @@ fn rm_fresh_fixture_pure_canon_deletes() {
     );
 }
 
-// AT2: hybrid files always route to Routing Decisions, even unmodified.
+// hybrid files always route to Routing Decisions, even unmodified.
 #[test]
 fn rm_hybrid_files_always_route_to_review() {
     let dir = rendered_code_fixture();
@@ -1369,7 +1369,7 @@ fn rm_hybrid_files_always_route_to_review() {
     }
 }
 
-// AT3: plan.md/arch.md list under Out Of Scope as repo-owned govna-adjacent content.
+// plan.md/arch.md list under Out Of Scope as repo-owned govna-adjacent content.
 #[test]
 fn rm_expected_divergence_files_kept() {
     let dir = rendered_code_fixture();
@@ -1384,7 +1384,7 @@ fn rm_expected_divergence_files_kept() {
     }
 }
 
-// AT4: a preserve marker routes that file to Out Of Scope, not In Scope or Review.
+// a preserve marker routes that file to Out Of Scope, not In Scope or Review.
 #[test]
 fn rm_preserve_marker_routes_to_keep() {
     let dir = rendered_code_fixture();
@@ -1403,7 +1403,7 @@ fn rm_preserve_marker_routes_to_keep() {
     );
 }
 
-// AT5: a target-only file lists under Out Of Scope as target-only repo-owned file.
+// a target-only file lists under Out Of Scope as target-only repo-owned file.
 #[test]
 fn rm_target_only_file_kept() {
     let dir = rendered_code_fixture();
@@ -1417,9 +1417,9 @@ fn rm_target_only_file_kept() {
     );
 }
 
-// AT6: an edited non-hybrid canon file routes to Review as ambiguity, with
-// an on-demand comparison recipe embedded in the bullet (AC10 Part C — no
-// pre-computed diff, no companion diffs file).
+// an edited non-hybrid canon file routes to Review as ambiguity, with
+// an on-demand comparison recipe embedded in the bullet (no pre-computed
+// diff, no companion diffs file).
 #[test]
 fn rm_edited_canon_file_routes_to_ambiguity() {
     let dir = rendered_code_fixture();
@@ -1437,7 +1437,7 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
+    let stub = read(&dir.join("govna/ac1-govna-rm-v0.2.0.md"));
     assert!(
         stub.contains("`govna/roles.md` is consumer-edited canon file"),
         "{stub}"
@@ -1448,10 +1448,10 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
         ),
         "{stub}"
     );
-    assert!(!dir.join("govna/ac1-govna-rm-v0.1.0-diffs.md").exists());
+    assert!(!dir.join("govna/ac1-govna-rm-v0.2.0-diffs.md").exists());
 }
 
-// AT7: re-running unedited reuses the same AC number for both files;
+// re-running unedited reuses the same AC number for both files;
 // editing either fails with the edit-detection guard's exact wording.
 #[test]
 fn rm_idempotent_reuse_and_edit_detection_guard() {
@@ -1465,7 +1465,7 @@ fn rm_idempotent_reuse_and_edit_detection_guard() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout).to_string();
     assert_eq!(stdout1, stdout2, "AC number should be reused");
 
-    let stub_path = dir.join("govna/ac1-govna-rm-v0.1.0.md");
+    let stub_path = dir.join("govna/ac1-govna-rm-v0.2.0.md");
     let tampered = format!("{}\ntampered\n", read(&stub_path));
     fs::write(&stub_path, tampered).unwrap();
     let out3 = govna().arg("rm").current_dir(&dir).output().unwrap();
@@ -1473,7 +1473,7 @@ fn rm_idempotent_reuse_and_edit_detection_guard() {
     assert!(String::from_utf8_lossy(&out3.stderr).contains("has been edited since last emission"));
 }
 
-// AT8: rm against govna's own source checkout refuses with a non-zero exit.
+// rm against govna's own source checkout refuses with a non-zero exit.
 #[test]
 fn rm_refuses_govna_source() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -1482,7 +1482,7 @@ fn rm_refuses_govna_source() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
 }
 
-// AT9: no AGENTS.md fails require_govna_adopted's exact wording; no .git/
+// no AGENTS.md fails require_govna_adopted's exact wording; no .git/
 // fails the git-worktree requirement.
 #[test]
 fn rm_requires_adoption_and_git_worktree() {
@@ -1504,7 +1504,7 @@ fn rm_requires_adoption_and_git_worktree() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a git worktree"));
 }
 
-// AT10: --flavor override is honored — forcing --flavor doc on an
+// --flavor override is honored — forcing --flavor doc on an
 // otherwise CODE-shaped fixture drives classification off DOC's smaller
 // canon set (govna/editing-guidelines.md, not development-guidelines.md).
 #[test]
@@ -1520,7 +1520,7 @@ fn rm_flavor_override_changes_canon_set() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let stub = read(&dir.join("govna/ac1-govna-rm-v0.1.0.md"));
+    let stub = read(&dir.join("govna/ac1-govna-rm-v0.2.0.md"));
     // Under DOC's canon (forced via --flavor), development-guidelines.md
     // isn't a canon path at all — it becomes target-only, not a hybrid
     // Routing Decision the way it is under CODE's canon.
@@ -1534,7 +1534,7 @@ fn rm_flavor_override_changes_canon_set() {
     );
 }
 
-// AT11: `rm extra-arg` fails with the exact "no positional arguments
+// `rm extra-arg` fails with the exact "no positional arguments
 // accepted" wording.
 #[test]
 fn rm_rejects_positional_args() {
@@ -1548,7 +1548,7 @@ fn rm_rejects_positional_args() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("no positional arguments accepted"));
 }
 
-// ── migrate-from-governa (AC10 Part A) + hunk-merge (AC10 Part B) ──────────
+// ── migrate-from-governa + hunk-merge ───────────────────────────────────────
 
 fn governa_metadata_fixture(code_stack: Option<&str>) -> PathBuf {
     let dir = new_fixture();
@@ -1608,7 +1608,7 @@ fn path_without_governa() -> String {
         .into_owned()
 }
 
-// AT1: governa/metadata.txt carries repo_type/code_stack; apply (no flags,
+// governa/metadata.txt carries repo_type/code_stack; apply (no flags,
 // no manifest file) resolves CODE/Rust from it instead of failing to infer.
 #[test]
 fn apply_migration_carries_over_legacy_metadata() {
@@ -1624,7 +1624,7 @@ fn apply_migration_carries_over_legacy_metadata() {
     assert!(metadata.contains("code_stack = Rust\n"), "{metadata}");
 }
 
-// AC16 AT5: a governa-managed apply emits exactly one AC file (not two,
+// a governa-managed apply emits exactly one AC file (not two,
 // adoption + migration merged), with a ## Migration findings section.
 #[test]
 fn apply_migration_emits_single_merged_ac() {
@@ -1655,13 +1655,13 @@ fn apply_migration_emits_single_merged_ac() {
         "expected exactly one AC file: {ac_files:?}"
     );
 
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
     assert!(ac.contains("## Migration findings"), "{ac}");
     assert!(ac.contains("## In Scope"), "{ac}");
     assert!(ac.contains("### In Scope (legacy governa/ tree)"), "{ac}");
 }
 
-// AT2: precise tier. A fake `governa` binary on PATH renders roles.md;
+// precise tier. A fake `governa` binary on PATH renders roles.md;
 // byte-identical target file classifies confirmed-safe, a differing one
 // classifies needs-review with the exact on-demand recipe, not a diff.
 #[test]
@@ -1682,7 +1682,7 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
     assert!(
         ac.contains("- `governa/roles.md` — confirmed safe; confirmed byte-identical"),
         "{ac}"
@@ -1701,7 +1701,7 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
         "{}",
         String::from_utf8_lossy(&out2.stderr)
     );
-    let ac2 = read(&dir2.join("govna/ac1-govna-apply-v0.1.0.md"));
+    let ac2 = read(&dir2.join("govna/ac1-govna-apply-v0.2.0.md"));
     assert!(
         ac2.contains(
             "Compare with: `governa render-canon --flavor code --stack Rust <scratch> && diff -ru <scratch>/governa/roles.md governa/roles.md`"
@@ -1710,7 +1710,7 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
     );
 }
 
-// AT3: crude tier. No `governa` binary on PATH at all: governa/roles.md
+// crude tier. No `governa` binary on PATH at all: governa/roles.md
 // (has a govna/ equivalent, since apply just wrote one) flags "likely
 // superseded"; a file with no govna equivalent flags "no equivalent".
 #[test]
@@ -1729,7 +1729,7 @@ fn apply_migration_crude_tier_fallback_no_governa_binary() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
     assert!(
         ac.contains("- `governa/roles.md` — likely superseded; likely superseded by `govna/roles.md`; compare manually before removing."),
         "{ac}"
@@ -1742,7 +1742,7 @@ fn apply_migration_crude_tier_fallback_no_governa_binary() {
     );
 }
 
-// AT4: a `governa` binary that succeeds on --version but fails on
+// a `governa` binary that succeeds on --version but fails on
 // render-canon (e.g. unsupported stack) falls back to the crude path —
 // apply does not error or crash.
 #[test]
@@ -1763,11 +1763,11 @@ fn apply_migration_falls_back_when_render_canon_fails() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.1.0.md"));
+    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
     assert!(ac.contains("likely superseded by `govna/roles.md`"), "{ac}");
 }
 
-// AT5: re-running apply unedited reuses the same merged apply+migration-AC
+// re-running apply unedited reuses the same merged apply+migration-AC
 // number; editing it and re-running fails with the edit-detection guard's
 // wording.
 #[test]
@@ -1781,7 +1781,7 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
         .output()
         .unwrap();
     assert!(out1.status.success());
-    assert!(dir.join("govna/ac1-govna-apply-v0.1.0.md").is_file());
+    assert!(dir.join("govna/ac1-govna-apply-v0.2.0.md").is_file());
 
     let out2 = govna()
         .args(["apply", "-f", "code", "-s", "rust"])
@@ -1791,11 +1791,11 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
         .unwrap();
     assert!(out2.status.success());
     assert!(
-        !dir.join("govna/ac2-govna-apply-v0.1.0.md").exists(),
+        !dir.join("govna/ac2-govna-apply-v0.2.0.md").exists(),
         "should reuse ac1, not allocate ac2"
     );
 
-    let ac_path = dir.join("govna/ac1-govna-apply-v0.1.0.md");
+    let ac_path = dir.join("govna/ac1-govna-apply-v0.2.0.md");
     let tampered = format!("{}\ntampered\n", read(&ac_path));
     fs::write(&ac_path, tampered).unwrap();
     let out3 = govna()
@@ -1819,7 +1819,7 @@ fn count_migration_acs(dir: &Path) -> usize {
         .count()
 }
 
-// AT6: no governa/ directory at all — no migration AC emitted, behavior
+// no governa/ directory at all — no migration AC emitted, behavior
 // identical to a plain apply. Self-terminating: once governa/ is removed,
 // re-running apply emits no further migration AC. Counts migration-AC
 // files rather than asserting specific numbers, since each re-`apply` also
@@ -1867,7 +1867,7 @@ fn apply_migration_noop_without_governa_dir_and_self_terminates() {
     );
 }
 
-// AT7: Part B — existing-mode apply on a repo whose AGENTS.md has extra
+// Part B — existing-mode apply on a repo whose AGENTS.md has extra
 // bullets under ## Project Rules preserves them byte-for-byte; everything
 // above the boundary matches fresh canon.
 #[test]
@@ -1902,7 +1902,7 @@ fn apply_hunk_merges_agents_md_preserving_extra_bullets() {
     );
 }
 
-// AT8: Part B — existing-mode apply on an unmodified repo is a no-op merge:
+// Part B — existing-mode apply on an unmodified repo is a no-op merge:
 // output byte-identical to a fresh write.
 #[test]
 fn apply_hunk_merge_idempotent_when_unmodified() {
@@ -1923,7 +1923,7 @@ fn apply_hunk_merge_idempotent_when_unmodified() {
     assert_eq!(first, second);
 }
 
-// AT9: Part B — existing-mode apply leaves a customized README.md/CHANGELOG.md
+// Part B — existing-mode apply leaves a customized README.md/CHANGELOG.md
 // completely untouched (no boundary to merge on for either).
 #[test]
 fn apply_skips_readme_and_changelog_when_existing() {
@@ -1946,7 +1946,7 @@ fn apply_skips_readme_and_changelog_when_existing() {
     assert_eq!(read(&dir.join("CHANGELOG.md")), "my custom changelog\n");
 }
 
-// AT10: Part B — new-mode apply (fresh empty dir) is unaffected: writes
+// Part B — new-mode apply (fresh empty dir) is unaffected: writes
 // AGENTS.md/README.md/CHANGELOG.md/development-guidelines.md fresh.
 #[test]
 fn apply_new_mode_unaffected_by_hunk_merge_logic() {
@@ -1965,7 +1965,7 @@ fn apply_new_mode_unaffected_by_hunk_merge_logic() {
     assert!(dir.join("plan.md").is_file());
 }
 
-// AT11: Part B — an AGENTS.md missing the ## Project Rules boundary
+// Part B — an AGENTS.md missing the ## Project Rules boundary
 // entirely falls back to blind overwrite with a printed warning, rather
 // than silently skipping or crashing.
 #[test]
@@ -1993,9 +1993,9 @@ fn apply_falls_back_to_overwrite_when_boundary_missing() {
     assert!(agents.contains("## Governed Sections"), "{agents}");
 }
 
-// ── AC14: apply must not overwrite EXPECTED_DIVERGENCE_PATHS files ─────────
+// ── apply must not overwrite EXPECTED_DIVERGENCE_PATHS files ───────────────
 
-// AC14 AT1: existing-mode apply preserves pre-existing arch.md/plan.md
+// existing-mode apply preserves pre-existing arch.md/plan.md
 // content instead of blindly overwriting it with the fresh canon stub.
 #[test]
 fn apply_preserves_existing_arch_and_plan_content() {
@@ -2027,9 +2027,9 @@ fn apply_preserves_existing_arch_and_plan_content() {
     );
 }
 
-// ── AC16: apply-AC fidelity, DOC closure-audit wording, single migration AC ─
+// ── apply-AC fidelity, DOC closure-audit wording, single migration AC ──────
 
-// AC16 AT1: new-mode apply labels every canon file "(written)" in the
+// new-mode apply labels every canon file "(written)" in the
 // emitted AC's ## In Scope — the common case, no skips/merges to report yet.
 #[test]
 fn apply_new_mode_labels_every_file_written() {
@@ -2046,7 +2046,7 @@ fn apply_new_mode_labels_every_file_written() {
     assert!(!ac.contains("merged"), "{ac}");
 }
 
-// AC16 AT2: existing-mode apply's emitted AC correctly labels
+// existing-mode apply's emitted AC correctly labels
 // README.md/CHANGELOG.md/arch.md/plan.md as preserved, not written —
 // regression test for the exact defect the `bits` audit found (the emitted
 // AC previously claimed these were written when the run actually skipped
@@ -2079,8 +2079,8 @@ fn apply_existing_mode_ac_labels_preserved_files_correctly() {
     assert!(ac.contains("- `AGENTS.md` (canon zone merged"), "{ac}");
 }
 
-// AC16 AT3: AT1's reworded manual-review wording, and AT3's two distinct
-// wordings depending on the real CLAUDE.md symlink outcome.
+// The reworded manual-review wording, and the two distinct wordings
+// depending on the real CLAUDE.md symlink outcome.
 #[test]
 fn apply_ac_at1_is_manual_review_wording() {
     let dir = new_fixture();
@@ -2120,7 +2120,7 @@ fn apply_ac_at3_reflects_symlink_conflict() {
     );
 }
 
-// AC16 AT4: the closure-audit bullet forks by flavor — DOC no longer
+// the closure-audit bullet forks by flavor — DOC no longer
 // contains CODE/data-pipeline vocabulary, and DOC's render differs from
 // CODE's at that exact bullet.
 #[test]
@@ -2162,7 +2162,104 @@ fn render_canon_doc_closure_audit_bullet_has_no_code_vocabulary() {
     assert!(doc_agents.contains("published page"), "{doc_agents}");
 }
 
-// AC16 AT5b: a mixed_content_boundary file with no matching boundary falls
+// Fresh CODE and DOC renders both seed ## Project Rules with just the one
+// generic bullet — no govna-specific utility-versioning or IE-tracking
+// content leaked into what a fresh consumer gets.
+#[test]
+fn render_canon_project_rules_seed_has_no_govna_specific_content() {
+    let code_dir = new_fixture();
+    let doc_dir = new_fixture();
+    govna()
+        .args([
+            "render-canon",
+            "--flavor",
+            "code",
+            "--stack",
+            "rust",
+            code_dir.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    govna()
+        .args(["render-canon", "--flavor", "doc", doc_dir.to_str().unwrap()])
+        .output()
+        .unwrap();
+    for dir in [&code_dir, &doc_dir] {
+        let agents = read(&dir.join("AGENTS.md"));
+        let tail = agents
+            .split("## Project Rules\n\n")
+            .nth(1)
+            .expect("Project Rules section missing");
+        assert_eq!(
+            tail.trim_end(),
+            "- Follow existing repo patterns unless an approved improvement says otherwise.",
+            "{agents}"
+        );
+    }
+}
+
+// govna's own root AGENTS.md keeps its real Project Rules bullets
+// (utility-versioning, IE-tracking) unchanged — only the shipped seed was
+// stripped, not govna's own contract.
+#[test]
+fn root_agents_project_rules_unchanged() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let agents = read(&repo_root.join("AGENTS.md"));
+    assert!(
+        agents.contains(
+            "Keep the repository/package release version separate from each installable utility version"
+        ),
+        "{agents}"
+    );
+    assert!(
+        agents.contains("Track forward-looking work in `plan.md` only via IE entries"),
+        "{agents}"
+    );
+}
+
+// prep's canon-version validation gate — no other reasonable place to unit
+// test build.sh logic from Rust, exercised directly by invoking it via bash
+// instead.
+#[test]
+fn build_sh_validates_canon_version_bump() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = Command::new("bash")
+        .arg("-c")
+        .arg("source build.sh; _failure() { echo \"FAILURE: $*\" >&2; return 1; }; _validate_canon_version_bump")
+        .current_dir(repo_root)
+        .output()
+        .unwrap();
+    // Whatever the current real repo state is, the function must run
+    // without a bash error (syntax/undefined-variable failures would show
+    // up as a non-0/1 exit or stderr noise unrelated to the check itself).
+    assert!(
+        out.status.code() == Some(0) || out.status.code() == Some(1),
+        "unexpected exit: {:?}\nstderr: {}",
+        out.status.code(),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+// The canon-version validation gate is govna-source-only (CANON_VERSION and
+// templates/ don't exist in an ordinary consumer repo) and deliberately not
+// shipped in the Rust stack template — locks in the one intentional
+// divergence between build.sh and its template mirror.
+#[test]
+fn rust_stack_template_omits_canon_version_check() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let build_sh = read(&repo_root.join("build.sh"));
+    let template = read(&repo_root.join("templates/overlays/code/stacks/rust/build.sh.tmpl"));
+    assert!(
+        build_sh.contains("_validate_canon_version_bump"),
+        "{build_sh}"
+    );
+    assert!(
+        !template.contains("_validate_canon_version_bump"),
+        "{template}"
+    );
+}
+
+// a mixed_content_boundary file with no matching boundary falls
 // back to a blind overwrite, and the emitted AC labels it distinctly from a
 // clean fresh write.
 #[test]
