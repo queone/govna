@@ -190,6 +190,18 @@ pub fn allocate_ac_number(
         }
     }
 
+    Ok((next_ac_number(target)?, false))
+}
+
+/// Computes the next monotonic AC number for `target`: the max of (a) AC
+/// numbers in `<target>/govna/ac*.md` filenames and (b) `AC\d+` references
+/// in `git log --all --pretty=%B`, plus one. A target with no `.git/` at
+/// all (e.g. a brand-new `apply` bootstrap target) is treated the same as
+/// one with no commits yet — empty history, not an error.
+pub fn next_ac_number(target: &Path) -> Result<u32, String> {
+    let docs_dir = target.join("govna");
+    let stub_re = Regex::new(r"^ac(\d+)-").unwrap();
+
     let mut max_n = 0u32;
     if let Ok(entries) = std::fs::read_dir(&docs_dir) {
         for entry in entries.flatten() {
@@ -228,6 +240,7 @@ pub fn allocate_ac_number(
         if stderr.contains("does not have any commits")
             || stderr.contains("bad default revision")
             || stderr.contains("Not a valid object name")
+            || stderr.contains("not a git repository")
         {
             String::new()
         } else {
@@ -246,7 +259,7 @@ pub fn allocate_ac_number(
             max_n = max_n.max(n);
         }
     }
-    Ok((max_n + 1, false))
+    Ok(max_n + 1)
 }
 
 /// Checks whether an emitted file body still matches its marker hash.

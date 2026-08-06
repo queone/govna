@@ -10,7 +10,6 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 
 - IE3: Port `deps` — report direct dependency freshness
 - IE4: Port `rm` — emit cleanup AC for removing govna canon
-- IE5: Port `apply` — the full governance-application flow; most involved of the five, likely depends on the embedded-template engine `render-canon` (AC4) already built
 - IE6: Port `updatecheck` — governa's binary self-checks for a newer release on every invocation (`internal/updatecheck`, called via `defer updatecheck.Check(programVersion)` in governa's `main()`); govna has no equivalent yet
 - IE8: Reconcile `templates/overlays/doc/files/AGENTS.md.tmpl` against root `AGENTS.md` — the DOC overlay copy is missing whole sections present in root (`### Build Verification`, `### AC Mechanics`, `### Errors`, `### Versioning and Dependencies`, `### Code Style and Conventions`) plus assorted rewording elsewhere, apparently never updated since those sections were added to root. Surfaced during AC6's Audit (2026-08-05), out of that AC's drift-scan-only scope
 - IE9: Confirm whether `templates/base/AGENTS.md` should ship the two govna-source-only Project Rules mirroring bullets (referencing `templates/overlays/doc/files/govna/`) to CODE consumers via `render-canon` — it is currently byte-identical to root `AGENTS.md`, so those bullets, which only make sense inside govna's own source repo, propagate as-is to consumer repos that have no `templates/` directory at all. Surfaced during AC6's Audit (2026-08-05)

@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.3.1\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.4.0\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -28,7 +28,7 @@ fn no_args_exits_with_usage_error() {
 #[test]
 fn unimplemented_subcommand_exits_one() {
     let output = Command::new(env!("CARGO_BIN_EXE_govna"))
-        .arg("apply")
+        .arg("rm")
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -1015,4 +1015,238 @@ fn render_canon_infers_terraform_from_tf_glob() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(read(&target.join("govna/metadata.txt")).contains("code_stack = Terraform"));
+}
+
+// ── apply (AC7) fixtures ────────────────────────────────────────────────────
+
+// AT1: fresh empty target, apply -f code -s rust: writes AGENTS.md, CLAUDE.md
+// symlink, metadata.txt (repo_type = CODE / code_stack = Rust), and
+// govna/ac1-govna-apply.md; exits 0.
+#[test]
+fn apply_fresh_code_target() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("AGENTS.md").is_file());
+    let link_target = fs::read_link(dir.join("CLAUDE.md")).unwrap();
+    assert_eq!(link_target, Path::new("AGENTS.md"));
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    assert!(metadata.contains("repo_type = CODE\n"), "{metadata}");
+    assert!(metadata.contains("code_stack = Rust\n"), "{metadata}");
+    assert!(dir.join("govna/ac1-govna-apply.md").is_file());
+}
+
+// AT2: fresh empty target, apply -f doc: writes the DOC-overlay set (no
+// --stack required) and govna/ac1-govna-apply.md; exits 0.
+#[test]
+fn apply_fresh_doc_target() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "doc"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("AGENTS.md").is_file());
+    assert!(dir.join("govna/editing-guidelines.md").is_file());
+    assert!(dir.join("govna/ac1-govna-apply.md").is_file());
+}
+
+// AT3: no flags, target has CODE manifests present — infers flavor and stack
+// without erroring.
+#[test]
+fn apply_infers_flavor_and_stack_from_manifest() {
+    let dir = new_fixture();
+    fs::write(dir.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+    let out = govna().arg("apply").current_dir(&dir).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(read(&dir.join("govna/metadata.txt")).contains("code_stack = Rust"));
+}
+
+// AT4: no resolvable flavor signal and no -f flag exits non-zero with an
+// actionable error.
+#[test]
+fn apply_unresolvable_flavor_errors() {
+    let dir = new_fixture();
+    let out = govna().arg("apply").current_dir(&dir).output().unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--flavor"), "{stderr}");
+}
+
+// AT5: re-running apply against a target that already has AGENTS.md prints
+// the existing-governance-files warning and allocates the adoption AC's
+// number above the pre-existing govna/ac1-govna-apply.md (not ac1 again).
+#[test]
+fn apply_reapply_bumps_ac_number() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("govna/ac1-govna-apply.md").is_file());
+
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("existing governance files detected"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("govna/ac2-govna-apply.md").is_file());
+}
+
+// AT5b: a fresh target with no .git/ at all (no --init-git passed) still
+// succeeds and allocates ac1 — regression coverage for next_ac_number's
+// git-error tolerance (verified during Audit: a target with no .git/ at
+// all produces a different git stderr than "no commits yet", and the
+// original allocate_ac_number tolerance list didn't cover it).
+#[test]
+fn apply_fresh_target_without_git_succeeds() {
+    let dir = new_fixture();
+    assert!(!dir.join(".git").exists());
+    let out = govna()
+        .args(["apply", "-f", "doc"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("govna/ac1-govna-apply.md").is_file());
+}
+
+// AT6: CLAUDE.md already present as a regular (non-symlink) file with
+// content — apply warns and leaves it untouched rather than deleting it.
+#[test]
+fn apply_preserves_existing_regular_claude_file() {
+    let dir = new_fixture();
+    fs::write(dir.join("CLAUDE.md"), "hand-written content\n").unwrap();
+    let out = govna()
+        .args(["apply", "-f", "doc"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("expected symlink to AGENTS.md"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(read(&dir.join("CLAUDE.md")), "hand-written content\n");
+}
+
+// AT7: --init-git on a target with no .git/ runs git init; a second run
+// against a target that already has .git/ prints a skip line and does not
+// re-init.
+#[test]
+fn apply_init_git_then_skips_on_rerun() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "doc", "--init-git"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join(".git").exists());
+
+    let out = govna()
+        .args(["apply", "-f", "doc", "--init-git"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("skip git init"),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+// AT8: apply against govna's own source checkout refuses with a non-zero
+// exit, mirroring drift-scan's existing refusal test. Safe against the
+// real repo: refuse_govna_source is the very first thing run_inner does.
+#[test]
+fn apply_refuses_govna_source() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = govna()
+        .arg("apply")
+        .current_dir(repo_root)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
+}
+
+// AT9: the written govna/ac<N>-govna-apply.md contains all five required
+// sections and lists every written file path under ## In Scope.
+#[test]
+fn apply_adoption_ac_has_required_sections() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "doc"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    for heading in [
+        "## Summary",
+        "## In Scope",
+        "## Out Of Scope",
+        "## Acceptance Tests",
+        "## Status",
+    ] {
+        assert!(ac.contains(heading), "{heading} missing:\n{ac}");
+    }
+    assert!(ac.contains("- `AGENTS.md` (canon file)"), "{ac}");
+    assert!(ac.contains("- `CLAUDE.md` (agent alias link)"), "{ac}");
 }

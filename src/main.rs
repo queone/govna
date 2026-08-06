@@ -1,3 +1,4 @@
+mod apply;
 mod driftscan;
 mod emission;
 mod governance;
@@ -9,7 +10,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const PROGRAM_VERSION: &str = "0.3.1";
+const PROGRAM_VERSION: &str = "0.4.0";
 const SOURCE_REPO: &str = "github.com/queone/govna";
 
 fn main() -> ExitCode {
@@ -29,7 +30,8 @@ fn main() -> ExitCode {
         }
         "render-canon" => run_render_canon(&args[2..]),
         "drift-scan" => driftscan::run_cli(&args[2..]),
-        "apply" | "rm" | "deps" => {
+        "apply" => apply::run_cli(&args[2..]),
+        "rm" | "deps" => {
             eprintln!("govna {subcmd}: not yet implemented");
             ExitCode::from(1)
         }
@@ -110,10 +112,7 @@ fn print_usage() {
     eprintln!();
     eprintln!(
         "{}",
-        usage_line(
-            "apply",
-            "apply governance template to a repo (not yet implemented)"
-        )
+        usage_line("apply", "apply governance template to a repo")
     );
     eprintln!(
         "{}",
@@ -363,10 +362,11 @@ fn run_render_canon(args: &[String]) -> ExitCode {
     // Deliberate divergence from governa (AC4 Refine): governa's render-canon
     // never creates this symlink (that's apply-only there); govna's does,
     // since render-canon is usable standalone well before apply exists.
-    let claude_path = abs_target.join("CLAUDE.md");
-    let _ = std::fs::remove_file(&claude_path);
-    if let Err(e) = std::os::unix::fs::symlink("AGENTS.md", &claude_path) {
-        eprintln!("create symlink {}: {e}", claude_path.display());
+    // Unconditional remove+recreate here — render-canon's typical target is
+    // a scratch dir, so there's no real user content to protect (apply, run
+    // against a real repo, uses the preserve_regular_file variant instead).
+    if let Err(e) = write_claude_symlink(&abs_target, false) {
+        eprintln!("{e}");
         return ExitCode::from(1);
     }
 
@@ -374,7 +374,33 @@ fn run_render_canon(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn write_canon_file(dest: &Path, content: &str) -> std::io::Result<()> {
+pub(crate) enum SymlinkOutcome {
+    Created,
+    Skipped,
+}
+
+/// Writes `<target>/CLAUDE.md` as a symlink to `AGENTS.md`. When
+/// `preserve_regular_file` is set, a `CLAUDE.md` that already exists as a
+/// regular (non-symlink) file is left untouched instead of being clobbered;
+/// otherwise (missing, or already a symlink) it's removed and recreated.
+pub(crate) fn write_claude_symlink(
+    target: &Path,
+    preserve_regular_file: bool,
+) -> Result<SymlinkOutcome, String> {
+    let claude_path = target.join("CLAUDE.md");
+    if preserve_regular_file
+        && let Ok(meta) = std::fs::symlink_metadata(&claude_path)
+        && !meta.file_type().is_symlink()
+    {
+        return Ok(SymlinkOutcome::Skipped);
+    }
+    let _ = std::fs::remove_file(&claude_path);
+    std::os::unix::fs::symlink("AGENTS.md", &claude_path)
+        .map_err(|e| format!("create symlink {}: {e}", claude_path.display()))?;
+    Ok(SymlinkOutcome::Created)
+}
+
+pub(crate) fn write_canon_file(dest: &Path, content: &str) -> std::io::Result<()> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
