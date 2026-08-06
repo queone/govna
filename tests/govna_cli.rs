@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.4.0\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.4.1\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -1220,6 +1220,42 @@ fn apply_refuses_govna_source() {
         .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("looks like a govna checkout"));
+}
+
+// ── govna-source-only content exclusion (AC8) ───────────────────────────────
+
+// AT5: a freshly apply'd CODE target's rendered AGENTS.md and
+// development-guidelines.md don't carry govna-source-only content that
+// references paths no consumer repo has.
+#[test]
+fn apply_excludes_govna_source_only_content() {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let agents = read(&dir.join("AGENTS.md"));
+    assert!(
+        !agents.contains("Mirror every AGENTS.md change"),
+        "{agents}"
+    );
+    assert!(
+        !agents.contains("templates/overlays/doc/files/govna/"),
+        "{agents}"
+    );
+
+    let guidelines = read(&dir.join("govna/development-guidelines.md"));
+    assert!(
+        !guidelines.contains("templates/overlays/code/stacks/"),
+        "{guidelines}"
+    );
 }
 
 // AT9: the written govna/ac<N>-govna-apply.md contains all five required

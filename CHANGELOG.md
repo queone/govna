@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.4.1 | AC8: strip govna-source-only content from shipped CODE templates |
 | 0.4.0 | AC7: implement apply; deterministic bootstrap for new and existing repos |
 | 0.3.1 | AC6: document govna drift-scan, resolve stale not-yet-implemented framing |
 | 0.3.0 | AC5: implement drift-scan; port govna canon-scan engine to Rust |

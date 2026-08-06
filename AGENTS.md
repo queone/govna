@@ -299,3 +299,5 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names the Claude 
 - Draft skeleton AC stubs first for every multi-AC track, then register one AC-pointer IE per stub.
 - Remove each AC-pointer IE when its AC ships and the AC file is deleted at release prep.
 - Skip the IE entirely (at Director's discretion) when an AC is drafted and implemented inside a single cycle.
+
+Note: when mirroring a change to `AGENTS.md` or a doc it references into `templates/base/AGENTS.md` or `templates/overlays/*/files/`, exclude any content that's only meaningful inside govna's own source checkout (e.g., references to `templates/`, govna's own build/release process) — a consumer repo has no `templates/` tree to act on. Two of this section's own bullets are examples: the two `Mirror every...` bullets above apply to govna's own development process only and are deliberately absent from the shipped templates.

@@ -291,8 +291,6 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names the Claude 
 - Validate every compiled utility's `--version` result before writing release metadata.
 - Preserve independent utility versions during repository release prep; never overwrite them automatically.
 - End every successful build with the actionable `==> To release, run:` heading and the canonical release command when the repository has a next release tag.
-- Mirror every AGENTS.md change that applies to consumer repos across govna source `AGENTS.md`, `templates/base/AGENTS.md`, and `templates/overlays/doc/files/AGENTS.md.tmpl` (CODE consumer inherits base unchanged) before staging the commit.
-- Mirror every change to a doc referenced from AGENTS.md across govna source `govna/`, `templates/overlays/code/files/govna/`, and `templates/overlays/doc/files/govna/` before staging the commit.
 - Keep generated repos self-contained — every dependency lives in the generated repo itself.
 - Track forward-looking work in `plan.md` only via IE entries (pre-rubric IEs or AC-pointers, per `plan.md`'s docstring).
 - Limit `plan.md` structure to its existing top-level sections (`## Product Direction`, `## Ideas To Explore`); add new content only as IE bullets.
