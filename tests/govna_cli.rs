@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.7.0\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.7.1\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -1918,6 +1918,8 @@ fn apply_new_mode_unaffected_by_hunk_merge_logic() {
     assert!(dir.join("README.md").is_file());
     assert!(dir.join("CHANGELOG.md").is_file());
     assert!(dir.join("govna/development-guidelines.md").is_file());
+    assert!(dir.join("arch.md").is_file());
+    assert!(dir.join("plan.md").is_file());
 }
 
 // AT11: Part B — an AGENTS.md missing the ## Project Rules boundary
@@ -1946,4 +1948,38 @@ fn apply_falls_back_to_overwrite_when_boundary_missing() {
     );
     let agents = read(&dir.join("AGENTS.md"));
     assert!(agents.contains("## Governed Sections"), "{agents}");
+}
+
+// ── AC14: apply must not overwrite EXPECTED_DIVERGENCE_PATHS files ─────────
+
+// AC14 AT1: existing-mode apply preserves pre-existing arch.md/plan.md
+// content instead of blindly overwriting it with the fresh canon stub.
+#[test]
+fn apply_preserves_existing_arch_and_plan_content() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    fs::write(dir.join("arch.md"), "my custom architecture notes\n").unwrap();
+    fs::write(dir.join("plan.md"), "my custom roadmap\n").unwrap();
+
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "rust"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(read(&dir.join("arch.md")), "my custom architecture notes\n");
+    assert_eq!(read(&dir.join("plan.md")), "my custom roadmap\n");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("skip arch.md (existing content preserved)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("skip plan.md (existing content preserved)"),
+        "{stdout}"
+    );
 }

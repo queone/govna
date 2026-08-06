@@ -288,14 +288,17 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 /// already has read-only: in existing mode, a `mixed_content_boundary`-
 /// registered file gets hunk-merged (fresh canon zone + preserved existing
 /// repo-owned tail) instead of blindly overwritten; `README.md`/`CHANGELOG.md`
-/// (hybrid but with no registered boundary to merge on) are skipped entirely
+/// and every `driftscan::EXPECTED_DIVERGENCE_PATHS` file (hybrid/per-repo
+/// content with no registered boundary to merge on) are skipped entirely
 /// when they already exist. New-mode writes, and every other file, are
 /// unaffected — always written fresh, exactly as before this existed.
 fn write_canon_op(dest: &Path, op: &governance::WriteOp, mode: &str) -> Result<(), String> {
     let exists = dest.is_file();
 
     if mode == "existing" && exists {
-        if matches!(op.rel_path.as_str(), "README.md" | "CHANGELOG.md") {
+        if matches!(op.rel_path.as_str(), "README.md" | "CHANGELOG.md")
+            || driftscan::EXPECTED_DIVERGENCE_PATHS.contains(&op.rel_path.as_str())
+        {
             println!("skip {} (existing content preserved)", op.rel_path);
             return Ok(());
         }

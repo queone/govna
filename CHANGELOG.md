@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.7.1 | AC14: fix apply overwriting arch.md/plan.md on re-apply |
 | 0.7.0 | AC12: canonical docs finalized, deps removed, governa framing rescinded |
 | 0.6.1 | AC11: prohibit bare cargo builds outside ./build.sh; require isolated target-dir |
 | 0.6.0 | AC10: apply migrates governa repos, hunk-merges hybrids; rm drops diffs file |
