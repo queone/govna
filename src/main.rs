@@ -11,7 +11,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const PROGRAM_VERSION: &str = "0.6.1";
+const PROGRAM_VERSION: &str = "0.7.0";
 const SOURCE_REPO: &str = "github.com/queone/govna";
 
 fn main() -> ExitCode {
@@ -33,10 +33,6 @@ fn main() -> ExitCode {
         "drift-scan" => driftscan::run_cli(&args[2..]),
         "apply" => apply::run_cli(&args[2..]),
         "rm" => rm::run_cli(&args[2..]),
-        "deps" => {
-            eprintln!("govna {subcmd}: not yet implemented");
-            ExitCode::from(1)
-        }
         "-h" | "--help" | "-?" | "help" | "h" => {
             print_usage();
             ExitCode::SUCCESS
@@ -51,9 +47,9 @@ fn main() -> ExitCode {
 
 // ── color ────────────────────────────────────────────────────────────────
 
-// Matches governa-color's gating exactly: enabled (NO_COLOR unset, TERM !=
-// dumb, stderr a TTY) AND 256-color capable (COLORTERM truecolor/24bit, or
-// TERM containing 256color) — see ~/code/governa-color/color.go's `wrap`.
+// Color gating: enabled when NO_COLOR is unset, TERM isn't dumb, and
+// stderr is a TTY, AND the terminal is 256-color capable (COLORTERM is
+// truecolor/24bit, or TERM contains 256color).
 fn color_enabled() -> bool {
     if std::env::var_os("NO_COLOR").is_some() {
         return false;
@@ -80,7 +76,7 @@ fn colorize(code: &str, s: &str) -> String {
     }
 }
 
-// governa-color Bold(Whi5(...)): 256-color white (231), bold.
+// 256-color white (231), bold.
 fn bold_white(s: &str) -> String {
     if color_enabled() {
         format!("\x1b[1m\x1b[38;5;231m{s}\x1b[0m")
@@ -89,7 +85,7 @@ fn bold_white(s: &str) -> String {
     }
 }
 
-// governa-color Gra5: 256-color index 245.
+// 256-color index 245.
 fn dark_gray(s: &str) -> String {
     colorize("38;5;245", s)
 }
@@ -123,13 +119,6 @@ fn print_usage() {
     eprintln!(
         "{}",
         usage_line("rm", "emit cleanup AC for removing govna canon")
-    );
-    eprintln!(
-        "{}",
-        usage_line(
-            "deps",
-            "report direct dependency freshness (not yet implemented)"
-        )
     );
     eprintln!(
         "{}",
@@ -358,12 +347,11 @@ fn run_render_canon(args: &[String]) -> ExitCode {
         }
     }
 
-    // Deliberate divergence from governa (AC4 Refine): governa's render-canon
-    // never creates this symlink (that's apply-only there); govna's does,
-    // since render-canon is usable standalone well before apply exists.
-    // Unconditional remove+recreate here — render-canon's typical target is
-    // a scratch dir, so there's no real user content to protect (apply, run
-    // against a real repo, uses the preserve_regular_file variant instead).
+    // render-canon creates the CLAUDE.md symlink even standalone, since it's
+    // usable well before apply exists — unlike apply, which uses the
+    // preserve_regular_file variant instead since it runs against real repos
+    // with real user content to protect. render-canon's typical target is a
+    // scratch dir, so this uses an unconditional remove+recreate.
     if let Err(e) = write_claude_symlink(&abs_target, false) {
         eprintln!("{e}");
         return ExitCode::from(1);

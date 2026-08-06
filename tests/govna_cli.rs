@@ -12,7 +12,7 @@ fn version_aliases_are_all_single_line_and_identical() {
             .output()
             .unwrap();
         assert!(output.status.success(), "arg={arg}");
-        assert_eq!(output.stdout, b"govna v0.6.1\n", "arg={arg}");
+        assert_eq!(output.stdout, b"govna v0.7.0\n", "arg={arg}");
         assert!(output.stderr.is_empty(), "arg={arg}");
     }
 }
@@ -26,14 +26,14 @@ fn no_args_exits_with_usage_error() {
 }
 
 #[test]
-fn unimplemented_subcommand_exits_one() {
+fn unrecognized_subcommand_exits_two() {
     let output = Command::new(env!("CARGO_BIN_EXE_govna"))
         .arg("deps")
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("not yet implemented"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown command: deps"));
 }
 
 // ── render-canon fixtures ──────────────────────────────────────────────────

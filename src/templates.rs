@@ -2,8 +2,7 @@ use rust_embed::RustEmbed;
 use std::collections::BTreeMap;
 
 /// Embedded template version, independent of `PROGRAM_VERSION`. Bumped by
-/// hand during release prep until `build.sh prep` automates it (AC4 Out of
-/// Scope) — mirrors governa's `programVersion` vs. `templates.TemplateVersion` split.
+/// hand during release prep until `build.sh prep` automates it.
 pub const TEMPLATE_VERSION: &str = "0.1.0";
 
 #[derive(RustEmbed)]
@@ -11,7 +10,7 @@ pub const TEMPLATE_VERSION: &str = "0.1.0";
 pub struct Templates;
 
 /// Reads an embedded template file and substitutes every placeholder key
-/// (sorted, matching governa's `ReadAndRender`) with its value.
+/// (sorted) with its value.
 pub fn read_and_render(
     path: &str,
     placeholders: &BTreeMap<&'static str, String>,

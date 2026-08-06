@@ -1,5 +1,4 @@
-//! Implements the `govna rm` subcommand. Ported from governa's
-//! `internal/governarm` package.
+//! Implements the `govna rm` subcommand.
 //!
 //! Runs against the current working directory (no positional arguments,
 //! no `--target` flag — matches `drift-scan`'s cwd-only design). Renders

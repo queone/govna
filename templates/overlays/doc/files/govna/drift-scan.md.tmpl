@@ -1,6 +1,6 @@
 # Drift Scan
 
-`govna drift-scan` compares an adopted repo's governance artifacts against what `govna render-canon` would produce for it now, and emits a `govna/ac<N>-drift-scan-<canon-version>.md` stub listing the divergences for the Director to resolve — mirroring governa's own mature `drift-scan` command, adapted for govna's own canon and scoped to what govna's actual canon needs rather than ported wholesale.
+`govna drift-scan` compares an adopted repo's governance artifacts against what `govna render-canon` would produce for it now, and emits a `govna/ac<N>-drift-scan-<canon-version>.md` stub listing the divergences for the Director to resolve.
 
 Run it from the consumer repo root (no positional arguments) after `govna render-canon` or `govna apply`.
 
@@ -91,7 +91,3 @@ drift-scan writes exactly one file, `govna/ac<N>-drift-scan-<canon-version>.md` 
 The stub carries an edit-detection marker (SHA-256 body hash). Re-running drift-scan against an unedited stub for the same canon version reuses the same AC number; running it against an edited stub fails with an error directing the Director to commit and delete the stub (to regenerate) or rename it off the `drift-scan-<version>` slug (to keep it as a standalone AC).
 
 Pass `--json` to also print a machine-readable report (`header`: invocation, canon SHA, target, flavor and its source, repo name, govna/code-stack versions from metadata; `files`: one entry per scanned file with its classification, diff, prior commits, matched preserve markers, canon reference, and mixed-content boundary where applicable; `emitted`: the stub's path) alongside the markdown emission.
-
-## Reference
-
-govna has no legacy consumers and no `repo-type.txt`-style compatibility marker to migrate, and a smaller canon surface than governa's mature implementation — this document describes govna's own scope, not a port of governa's real `governa/drift-scan.md` (Go-implementation-specific, available in governa's own source tree for reference).

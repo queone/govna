@@ -1,6 +1,4 @@
-//! Implements the `govna apply` subcommand. Ported from governa's
-//! `internal/governance` package (`runApply`, `AssessTarget`, `planCanonical`,
-//! `applyOperations`, `renderApplyAC`, `maybeInitGit`).
+//! Implements the `govna apply` subcommand.
 //!
 //! Runs against the current working directory (no positional arguments,
 //! no `--target` flag — govna-consistent with `drift-scan`'s cwd-only
@@ -707,10 +705,9 @@ fn expected_artifact_paths(repo_type: Option<RepoType>) -> Vec<&'static str> {
     paths
 }
 
-/// Ported from governa's `AssessTarget`: scans the target for repo-shape
-/// signals (informational + overwrite-risk display only — actual flavor
-/// resolution uses `governance::detect_flavor` for consistency with
-/// `render-canon`/`drift-scan`, not this heuristic).
+/// Scans the target for repo-shape signals (informational + overwrite-risk
+/// display only — actual flavor resolution uses `governance::detect_flavor`
+/// for consistency with `render-canon`/`drift-scan`, not this heuristic).
 fn assess_target(root: &Path) -> Result<Assessment, String> {
     let mut files: Vec<PathBuf> = Vec::new();
     collect_files(root, root, &mut files)?;

@@ -1,13 +1,14 @@
 [package]
 name = "govna"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 
 [dependencies]
-# Reserved for a future subcommand whose flag surface doesn't need governa's
-# exact stream/exit-code parity. render-canon (AC4) stayed hand-rolled against
-# std::env::args(), matching AC2's top-level dispatch, since AT8 needs exact
-# help-text control that clap's own conventions would fight.
+# Reserved for a future subcommand whose flag surface doesn't need exact
+# stream/exit-code parity with the hand-rolled dispatch. render-canon stayed
+# hand-rolled against std::env::args(), matching the top-level dispatch,
+# since help-text control needs precision that clap's own conventions would
+# fight.
 clap = { version = "4", features = ["derive"] }
 # Embeds templates/ into the binary at compile time (AC4). No extra features:
 # the whole folder is embedded unfiltered, so include/exclude patterns aren't needed.

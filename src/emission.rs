@@ -1,5 +1,5 @@
 //! Shared helpers for govna CLI commands that emit AC artifacts into
-//! consumer repositories. Ported from governa's `internal/emission` package.
+//! consumer repositories.
 
 use regex::Regex;
 use sha2::{Digest, Sha256};
@@ -15,10 +15,10 @@ fn file_exists(p: &Path) -> bool {
 /// Reports whether `dir` looks like a govna source checkout: `Cargo.toml`
 /// declares `name = "govna"`, `templates/base/AGENTS.md` exists, and
 /// `src/main.rs` carries the literal `SOURCE_REPO` declaration. The third
-/// check is load-bearing — governa's own equivalent checks the full
-/// `go.mod` module path (`github.com/queone/governa`), not a bare package
-/// name, so a coincidentally-named `govna` Cargo package elsewhere doesn't
-/// false-positive on name alone.
+/// check is load-bearing: checking only the bare package name would
+/// false-positive on any coincidentally-named `govna` Cargo package
+/// elsewhere, so this also requires the literal `SOURCE_REPO` declaration
+/// unique to this repo.
 pub fn is_govna_checkout(dir: &Path) -> bool {
     let cargo_toml_ok = std::fs::read_to_string(dir.join("Cargo.toml"))
         .map(|s| s.lines().any(|l| l.trim() == "name = \"govna\""))

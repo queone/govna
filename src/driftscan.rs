@@ -1,5 +1,4 @@
-//! Implements the `govna drift-scan` subcommand. Ported from governa's
-//! `internal/driftscan` package.
+//! Implements the `govna drift-scan` subcommand.
 //!
 //! Runs against the current working directory (no positional arguments)
 //! after a positive govna-adoption check, walks the canon overlay embedded
@@ -82,13 +81,13 @@ pub struct FileResult {
     pub canon_ref: String,
     #[serde(rename = "compare_command", skip_serializing_if = "String::is_empty")]
     pub compare_command: String,
-    /// Rendered canon body. Not serialized (matches governa's `json:"-"`) —
-    /// used internally by `build_ac_stub` for missing-in-target previews.
+    /// Rendered canon body. Not serialized — used internally by
+    /// `build_ac_stub` for missing-in-target previews.
     #[serde(skip)]
     pub canon_content: String,
-    /// Declared for JSON-shape parity with governa; never populated —
-    /// governa itself declares this field but never sets it anywhere in its
-    /// current implementation either.
+    /// Declared for JSON-shape compatibility with governa's own `--json`
+    /// output (some consumers may parse either tool's output uniformly);
+    /// never populated, matching governa's own current behavior.
     #[serde(rename = "coupled_local_only", skip_serializing_if = "Vec::is_empty")]
     pub coupled_local_only: Vec<String>,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -631,12 +630,10 @@ struct CoherenceRule {
     conformants: Vec<CoherenceConformant>,
 }
 
-/// Registry-driven, canon-only precondition. **Starts empty**, matching
-/// governa's own current registry exactly (`coherenceRules = []coherenceRule{}`
-/// in governa's real source) — this ships the mechanism, not any specific
-/// rule. `Regex` isn't `const`-constructible, so this is a function rather
-/// than a `const`/`static` slice; a future rule is added by pushing a
-/// `CoherenceRule` into the returned `Vec`.
+/// Registry-driven, canon-only precondition. **Starts empty** — this ships
+/// the mechanism, not any specific rule. `Regex` isn't `const`-constructible,
+/// so this is a function rather than a `const`/`static` slice; a future rule
+/// is added by pushing a `CoherenceRule` into the returned `Vec`.
 fn coherence_rules() -> Vec<CoherenceRule> {
     vec![]
 }
@@ -950,13 +947,11 @@ fn walk_dir(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
 
 // Excludes whitespace, not just the closing delimiter, so a match can never
 // cross a line/sentence boundary. Real path references never contain
-// whitespace; governa's own equivalent (`` `([./][^`]+)` ``) only excludes
-// the delimiter, which lets a *closing* backtick immediately followed by
-// unrelated punctuation (e.g. `` `Package complete.`. `` — very common
-// prose, and present in govna's own real `roles.md`) get misread as a new
-// match's opening delimiter, then greedily consume everything up to the
-// next literal backtick anywhere in the file. Deliberate divergence from
-// governa parity (Director guidance): fix the bug rather than port it.
+// whitespace; excluding only the delimiter would let a *closing* backtick
+// immediately followed by unrelated punctuation (e.g. `` `Package complete.`. ``
+// — very common prose, and present in govna's own real `roles.md`) get
+// misread as a new match's opening delimiter, then greedily consume
+// everything up to the next literal backtick anywhere in the file.
 static BACKTICKED_PATH_RE: std::sync::LazyLock<Regex> =
     std::sync::LazyLock::new(|| Regex::new(r"`([./][^`\s]+)`").unwrap());
 static QUOTED_PATH_RE: std::sync::LazyLock<Regex> =

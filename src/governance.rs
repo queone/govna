@@ -12,8 +12,8 @@ pub struct Config {
     pub repo_type: RepoType,
     pub repo_name: String,
     /// Raw stack string (whatever the user passed, or whatever `infer_stack`
-    /// returned) — canonicalized inside `render_canonical_files`, matching
-    /// governa's `planCanonical`. Empty for DOC.
+    /// returned) — canonicalized inside `render_canonical_files`. Empty for
+    /// DOC.
     pub stack: String,
     /// Empty unless CODE flavor with the Go stack.
     pub module_path: String,
@@ -26,7 +26,7 @@ pub struct WriteOp {
 
 /// Produces the full set of canon files a render would write, keyed by
 /// repo-relative slash path via `WriteOp`. Pure, in-memory — no filesystem
-/// writes. Reproduces governa's output-precedence rule: ops are queued in
+/// writes. Output-precedence rule: ops are queued in
 /// order (base -> flavor overlay -> stack overlay) and a later op silently
 /// wins over an earlier one at the same rel path. Concretely, the DOC overlay
 /// ships its own `AGENTS.md.tmpl`, so DOC's real output is the overlay's
@@ -193,9 +193,9 @@ fn detect_fallback_flavor(dir: &Path) -> Result<RepoType, String> {
     }
 }
 
-/// Stack inference, read from `dir`. Preserves governa's exact manifest
-/// precedence: Go/Terraform/Rust checked first in that literal order, then
-/// Swift, then the remaining manifests, then a `*.tf` glob fallback.
+/// Stack inference, read from `dir`. Exact manifest-check precedence:
+/// Go/Terraform/Rust checked first in that literal order, then Swift, then
+/// the remaining manifests, then a `*.tf` glob fallback.
 pub fn infer_stack(dir: &Path) -> Option<&'static str> {
     if dir.join("go.mod").exists() {
         return Some("Go");
@@ -228,8 +228,7 @@ pub fn infer_stack(dir: &Path) -> Option<&'static str> {
     None
 }
 
-/// Public surface for a future `drift-scan` AC, matching governa's own
-/// `CanonicalStack` export.
+/// Public surface for a future `drift-scan` AC.
 pub fn canonical_stack(stack: &str) -> Option<&'static str> {
     match stack.trim().to_lowercase().as_str() {
         "go" => Some("Go"),

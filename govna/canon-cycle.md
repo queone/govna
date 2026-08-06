@@ -17,7 +17,7 @@ What govna commits to when shipping canon updates:
 
 - Treat `govna/metadata.txt` as the authoritative consumer identity record.
 - Require `schema_version`, `govna_version`, and `repo_type`; require `code_stack` only for CODE consumers.
-- govna has no legacy marker file to accept during a compatibility window — it never shipped one (see AC4's render-canon scoping notes: governa's own `repo-type.txt` compatibility window doesn't apply to a fresh port with no pre-existing consumers).
+- govna has no legacy marker file to accept during a compatibility window — it never shipped one.
 - Write metadata during `render-canon`/`apply`.
 
 ## Consumer-side workflow
