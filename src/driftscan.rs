@@ -1249,7 +1249,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     }
     if !sync_entries.is_empty() || !migration_entries.is_empty() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, `govna render-canon` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff.\n\n"
+            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, `govna render-canon` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary.\n\n"
         ));
     }
 

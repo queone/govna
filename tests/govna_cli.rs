@@ -778,7 +778,9 @@ fn drift_scan_format_defining_forces_sync() {
     // final AT is the non-mutating render-canon + diff -ru recipe, not the
     // old self-defeating "re-run drift-scan" instruction.
     assert!(
-        stub.contains("`govna render-canon` (per the recipe in `## Summary`) plus `diff -ru`"),
+        stub.contains(
+            "For each file listed under `## In Scope`, `govna render-canon` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary."
+        ),
         "{stub}"
     );
     assert!(!stub.contains("Re-running `govna drift-scan`"), "{stub}");
