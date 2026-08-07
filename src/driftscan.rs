@@ -63,7 +63,7 @@ impl std::fmt::Display for Classification {
 }
 
 const REACHABILITY_HEADER_REMINDER: &str = "Reachability check: verify divergent canon-code branches reach this consumer's structure before treating as drift.";
-const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: every Director-resolved routing target is effective implementation scope even when absent from `## In Scope`; an explicitly named migration destination joins that scope, and `CHANGELOG.md` joins it when a preserve marker is required. Do not infer an unnamed migration destination. Leave this emitted stub unchanged while implementing and verifying every resolution.";
+const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: resolve every routing decision in chat and leave this emitted stub unchanged. Every Director-resolved routing target is effective implementation scope even when absent from `## In Scope`; an explicitly named migration destination joins that scope, and `CHANGELOG.md` joins it when a preserve marker is required. Do not infer an unnamed migration destination.";
 const AUDIT_MARKER_PREFIX: &str = "<!-- audit: emitted-by govna ";
 const BASELINE_SCHEMA: &str = "govna-canon-baseline-v1";
 const RETIRED_CANON_PATHS: &[(&str, &str)] = &[("govna/drift-scan.md", "govna/audit.md")];
@@ -1382,6 +1382,10 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
             Classification::Match => {}
         }
     }
+    let baseline_migration = migration_entries
+        .iter()
+        .copied()
+        .find(|f| f.relpath == governance::BASELINE_PATH);
 
     let mut b = String::new();
     b.push_str(&format!(
@@ -1407,7 +1411,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         "Sync this repo to govna @ {canon_version} canon as part of the recurring audit cycle. Audit surfaced {}. Use `govna render` to render canon and standard `diff -ru` to inspect per-file changes (see AGENTS.md `### Audit Adoption`).\n\n",
         tally_classifications(&r.files)
     ));
-    if !review_entries.is_empty() {
+    if !review_entries.is_empty() || baseline_migration.is_some() {
         b.push_str(ROUTING_RESOLUTION_REMINDER);
         b.push_str("\n\n");
     }
@@ -1427,20 +1431,8 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         }
         b.push('\n');
     }
-    if !migration_entries.is_empty() {
-        b.push_str("### Migration Required\n\n");
-        b.push_str("The following migration items require explicit consumer work; audit does not modify them:\n\n");
-        for f in &migration_entries {
-            b.push_str(&format!(
-                "- `{}` — {}. {}\n",
-                f.relpath, f.classification, f.compare_command
-            ));
-        }
-        b.push('\n');
-    }
-
     b.push_str("### Routing Decisions\n\n");
-    if review_entries.is_empty() {
+    if review_entries.is_empty() && baseline_migration.is_none() {
         b.push_str("`None` — no ambiguities or target-only files surfaced.\n");
     } else {
         for (i, f) in review_entries.iter().enumerate() {
@@ -1464,6 +1456,18 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
                     f.compare_command
                 )),
                 _ => {}
+            }
+        }
+        if baseline_migration.is_some() {
+            let item = review_entries.len() + 1;
+            if r.header.flavor == "code" {
+                b.push_str(&format!(
+                    "{item}. **Validation disposition**: proposed `./build.sh` based on the CODE flavor. Director must confirm it or override it in chat when this repository declares a different validation command; leave this emitted stub unchanged.\n"
+                ));
+            } else {
+                b.push_str(&format!(
+                    "{item}. **Validation disposition**: proposed `Not applicable` because standard DOC canon defines no automated content-validation command. Director must confirm it with repository evidence or override it in chat when this repository declares a validation command; leave this emitted stub unchanged.\n"
+                ));
             }
         }
     }
@@ -1510,6 +1514,16 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     }
     b.push('\n');
 
+    b.push_str("## Migration findings\n\n");
+    if migration_entries.is_empty() {
+        b.push_str("`None`.\n");
+    } else {
+        for f in &migration_entries {
+            b.push_str(&format!("- `{}` — {}\n", f.relpath, f.compare_command));
+        }
+    }
+    b.push('\n');
+
     b.push_str("## Acceptance Tests\n\n");
     b.push_str(
         "**AT1** [Automated] — Canon-coherence precondition passed (emission was not blocked).\n\n",
@@ -1530,20 +1544,15 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         at_num += 1;
     }
     for f in &migration_entries {
-        if f.relpath == governance::BASELINE_PATH {
-            b.push_str(&format!(
-                "**AT{at_num}** [Automated] — `{}` is installed or replaced from rendered canon only after every routing decision, sync, and validation succeeds.\n\n",
-                f.relpath
-            ));
-        } else {
+        if f.relpath != governance::BASELINE_PATH {
             b.push_str(&format!(
                 "**AT{at_num}** [Automated] — `{}` is explicitly migrated to the metadata contract before audit adoption completes.\n\n",
                 f.relpath
             ));
+            at_num += 1;
         }
-        at_num += 1;
     }
-    if !review_entries.is_empty() {
+    if !review_entries.is_empty() || baseline_migration.is_some() {
         b.push_str(&format!(
             "**AT{at_num}** [Manual] — Director resolved every `### Routing Decisions` item listed above, and the resolution is reflected in the repo.\n\n"
         ));
@@ -1553,9 +1562,21 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         ));
         at_num += 1;
     }
+    if baseline_migration.is_some() {
+        b.push_str(&format!(
+            "**AT{at_num}** [Automated] — The Director-confirmed validation disposition is satisfied after all selected sync, migration, and deletion work: the resolved command succeeds, or `Not applicable` cites repository evidence that no automated content-validation command is declared.\n\n"
+        ));
+        at_num += 1;
+    }
     if !sync_entries.is_empty() || !migration_entries.is_empty() || !review_entries.is_empty() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last.\n\n"
+            "**AT{at_num}** [Automated] — For each file listed under `## In Scope` except `govna/canon-baseline.txt`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary.\n\n"
+        ));
+        at_num += 1;
+    }
+    if baseline_migration.is_some() {
+        b.push_str(&format!(
+            "**AT{at_num}** [Automated] — After every other applicable automated AT, resolved routing outcome, and the resolved validation disposition passes, `govna/canon-baseline.txt` is installed or replaced from the same scratch render and verified as the final audit-adoption step.\n\n"
         ));
     }
 

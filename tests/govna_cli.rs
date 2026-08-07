@@ -647,6 +647,34 @@ fn rendered_code_fixture() -> PathBuf {
     dir
 }
 
+fn rendered_doc_fixture() -> PathBuf {
+    let dir = new_fixture();
+    let out = govna()
+        .args(["render", "--flavor", "doc", "."])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    git(&dir, &["init", "-q"]);
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "AC0: initial fixture render"]);
+    dir
+}
+
+fn markdown_section<'a>(content: &'a str, heading: &str) -> &'a str {
+    let after_heading = content
+        .split_once(&format!("## {heading}\n"))
+        .unwrap_or_else(|| panic!("{heading} section missing"))
+        .1;
+    after_heading
+        .split_once("\n## ")
+        .map_or(after_heading, |(section, _)| section)
+}
+
 fn audit_json(dir: &Path) -> serde_json::Value {
     let out = govna()
         .args(["audit", "--json"])
@@ -741,6 +769,15 @@ fn audit_fresh_fixture_all_match() {
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
     let stub = read(&stub_path);
     assert!(stub.contains("No sync items."), "{stub}");
+    assert_eq!(
+        markdown_section(&stub, "Migration findings").trim(),
+        "`None`."
+    );
+    assert!(!stub.contains("**Validation disposition**"), "{stub}");
+    assert!(stub.find("## Out Of Scope").unwrap() < stub.find("## Migration findings").unwrap());
+    assert!(
+        stub.find("## Migration findings").unwrap() < stub.find("## Acceptance Tests").unwrap()
+    );
     // Nothing to sync/migrate/review — no vacuous "verify via diff" AT.
     assert!(!stub.contains("**AT2**"), "{stub}");
 }
@@ -816,6 +853,24 @@ fn audit_baseline_distinguishes_untouched_prior_canon_from_consumer_edit() {
 
 #[test]
 fn audit_missing_baseline_and_entry_route_without_silent_trust() {
+    let missing_metadata = rendered_code_fixture();
+    fs::write(
+        missing_metadata.join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::remove_file(missing_metadata.join("govna/metadata.txt")).unwrap();
+    let report = audit_json(&missing_metadata);
+    assert_eq!(
+        file_result(&report, "govna/metadata.txt").unwrap()["classification"],
+        "migration-required"
+    );
+    let stub = read(&missing_metadata.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    let migration = markdown_section(&stub, "Migration findings");
+    assert_eq!(migration.matches("`govna/metadata.txt`").count(), 1);
+    assert!(migration.contains("metadata absent; migration required"));
+    assert!(stub.contains("Migration items:\n\n- `govna/metadata.txt`"));
+
     let missing_manifest = rendered_code_fixture();
     fs::remove_file(missing_manifest.join("govna/canon-baseline.txt")).unwrap();
     let report = audit_json(&missing_manifest);
@@ -823,6 +878,17 @@ fn audit_missing_baseline_and_entry_route_without_silent_trust() {
         file_result(&report, "govna/canon-baseline.txt").unwrap()["classification"],
         "migration-required"
     );
+    let stub = read(&missing_manifest.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    let migration = markdown_section(&stub, "Migration findings");
+    assert_eq!(migration.matches("`govna/canon-baseline.txt`").count(), 1);
+    assert!(migration.contains("install after Director-reviewed migration"));
+    assert!(stub.contains("Migration items:\n\n- `govna/canon-baseline.txt`"));
+    assert!(stub.contains("**Validation disposition**: proposed `./build.sh`"));
+    assert!(stub.contains("Director must confirm it or override it in chat"));
+    assert!(stub.contains("except `govna/canon-baseline.txt`"));
+    assert!(stub.contains("every other applicable automated AT"));
+    assert!(stub.contains("verified as the final audit-adoption step"));
+    assert!(stub.contains("leave this emitted stub unchanged"));
 
     let missing_entry = rendered_code_fixture();
     let path = missing_entry.join("govna/canon-baseline.txt");
@@ -839,6 +905,19 @@ fn audit_missing_baseline_and_entry_route_without_silent_trust() {
         file_result(&report, "govna/roles.md").unwrap()["classification"],
         "ambiguity"
     );
+}
+
+#[test]
+fn audit_doc_baseline_migration_proposes_evidenced_no_validation() {
+    let dir = rendered_doc_fixture();
+    fs::remove_file(dir.join("govna/canon-baseline.txt")).unwrap();
+
+    let report = audit_json(&dir);
+    let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    assert!(stub.contains("**Validation disposition**: proposed `Not applicable`"));
+    assert!(stub.contains("standard DOC canon defines no automated content-validation command"));
+    assert!(stub.contains("confirm it with repository evidence or override it in chat"));
+    assert!(stub.contains("repository declares a validation command"));
 }
 
 #[test]
@@ -1169,7 +1248,13 @@ fn audit_ambiguity_routes_to_review() {
         "{stub}"
     );
     assert!(
-        stub.contains("every Director-resolved routing target is effective implementation scope"),
+        stub.contains("Every Director-resolved routing target is effective implementation scope"),
+        "{stub}"
+    );
+    assert!(
+        stub.contains(
+            "resolve every routing decision in chat and leave this emitted stub unchanged"
+        ),
         "{stub}"
     );
     assert!(
@@ -1234,7 +1319,7 @@ fn audit_format_defining_forces_sync() {
     // old self-defeating "re-run audit" instruction.
     assert!(
         stub.contains(
-            "For each file listed under `## In Scope`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last."
+            "For each file listed under `## In Scope` except `govna/canon-baseline.txt`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary."
         ),
         "{stub}"
     );
@@ -2755,11 +2840,15 @@ fn render_audit_docs_and_version_match_authority() {
             "Verify each repo-owned migration destination",
             "Verify each resolved delete target",
             "Verify each resolved preserve target",
+            "Confirm or override the emitted validation disposition in chat",
+            "Run the resolved validation command after all selected sync, migration, and deletion work",
+            "Cite repository evidence when resolving validation as `Not applicable`",
+            "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test",
         ] {
             assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.6.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.7.0\n"));
         for relpath in [
             "govna/ac-template.md",
             "govna/build-release.md",
@@ -2834,7 +2923,7 @@ fn render_code_build_reuse_rationale_matches_authority() {
     ] {
         assert!(section(&authority).contains(expected), "{expected}");
     }
-    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.6.0\n"));
+    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.7.0\n"));
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
 }
 
