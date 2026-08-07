@@ -40,13 +40,29 @@ Use the standalone action vocabulary `Draft → Audit → Refine → Implement �
 | Command | Status |
 | --- | --- |
 | `apply` | implemented |
-| `drift-scan` | implemented |
+| `audit` | implemented |
 | `rm` | implemented |
-| `render-canon` | implemented |
-| `version`, `ver`, `v`, `--version` | implemented |
+| `render` | implemented |
+| `ver`, `v`, `--version` | implemented |
 | `-h`, `--help`, `-?`, `help`, `h` | implemented |
 
 ## Usage
+
+```text
+govna v0.13.0
+Repo governance templates — github.com/queone/govna
+
+Usage: govna <command> [options]
+
+  apply                         apply governance template to a repo
+  audit                         drift scan an adopted repo against govna canon
+  rm                            emit cleanup AC for removing govna canon
+  render                        render flavor-specific canon files into a target directory
+  ver, v, --version             print version
+  help, h                       show this help
+
+Run 'govna <command> -h' for command-specific flags.
+```
 
 Install the binary:
 
@@ -87,17 +103,17 @@ Tell an agent to run `govna apply` inside a repo currently managed by governa. `
 
 The migration findings compare against a live `governa render-canon` output when the `governa` binary is available on `PATH`, falling back to a plain file enumeration otherwise. Nothing under `governa/` is deleted automatically — review and removal are Director-driven, tracked in that section.
 
-### `drift-scan`
+### `audit`
 
-Run `govna drift-scan` from an adopted consumer repo root to compare it against current canon and emit a `govna/ac<N>-drift-scan-<canon-version>.md` stub listing the divergences for Director review. See [`govna/drift-scan.md`](govna/drift-scan.md) for the full classification model.
+Run `govna audit` from an adopted consumer repo root to compare it against current canon and emit a `govna/ac<N>-audit-<canon-version>.md` stub listing divergences for Director review. The generated `govna/canon-baseline.txt` lets audit distinguish untouched prior canon from consumer edits without relying on commit history. See [`govna/audit.md`](govna/audit.md) for the full classification model.
 
 ### `rm`
 
-Run `govna rm` from an adopted consumer repo root to emit a Director-reviewed cleanup AC for removing govna canon. The emitted AC lists whole-file removals, preserves repo-owned content, and routes hybrid files through Director review before any deletion occurs — `rm` deletes nothing itself. Review items carry an on-demand `govna render-canon` + `diff -ru` recipe rather than a pre-computed diff file.
+Run `govna rm` from an adopted consumer repo root to emit a Director-reviewed cleanup AC for removing govna canon. The emitted AC lists whole-file removals, preserves repo-owned content, and routes hybrid files through Director review before any deletion occurs — `rm` deletes nothing itself. Review items carry an on-demand `govna render` + `diff -ru` recipe rather than a pre-computed diff file.
 
-### `render-canon`
+### `render`
 
-Run `govna render-canon --flavor code|doc <target>` to render flavor-specific canon into a target directory for inspection or testing. CODE rendering infers the stack from the current directory; use `-s, --stack <name>` to override it. Go rendering reads the module path from `go.mod` unless `-m, --module-path <path>` is supplied. See `govna render-canon -h` for full usage.
+Run `govna render --flavor code|doc <target>` to render flavor-specific canon into a target directory for inspection or testing. CODE rendering infers the stack from the current directory; use `-s, --stack <name>` to override it. Go rendering reads the module path from `go.mod` unless `-m, --module-path <path>` is supplied. See `govna render -h` for full usage.
 
 ## Design
 

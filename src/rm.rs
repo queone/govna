@@ -1,7 +1,7 @@
 //! Implements the `govna rm` subcommand.
 //!
 //! Runs against the current working directory (no positional arguments,
-//! no `--target` flag — matches `drift-scan`'s cwd-only design). Renders
+//! no `--target` flag — matches `audit`'s cwd-only design). Renders
 //! the repo's canon (to know what *should* be there), classifies every
 //! canon file into In Scope (safe to delete), Out Of Scope (repo-owned,
 //! keep), or Review (needs a Director routing decision), and emits one
@@ -404,7 +404,7 @@ fn build_stub(
     b
 }
 
-/// Builds the `govna render-canon` half of a Routing Decision's on-demand
+/// Builds the `govna render` half of a Routing Decision's on-demand
 /// comparison command — the flag exactly as it would need to be re-run to
 /// regenerate the canon this repo was compared against.
 fn render_canon_recipe(cfg: &governance::Config) -> String {
@@ -412,7 +412,7 @@ fn render_canon_recipe(cfg: &governance::Config) -> String {
         RepoType::Code => "code",
         RepoType::Doc => "doc",
     };
-    let mut cmd = format!("govna render-canon --flavor {flavor}");
+    let mut cmd = format!("govna render --flavor {flavor}");
     if cfg.repo_type == RepoType::Code && !cfg.stack.is_empty() {
         let canonical = governance::canonical_stack(&cfg.stack).unwrap_or(&cfg.stack);
         cmd.push_str(&format!(" --stack {canonical}"));

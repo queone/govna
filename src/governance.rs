@@ -1,4 +1,5 @@
 use crate::templates::{self, Templates};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -22,6 +23,57 @@ pub struct Config {
 pub struct WriteOp {
     pub rel_path: String,
     pub content: String,
+}
+
+pub const BASELINE_PATH: &str = "govna/canon-baseline.txt";
+const BASELINE_SCHEMA: &str = "govna-canon-baseline-v1";
+
+pub fn mixed_content_boundary(relpath: &str) -> Option<&'static str> {
+    match relpath {
+        "AGENTS.md" => Some("## Project Rules"),
+        "govna/development-guidelines.md" | "govna/editing-guidelines.md" => {
+            Some("## Project Practices")
+        }
+        _ => None,
+    }
+}
+
+pub fn extract_canon_zone(content: &str, boundary: &str) -> Option<String> {
+    let mut acc = String::new();
+    for line in content.split_inclusive('\n') {
+        let trimmed = line.trim_end_matches(['\n', '\r']);
+        if trimmed == boundary {
+            return Some(acc);
+        }
+        acc.push_str(line);
+    }
+    None
+}
+
+fn sha256(content: &str) -> String {
+    Sha256::digest(content.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn render_baseline(canon: &BTreeMap<String, String>) -> Result<String, String> {
+    let mut baseline = format!(
+        "{BASELINE_SCHEMA}\ncanon_version = v{}\n",
+        templates::CANON_VERSION
+    );
+    for (relpath, content) in canon {
+        let (scope, region) = if let Some(boundary) = mixed_content_boundary(relpath) {
+            let region = extract_canon_zone(content, boundary).ok_or_else(|| {
+                format!("render baseline: {relpath} is missing registered boundary {boundary:?}")
+            })?;
+            (format!("before:{boundary}"), region)
+        } else {
+            ("full".to_string(), content.clone())
+        };
+        baseline.push_str(&format!("{relpath}\t{scope}\t{}\n", sha256(&region)));
+    }
+    Ok(baseline)
 }
 
 /// Produces the full set of canon files a render would write, keyed by
@@ -103,6 +155,9 @@ pub fn render_canonical_files(cfg: &Config) -> Result<Vec<WriteOp>, String> {
         }
     }
 
+    let baseline = render_baseline(&out)?;
+    out.insert(BASELINE_PATH.to_string(), baseline);
+
     Ok(out
         .into_iter()
         .map(|(rel_path, content)| WriteOp { rel_path, content })
@@ -117,7 +172,7 @@ pub fn detect_flavor(dir: &Path) -> Result<RepoType, String> {
 }
 
 /// Same resolution as `detect_flavor`, also reporting which tier resolved
-/// it (`"metadata"` or `"fallback"`) — public surface for `drift-scan`,
+/// it (`"metadata"` or `"fallback"`) — public surface for `audit`,
 /// which reports the source in its emitted report header.
 pub fn detect_flavor_with_source(dir: &Path) -> Result<(RepoType, &'static str), String> {
     if let Some(metadata) = read_repo_metadata(dir)? {
@@ -136,7 +191,7 @@ pub fn detect_flavor_with_source(dir: &Path) -> Result<(RepoType, &'static str),
 }
 
 /// Reads and parses `<dir>/govna/metadata.txt`. Public surface for
-/// `drift-scan`, which needs the full parsed record (canon_version,
+/// `audit`, which needs the full parsed record (canon_version,
 /// code_stack) for its report header, not just the repo_type `detect_flavor` uses.
 pub fn read_repo_metadata(dir: &Path) -> Result<Option<BTreeMap<String, String>>, String> {
     let path = dir.join("govna").join("metadata.txt");
@@ -228,7 +283,7 @@ pub fn infer_stack(dir: &Path) -> Option<&'static str> {
     None
 }
 
-/// Public surface for a future `drift-scan` AC.
+/// Public surface for audit and render command handling.
 pub fn canonical_stack(stack: &str) -> Option<&'static str> {
     match stack.trim().to_lowercase().as_str() {
         "go" => Some("Go"),
@@ -309,7 +364,7 @@ fn insert_stack_guidelines(content: &str, block: &str) -> Result<String, String>
 /// the module path's final slash-separated component (module paths always
 /// use `/`, regardless of host OS — matching Go's `path.Base`, not
 /// `filepath.Base`); otherwise the basename of `cwd` (never the render
-/// target's basename — see `render-canon`'s doc comment).
+/// target's basename — see `render`'s doc comment).
 pub fn resolve_repo_name(cwd: &Path, module_path: &str) -> String {
     if !module_path.is_empty() {
         module_path

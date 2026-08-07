@@ -1,19 +1,20 @@
-//! Implements the `govna drift-scan` subcommand.
+//! Implements the `govna audit` subcommand.
 //!
 //! Runs against the current working directory (no positional arguments)
 //! after a positive govna-adoption check, walks the canon overlay embedded
 //! in the binary, byte-compares each governed file against the cwd,
 //! classifies divergences, collects evidence (preserve markers, git log),
 //! allocates a monotonic AC number, and emits one file under `<cwd>/govna/`:
-//! the AC stub (`ac<N>-drift-scan-v<X.Y.Z>.md`, conforming to
+//! the AC stub (`ac<N>-audit-v<X.Y.Z>.md`, conforming to
 //! `govna/ac-template.md`). Per-file diffs are not snapshotted — adopters
-//! use `govna render-canon` + standard `diff -ru` to inspect changes.
+//! use `govna render` + standard `diff -ru` to inspect changes.
 
 use crate::emission;
 use crate::governance::{self, RepoType};
 use crate::templates;
 use regex::Regex;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -63,7 +64,8 @@ impl std::fmt::Display for Classification {
 
 const REACHABILITY_HEADER_REMINDER: &str = "Reachability check: verify divergent canon-code branches reach this consumer's structure before treating as drift.";
 const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: a Director-resolved `sync` for an `ambiguity` item authorizes editing the named target even when it is absent from `## In Scope`; leave this emitted stub unchanged through sync and post-sync verification.";
-const DRIFT_SCAN_MARKER_PREFIX: &str = "<!-- drift-scan: emitted-by govna ";
+const AUDIT_MARKER_PREFIX: &str = "<!-- audit: emitted-by govna ";
+const BASELINE_SCHEMA: &str = "govna-canon-baseline-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct StableVersion(u64, u64, u64);
@@ -71,7 +73,7 @@ struct StableVersion(u64, u64, u64);
 fn parse_canon_version(value: &str, source: &str) -> Result<StableVersion, String> {
     let Some(raw) = value.strip_prefix('v') else {
         return Err(format!(
-            "drift-scan: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+            "audit: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
         ));
     };
     let parts: Vec<&str> = raw.split('.').collect();
@@ -83,14 +85,14 @@ fn parse_canon_version(value: &str, source: &str) -> Result<StableVersion, Strin
         })
     {
         return Err(format!(
-            "drift-scan: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+            "audit: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
         ));
     }
     let mut parsed = [0_u64; 3];
     for (index, part) in parts.iter().enumerate() {
         parsed[index] = part.parse::<u64>().map_err(|_| {
             format!(
-                "drift-scan: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+                "audit: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
             )
         })?;
     }
@@ -111,10 +113,117 @@ fn validate_metadata_versions(
     let embedded = parse_canon_version(embedded_value, "embedded")?;
     if target > embedded {
         return Err(format!(
-            "drift-scan: target canon_version {target_value} is newer than embedded canon {embedded_value}; upgrade govna before scanning so consumer metadata is not downgraded"
+            "audit: target canon_version {target_value} is newer than embedded canon {embedded_value}; upgrade govna before auditing so consumer metadata is not downgraded"
         ));
     }
     Ok((target, embedded))
+}
+
+#[derive(Debug)]
+struct BaselineEntry {
+    hash: String,
+}
+
+#[derive(Debug)]
+struct Baseline {
+    entries: BTreeMap<String, BaselineEntry>,
+}
+
+fn parse_baseline(content: &str, embedded_version: &str) -> Result<Baseline, String> {
+    if !content.ends_with('\n') {
+        return Err("audit: invalid govna/canon-baseline.txt: require a final newline".to_string());
+    }
+    let mut lines = content.trim_end_matches('\n').split('\n');
+    if lines.next() != Some(BASELINE_SCHEMA) {
+        return Err(format!(
+            "audit: invalid govna/canon-baseline.txt: first line must be {BASELINE_SCHEMA}"
+        ));
+    }
+    let version_line = lines.next().ok_or_else(|| {
+        "audit: invalid govna/canon-baseline.txt: missing canon_version".to_string()
+    })?;
+    let version = version_line.strip_prefix("canon_version = ").ok_or_else(|| {
+        "audit: invalid govna/canon-baseline.txt: second line must be canon_version = vMAJOR.MINOR.PATCH".to_string()
+    })?;
+    let baseline_version = parse_canon_version(version, "baseline")?;
+    let embedded_version_parsed = parse_canon_version(embedded_version, "embedded")?;
+    if baseline_version > embedded_version_parsed {
+        return Err(format!(
+            "audit: baseline canon_version {version} is newer than embedded canon {embedded_version}; upgrade govna before auditing"
+        ));
+    }
+
+    let mut entries = BTreeMap::new();
+    let mut previous = None::<String>;
+    for line in lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() != 3 || fields.iter().any(|field| field.is_empty()) {
+            return Err("audit: invalid govna/canon-baseline.txt: each entry must be <path><TAB><scope><TAB><sha256>".to_string());
+        }
+        let (relpath, scope, hash) = (fields[0], fields[1], fields[2]);
+        if relpath == governance::BASELINE_PATH {
+            return Err(
+                "audit: invalid govna/canon-baseline.txt: manifest must exclude itself".to_string(),
+            );
+        }
+        if previous.as_deref().is_some_and(|path| path >= relpath) {
+            return Err(
+                "audit: invalid govna/canon-baseline.txt: paths must be unique and sorted"
+                    .to_string(),
+            );
+        }
+        previous = Some(relpath.to_string());
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err(format!(
+                "audit: invalid govna/canon-baseline.txt: invalid SHA-256 for {relpath}"
+            ));
+        }
+        let expected_boundary = governance::mixed_content_boundary(relpath);
+        match (scope, expected_boundary) {
+            ("full", None) => {}
+            (scope, Some(boundary)) if scope == format!("before:{boundary}") => {}
+            (scope, Some(boundary)) => {
+                return Err(format!(
+                    "audit: invalid govna/canon-baseline.txt: {relpath} scope {scope:?} does not match registered boundary {boundary:?}"
+                ));
+            }
+            (scope, None) if scope.starts_with("before:") => {
+                return Err(format!(
+                    "audit: invalid govna/canon-baseline.txt: {relpath} declares an unregistered boundary scope {scope:?}"
+                ));
+            }
+            _ => {
+                return Err(format!(
+                    "audit: invalid govna/canon-baseline.txt: unknown scope {scope:?} for {relpath}"
+                ));
+            }
+        }
+        entries.insert(
+            relpath.to_string(),
+            BaselineEntry {
+                hash: hash.to_string(),
+            },
+        );
+    }
+    Ok(Baseline { entries })
+}
+
+fn region_hash(content: &str, relpath: &str) -> Option<String> {
+    let region = if let Some(boundary) = governance::mixed_content_boundary(relpath) {
+        governance::extract_canon_zone(content, boundary)?
+    } else {
+        content.to_string()
+    };
+    Some(
+        Sha256::digest(region.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
+    )
 }
 
 // ── report types ────────────────────────────────────────────────────────────
@@ -208,7 +317,7 @@ pub struct Config {
 }
 
 fn print_usage() {
-    eprintln!("Usage: govna drift-scan [flags]");
+    eprintln!("Usage: govna audit [options]");
     eprintln!();
     eprintln!("Scan an adopted-govna repo against canon. Run from the consumer repo root");
     eprintln!("(no positional arguments). Emits an AC stub under govna/.");
@@ -244,19 +353,17 @@ pub fn parse_args(args: &[String]) -> Result<(Config, bool), String> {
             }
             "-f" | "--flavor" => {
                 let Some(v) = args.get(i + 1) else {
-                    return Err("drift-scan: -f, --flavor <code|doc> requires a value".to_string());
+                    return Err("audit: -f, --flavor <code|doc> requires a value".to_string());
                 };
                 cfg.flavor = v.clone();
                 i += 1;
             }
             "-s" | "--stack" => {
                 let Some(v) = args.get(i + 1) else {
-                    return Err("drift-scan: -s, --stack <name> requires a value".to_string());
+                    return Err("audit: -s, --stack <name> requires a value".to_string());
                 };
                 if v.trim().is_empty() {
-                    return Err(
-                        "drift-scan: -s, --stack <name> requires a non-empty value".to_string()
-                    );
+                    return Err("audit: -s, --stack <name> requires a non-empty value".to_string());
                 }
                 cfg.stack = v.trim().to_string();
                 i += 1;
@@ -266,16 +373,16 @@ pub fn parse_args(args: &[String]) -> Result<(Config, bool), String> {
             }
             "-l" | "--diff-lines" => {
                 let Some(v) = args.get(i + 1) else {
-                    return Err("drift-scan: -l, --diff-lines <N> requires a value".to_string());
+                    return Err("audit: -l, --diff-lines <N> requires a value".to_string());
                 };
                 cfg.diff_lines = v.parse().map_err(|_| {
-                    format!("drift-scan: --diff-lines must be a non-negative integer, got {v:?}")
+                    format!("audit: --diff-lines must be a non-negative integer, got {v:?}")
                 })?;
                 i += 1;
             }
             "-n" | "--repo-name" => {
                 let Some(v) = args.get(i + 1) else {
-                    return Err("drift-scan: -n, --repo-name <name> requires a value".to_string());
+                    return Err("audit: -n, --repo-name <name> requires a value".to_string());
                 };
                 cfg.repo_name = v.clone();
                 i += 1;
@@ -287,23 +394,26 @@ pub fn parse_args(args: &[String]) -> Result<(Config, bool), String> {
 
     if !positional.is_empty() {
         return Err(format!(
-            "drift-scan: no positional arguments accepted; run from the consumer repo root (got: {positional:?})"
+            "audit: no positional arguments accepted; run from the consumer repo root (got: {positional:?})"
         ));
     }
 
     if !cfg.flavor.is_empty() && cfg.flavor != "code" && cfg.flavor != "doc" {
         return Err(format!(
-            "drift-scan: --flavor must be code or doc, got {:?}",
+            "audit: --flavor must be code or doc, got {:?}",
             cfg.flavor
         ));
     }
     if cfg.flavor == "doc" && !cfg.stack.is_empty() {
-        return Err("drift-scan: --stack applies only to CODE canon; remove --stack or select --flavor code".to_string());
+        return Err(
+            "audit: --stack applies only to CODE canon; remove --stack or select --flavor code"
+                .to_string(),
+        );
     }
 
-    let cwd = std::env::current_dir().map_err(|e| format!("drift-scan: get cwd: {e}"))?;
+    let cwd = std::env::current_dir().map_err(|e| format!("audit: get cwd: {e}"))?;
     cfg.target = cwd;
-    cfg.invocation = format!("govna drift-scan {}", args.join(" "));
+    cfg.invocation = format!("govna audit {}", args.join(" "));
 
     Ok((cfg, false))
 }
@@ -338,24 +448,23 @@ pub fn run(cfg: Config) -> ExitCode {
 fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     if !cfg.target.is_dir() {
         return Err(format!(
-            "drift-scan: target {} is not a directory",
+            "audit: target {} is not a directory",
             cfg.target.display()
         ));
     }
 
-    emission::refuse_govna_source(&cfg.target, "drift-scan")?;
-    emission::require_govna_adopted(&cfg.target, "drift-scan")?;
+    emission::refuse_govna_source(&cfg.target, "audit")?;
+    emission::require_govna_adopted(&cfg.target, "audit")?;
 
     if !cfg.target.join(".git").exists() {
         return Err(format!(
-            "drift-scan: target {} is not a git worktree (no .git/) — drift-scan needs git history to classify divergent files; run `git init` and commit, or pass an already-rendered target",
+            "audit: target {} is not a git worktree (no .git/) — audit needs git history for migration fallback; run `git init` and commit, or pass an already-rendered target",
             cfg.target.display()
         ));
     }
     if Command::new("git").arg("--version").output().is_err() {
         return Err(
-            "drift-scan: git binary not found on PATH; install git before running drift-scan"
-                .to_string(),
+            "audit: git binary not found on PATH; install git before running audit".to_string(),
         );
     }
 
@@ -379,11 +488,14 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     };
     if flavor != "code" && flavor != "doc" {
         return Err(format!(
-            "drift-scan: --flavor must be code or doc, got {flavor:?}"
+            "audit: --flavor must be code or doc, got {flavor:?}"
         ));
     }
     if flavor == "doc" && !stack_input.is_empty() {
-        return Err("drift-scan: --stack applies only to CODE canon; remove --stack or select --flavor code".to_string());
+        return Err(
+            "audit: --stack applies only to CODE canon; remove --stack or select --flavor code"
+                .to_string(),
+        );
     }
 
     let repo_name = if cfg.repo_name.is_empty() {
@@ -413,7 +525,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         }
         if stack.is_empty() {
             return Err(format!(
-                "drift-scan: cannot resolve CODE stack for target {}; pass -s, --stack <name> or add a recognized stack manifest",
+                "audit: cannot resolve CODE stack for target {}; pass -s, --stack <name> or add a recognized stack manifest",
                 cfg.target.display()
             ));
         }
@@ -426,7 +538,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         module_path: String::new(),
     };
     let canon_ops = governance::render_canonical_files(&gcfg)
-        .map_err(|e| format!("drift-scan: render canon: {e}"))?;
+        .map_err(|e| format!("audit: render canon: {e}"))?;
     let canon: BTreeMap<String, String> = canon_ops
         .into_iter()
         .map(|op| (op.rel_path, op.content))
@@ -434,15 +546,15 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 
     let canon_metadata = canon
         .get("govna/metadata.txt")
-        .ok_or_else(|| "drift-scan: rendered canon is missing govna/metadata.txt".to_string())?;
+        .ok_or_else(|| "audit: rendered canon is missing govna/metadata.txt".to_string())?;
     let embedded_canon_version = metadata_value(canon_metadata, "canon_version")
         .ok_or_else(|| {
-            "drift-scan: invalid embedded canon_version: govna/metadata.txt is missing the field; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+            "audit: invalid embedded canon_version: govna/metadata.txt is missing the field; restore a strict vMAJOR.MINOR.PATCH value before re-running"
                 .to_string()
         })?;
     let metadata_versions = if metadata_present {
         let target_canon_version = metadata.get("canon_version").ok_or_else(|| {
-            "drift-scan: invalid target canon_version: govna/metadata.txt is missing the field; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+            "audit: invalid target canon_version: govna/metadata.txt is missing the field; restore a strict vMAJOR.MINOR.PATCH value before re-running"
                 .to_string()
         })?;
         Some(validate_metadata_versions(
@@ -454,13 +566,32 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         None
     };
 
+    let canon_baseline = canon
+        .get(governance::BASELINE_PATH)
+        .ok_or_else(|| "audit: rendered canon is missing govna/canon-baseline.txt".to_string())?;
+    let target_baseline_content =
+        match std::fs::read_to_string(cfg.target.join(governance::BASELINE_PATH)) {
+            Ok(content) => Some(content),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(format!(
+                    "audit: read {}: {error}",
+                    governance::BASELINE_PATH
+                ));
+            }
+        };
+    let baseline = target_baseline_content
+        .as_deref()
+        .map(|content| parse_baseline(content, embedded_canon_version))
+        .transpose()?;
+
     let coherence_failures = check_canon_coherence(&canon);
     if !coherence_failures.is_empty() {
         return Ok(write_coherence_failure_report(&coherence_failures));
     }
 
     let invocation = if cfg.invocation.is_empty() {
-        let mut s = format!("govna drift-scan --flavor {flavor}");
+        let mut s = format!("govna audit --flavor {flavor}");
         if !stack.is_empty() {
             s.push_str(&format!(" --stack {stack:?}"));
         }
@@ -486,8 +617,18 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
     };
 
     for relpath in canon.keys() {
+        if relpath == governance::BASELINE_PATH {
+            continue;
+        }
         let canon_content = &canon[relpath];
-        let mut fr = classify_file(&cfg.target, relpath, canon_content, &sha, cfg.diff_lines);
+        let mut fr = classify_file(
+            &cfg.target,
+            relpath,
+            canon_content,
+            baseline.as_ref(),
+            &sha,
+            cfg.diff_lines,
+        );
         if relpath == "govna/metadata.txt" && !metadata_present {
             fr.classification = Classification::MigrationRequired;
             fr.compare_command = format!("metadata absent; migration required (canon @ {sha})");
@@ -497,7 +638,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         {
             let target_canon_version = metadata.get("canon_version").unwrap();
             let target_content = std::fs::read_to_string(cfg.target.join(relpath))
-                .map_err(|e| format!("drift-scan: read {relpath}: {e}"))?;
+                .map_err(|e| format!("audit: read {relpath}: {e}"))?;
             let replaced = target_content.replacen(
                 &format!("canon_version = {target_canon_version}"),
                 &format!("canon_version = {embedded_canon_version}"),
@@ -516,6 +657,19 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
                 );
             }
         }
+        report.files.push(fr);
+    }
+
+    if target_baseline_content.as_deref() != Some(canon_baseline.as_str()) {
+        let mut fr = FileResult::new(governance::BASELINE_PATH);
+        fr.classification = Classification::MigrationRequired;
+        fr.canon_ref = format!("govna @ {sha}: generated baseline manifest");
+        fr.canon_content = canon_baseline.clone();
+        fr.compare_command = if target_baseline_content.is_some() {
+            format!("replace baseline after all routing and sync succeeds (canon @ {sha})")
+        } else {
+            format!("baseline absent; install after Director-reviewed migration (canon @ {sha})")
+        };
         report.files.push(fr);
     }
 
@@ -563,23 +717,23 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         report.files.push(fr);
     }
 
-    let (ac_num, reused) = emission::allocate_ac_number(&cfg.target, "drift-scan", &sha)?;
-    let stub_rel = format!("govna/ac{ac_num}-drift-scan-{sha}.md");
+    let (ac_num, reused) = emission::allocate_ac_number(&cfg.target, "audit", &sha)?;
+    let stub_rel = format!("govna/ac{ac_num}-audit-{sha}.md");
     let stub_path = cfg.target.join(&stub_rel);
 
     if reused && stub_path.exists() {
-        let unedited = emission::verify_unedited(&stub_path, DRIFT_SCAN_MARKER_PREFIX)?;
+        let unedited = emission::verify_unedited(&stub_path, AUDIT_MARKER_PREFIX)?;
         if !unedited {
             return Err(format!(
-                "drift-scan: {stub_rel} has been edited since last drift-scan emission — to re-run, commit edits and delete the stub to regenerate, or rename the stub off the drift-scan-{sha} slug"
+                "audit: {stub_rel} has been edited since last audit emission — to re-run, commit edits and delete the stub to regenerate, or rename the stub off the audit-{sha} slug"
             ));
         }
     }
 
     let stub_body = build_ac_stub(&report, ac_num, &sha);
 
-    emission::ensure_docs_dir(&cfg.target, "drift-scan")?;
-    emission::write_with_marker(&stub_path, DRIFT_SCAN_MARKER_PREFIX, &sha, &stub_body)?;
+    emission::ensure_docs_dir(&cfg.target, "audit")?;
+    emission::write_with_marker(&stub_path, AUDIT_MARKER_PREFIX, &sha, &stub_body)?;
 
     report.emitted = Some(EmittedPaths {
         ac_stub: stub_rel.clone(),
@@ -587,7 +741,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
 
     if cfg.json {
         let json = serde_json::to_string_pretty(&report)
-            .map_err(|e| format!("drift-scan: encode JSON report: {e}"))?;
+            .map_err(|e| format!("audit: encode JSON report: {e}"))?;
         println!("{json}");
     } else {
         println!(
@@ -604,13 +758,7 @@ pub(crate) const EXPECTED_DIVERGENCE_PATHS: &[&str] = &["plan.md", "arch.md"];
 const FORMAT_DEFINING_CANON_PATHS: &[&str] = &["govna/ac-template.md", "AGENTS.md"];
 
 pub(crate) fn mixed_content_boundary(relpath: &str) -> Option<&'static str> {
-    match relpath {
-        "AGENTS.md" => Some("## Project Rules"),
-        "govna/development-guidelines.md" | "govna/editing-guidelines.md" => {
-            Some("## Project Practices")
-        }
-        _ => None,
-    }
+    governance::mixed_content_boundary(relpath)
 }
 
 fn is_format_defining(relpath: &str) -> bool {
@@ -618,21 +766,14 @@ fn is_format_defining(relpath: &str) -> bool {
 }
 
 pub(crate) fn extract_canon_zone(content: &str, boundary: &str) -> Option<String> {
-    let mut acc = String::new();
-    for line in content.split_inclusive('\n') {
-        let trimmed = line.trim_end_matches(['\n', '\r']);
-        if trimmed == boundary {
-            return Some(acc);
-        }
-        acc.push_str(line);
-    }
-    None
+    governance::extract_canon_zone(content, boundary)
 }
 
 fn classify_file(
     target: &Path,
     relpath: &str,
     canon: &str,
+    baseline: Option<&Baseline>,
     sha: &str,
     diff_lines: usize,
 ) -> FileResult {
@@ -687,16 +828,36 @@ fn classify_file(
     }
 
     fr.diff = unified_diff(canon, &target_bytes, relpath, diff_lines);
-    fr.commits = git_log_n(target, relpath, 5);
     fr.markers = emission::preserve_markers(target, relpath);
+    if !fr.markers.is_empty() {
+        fr.classification = Classification::Preserve;
+        return fr;
+    }
 
-    fr.classification = if !fr.markers.is_empty() {
-        Classification::Preserve
-    } else if !fr.commits.is_empty() {
-        Classification::Ambiguity
+    if let Some(baseline) = baseline {
+        fr.classification = match baseline.entries.get(relpath) {
+            Some(entry) if region_hash(&target_bytes, relpath).as_deref() == Some(&entry.hash) => {
+                fr.compare_command = format!(
+                    "target comparison region matches stored baseline; canon changed (canon @ {sha})"
+                );
+                Classification::ClearSync
+            }
+            Some(_) => Classification::Ambiguity,
+            None => {
+                fr.compare_command = format!(
+                    "valid baseline has no entry for {relpath}; review required (canon @ {sha})"
+                );
+                Classification::Ambiguity
+            }
+        };
     } else {
-        Classification::ClearSync
-    };
+        fr.commits = git_log_n(target, relpath, 5);
+        fr.classification = if !fr.commits.is_empty() {
+            Classification::Ambiguity
+        } else {
+            Classification::ClearSync
+        };
+    }
     fr
 }
 
@@ -797,7 +958,7 @@ fn write_coherence_failure_report(failures: &[CoherenceFailure]) -> ExitCode {
             println!();
         }
     }
-    println!("Reconcile canon-side and re-run drift-scan.");
+    println!("Reconcile canon-side and re-run audit.");
     ExitCode::from(1)
 }
 
@@ -1189,7 +1350,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
 
     let mut b = String::new();
     b.push_str(&format!(
-        "# AC{ac_num} Drift-Scan Adoption from govna {canon_version}\n\n"
+        "# AC{ac_num} Audit Adoption from govna {canon_version}\n\n"
     ));
     if migration_entries.is_empty() {
         b.push_str(&format!(
@@ -1208,7 +1369,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
 
     b.push_str("## Summary\n\n");
     b.push_str(&format!(
-        "Sync this repo to govna @ {canon_version} canon as part of the recurring drift-scan cycle. Drift-scan surfaced {}. Use `govna render-canon` to render canon and standard `diff -ru` to inspect per-file changes (see AGENTS.md `### Drift-Scan Adoption`).\n\n",
+        "Sync this repo to govna @ {canon_version} canon as part of the recurring audit cycle. Audit surfaced {}. Use `govna render` to render canon and standard `diff -ru` to inspect per-file changes (see AGENTS.md `### Audit Adoption`).\n\n",
         tally_classifications(&r.files)
     ));
     if has_ambiguity {
@@ -1233,7 +1394,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     }
     if !migration_entries.is_empty() {
         b.push_str("### Migration Required\n\n");
-        b.push_str("The following metadata migration items require explicit consumer work; drift-scan does not modify them:\n\n");
+        b.push_str("The following migration items require explicit consumer work; audit does not modify them:\n\n");
         for f in &migration_entries {
             b.push_str(&format!(
                 "- `{}` — {}. {}\n",
@@ -1333,10 +1494,17 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         at_num += 1;
     }
     for f in &migration_entries {
-        b.push_str(&format!(
-            "**AT{at_num}** [Automated] — `{}` is explicitly migrated to the metadata contract (and any legacy marker disposition is recorded) before the next drift-scan.\n\n",
-            f.relpath
-        ));
+        if f.relpath == governance::BASELINE_PATH {
+            b.push_str(&format!(
+                "**AT{at_num}** [Automated] — `{}` is installed or replaced from rendered canon only after every routing decision, sync, and validation succeeds.\n\n",
+                f.relpath
+            ));
+        } else {
+            b.push_str(&format!(
+                "**AT{at_num}** [Automated] — `{}` is explicitly migrated to the metadata contract before audit adoption completes.\n\n",
+                f.relpath
+            ));
+        }
         at_num += 1;
     }
     if !review_entries.is_empty() {
@@ -1347,12 +1515,14 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     }
     if !sync_entries.is_empty() || !migration_entries.is_empty() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, `govna render-canon` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary.\n\n"
+            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last.\n\n"
         ));
     }
 
     b.push_str("## Status\n\n");
-    b.push_str("`PENDING` — drift-scan emission; awaiting Director review and implementation authorization.\n");
+    b.push_str(
+        "`PENDING` — audit emission; awaiting Director review and implementation authorization.\n",
+    );
     b
 }
 
@@ -1370,7 +1540,7 @@ mod tests {
 
     #[test]
     fn metadata_version_validation_rejects_newer_target() {
-        let error = validate_metadata_versions("v1.0.0", "v0.3.0").unwrap_err();
+        let error = validate_metadata_versions("v1.0.0", "v0.4.0").unwrap_err();
         assert!(error.contains("upgrade govna"), "{error}");
         assert!(error.contains("not downgraded"), "{error}");
     }

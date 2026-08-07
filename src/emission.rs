@@ -49,7 +49,7 @@ pub fn refuse_govna_source(target: &Path, tool: &str) -> Result<(), String> {
 pub fn require_govna_adopted(target: &Path, tool: &str) -> Result<(), String> {
     if !file_exists(&target.join("AGENTS.md")) {
         return Err(format!(
-            "{tool}: {} is not a govna-adopted repo (AGENTS.md not found); run from the consumer repo root after `govna render-canon`",
+            "{tool}: {} is not a govna-adopted repo (AGENTS.md not found); run from the consumer repo root after `govna render`",
             target.display()
         ));
     }
@@ -63,13 +63,13 @@ pub fn require_govna_adopted(target: &Path, tool: &str) -> Result<(), String> {
         }
     }
     if let Ok(changelog) = std::fs::read_to_string(target.join("CHANGELOG.md")) {
-        let re = Regex::new(r"(?i)govna\s+(apply|render-canon)").unwrap();
+        let re = Regex::new(r"(?i)govna\s+(apply|render|render-canon)").unwrap();
         if re.is_match(&changelog) {
             return Ok(());
         }
     }
     Err(format!(
-        "{tool}: {} has AGENTS.md but no govna adoption signal (expected one of: govna/ac-template.md, govna/release.md, govna/build-release.md, or a CHANGELOG row referencing 'govna apply' or 'govna render-canon'); ensure you are running from a govna-adopted repo root",
+        "{tool}: {} has AGENTS.md but no govna adoption signal (expected one of: govna/ac-template.md, govna/release.md, govna/build-release.md, or a CHANGELOG row referencing 'govna apply' or 'govna render'); ensure you are running from a govna-adopted repo root",
         target.display()
     ))
 }

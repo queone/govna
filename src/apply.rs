@@ -1,14 +1,14 @@
 //! Implements the `govna apply` subcommand.
 //!
 //! Runs against the current working directory (no positional arguments,
-//! no `--target` flag — govna-consistent with `drift-scan`'s cwd-only
+//! no `--target` flag — govna-consistent with `audit`'s cwd-only
 //! design, unlike governa's `-t/--target`). Writes the full canon set via
-//! `governance::render_canonical_files` (already built by `render-canon`),
+//! `governance::render_canonical_files` (already built by `render`),
 //! a `CLAUDE.md` symlink, and a `govna/ac<N>-govna-apply.md` adoption
 //! record. No interactive prompting (govna's primary consumer is an AI
 //! agent invoking the CLI non-interactively, not a terminal user) — an
 //! unresolvable required param hard-fails with actionable guidance instead,
-//! matching `render-canon`'s existing convention.
+//! matching `render`'s existing convention.
 
 use crate::driftscan;
 use crate::emission;
@@ -720,7 +720,7 @@ fn expected_artifact_paths(repo_type: Option<RepoType>) -> Vec<&'static str> {
 
 /// Scans the target for repo-shape signals (informational + overwrite-risk
 /// display only — actual flavor resolution uses `governance::detect_flavor`
-/// for consistency with `render-canon`/`drift-scan`, not this heuristic).
+/// for consistency with `render`/`audit`, not this heuristic).
 fn assess_target(root: &Path) -> Result<Assessment, String> {
     let mut files: Vec<PathBuf> = Vec::new();
     collect_files(root, root, &mut files)?;

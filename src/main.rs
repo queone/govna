@@ -11,7 +11,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const PROGRAM_VERSION: &str = "0.12.0";
+const PROGRAM_VERSION: &str = "0.13.0";
 const SOURCE_REPO: &str = "github.com/queone/govna";
 
 fn main() -> ExitCode {
@@ -29,12 +29,12 @@ fn main() -> ExitCode {
             println!("govna v{PROGRAM_VERSION}");
             ExitCode::SUCCESS
         }
-        "render-canon" => run_render_canon(&args[2..]),
-        "drift-scan" => driftscan::run_cli(&args[2..]),
+        "render" | "render-canon" => run_render(&args[2..]),
+        "audit" | "drift-scan" => driftscan::run_cli(&args[2..]),
         "apply" => apply::run_cli(&args[2..]),
         "rm" => rm::run_cli(&args[2..]),
         "-h" | "--help" | "-?" | "help" | "h" => {
-            print_usage();
+            print_usage_stdout();
             ExitCode::SUCCESS
         }
         _ => {
@@ -90,55 +90,44 @@ fn dark_gray(s: &str) -> String {
     colorize("38;5;245", s)
 }
 
-/// 2-space indent, description aligned at column 38 — matches
+/// 2-space indent, description aligned at column 32 — matches
 /// `govna/development-guidelines.md`'s CLI Usage Formatting convention and
 /// build.sh's own `_emit_usage_line`.
 fn usage_line(flag: &str, desc: &str) -> String {
     let prefix_len = 2 + flag.chars().count();
-    let pad = if prefix_len < 38 { 38 - prefix_len } else { 2 };
+    let pad = if prefix_len < 32 { 32 - prefix_len } else { 2 };
     format!("  {flag}{}{desc}", " ".repeat(pad))
 }
 
 fn print_usage() {
-    eprintln!("{} v{PROGRAM_VERSION}", bold_white("govna"));
-    eprintln!(
-        "{}",
-        dark_gray(&format!("Repo governance templates — {SOURCE_REPO}"))
-    );
-    eprintln!();
-    eprintln!("{} govna <command> [options]", bold_white("Usage:"));
-    eprintln!();
-    eprintln!(
-        "{}",
-        usage_line("apply", "apply governance template to a repo")
-    );
-    eprintln!(
-        "{}",
-        usage_line("drift-scan", "scan an adopted repo against govna canon")
-    );
-    eprintln!(
-        "{}",
-        usage_line("rm", "emit cleanup AC for removing govna canon")
-    );
-    eprintln!(
-        "{}",
-        usage_line(
-            "render-canon",
-            "render flavor-specific canon files into a target directory"
-        )
-    );
-    eprintln!(
-        "{}",
-        usage_line("version, ver, v, --version", "print version")
-    );
-    eprintln!("{}", usage_line("help, h", "show this help"));
-    eprintln!();
-    eprintln!("Run 'govna <command> -h' for command-specific flags.");
+    eprint!("{}", usage_text());
 }
 
-fn print_render_canon_usage() {
+fn print_usage_stdout() {
+    print!("{}", usage_text());
+}
+
+fn usage_text() -> String {
+    format!(
+        "{} v{PROGRAM_VERSION}\n{}\n\n{} govna <command> [options]\n\n{}\n{}\n{}\n{}\n{}\n{}\n\nRun 'govna <command> -h' for command-specific flags.\n",
+        bold_white("govna"),
+        dark_gray(&format!("Repo governance templates — {SOURCE_REPO}")),
+        bold_white("Usage:"),
+        usage_line("apply", "apply governance template to a repo"),
+        usage_line("audit", "drift scan an adopted repo against govna canon"),
+        usage_line("rm", "emit cleanup AC for removing govna canon"),
+        usage_line(
+            "render",
+            "render flavor-specific canon files into a target directory"
+        ),
+        usage_line("ver, v, --version", "print version"),
+        usage_line("help, h", "show this help"),
+    )
+}
+
+fn print_render_usage() {
     eprintln!(
-        "{} govna render-canon [--flavor code|doc] [--stack <name>] [--module-path <path>] <target>",
+        "{} govna render [--flavor code|doc] [--stack <name>] [--module-path <path>] <target>",
         bold_white("Usage:")
     );
     eprintln!();
@@ -171,10 +160,10 @@ fn print_render_canon_usage() {
     eprintln!("need a fresh tree.");
 }
 
-/// render-canon: render flavor-specific canon files into <target>/, flat
+/// render: render flavor-specific canon files into <target>/, flat
 /// repo-relative layout (e.g. <target>/AGENTS.md, <target>/govna/ac-template.md).
 /// Flavor/stack/module-path are read from cwd, not the render target.
-fn run_render_canon(args: &[String]) -> ExitCode {
+fn run_render(args: &[String]) -> ExitCode {
     let mut flavor: Option<String> = None;
     let mut target: Option<String> = None;
     let mut module_path: Option<String> = None;
@@ -184,7 +173,7 @@ fn run_render_canon(args: &[String]) -> ExitCode {
     while i < args.len() {
         match args[i].as_str() {
             "-h" | "--help" | "-?" => {
-                print_render_canon_usage();
+                print_render_usage();
                 return ExitCode::SUCCESS;
             }
             "-f" | "--flavor" => {
@@ -228,7 +217,7 @@ fn run_render_canon(args: &[String]) -> ExitCode {
     }
 
     let Some(target) = target else {
-        eprintln!("render-canon requires a positional <target> argument");
+        eprintln!("render requires a positional <target> argument");
         return ExitCode::from(2);
     };
 
@@ -347,10 +336,10 @@ fn run_render_canon(args: &[String]) -> ExitCode {
         }
     }
 
-    // render-canon creates the CLAUDE.md symlink even standalone, since it's
+    // render creates the CLAUDE.md symlink even standalone, since it's
     // usable well before apply exists — unlike apply, which uses the
     // preserve_regular_file variant instead since it runs against real repos
-    // with real user content to protect. render-canon's typical target is a
+    // with real user content to protect. render's typical target is a
     // scratch dir, so this uses an unconditional remove+recreate.
     if let Err(e) = write_claude_symlink(&abs_target, false) {
         eprintln!("{e}");

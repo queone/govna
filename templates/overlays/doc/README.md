@@ -13,7 +13,7 @@ Current contents:
 - `README.md`
 - `govna/ac-template.md`
 - `govna/canon-cycle.md`
-- `govna/drift-scan.md`
+- `govna/audit.md`
 - `govna/editing-cycle.md`
 - `govna/editing-guidelines.md`
 - `govna/metadata.txt`

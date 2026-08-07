@@ -67,7 +67,7 @@ The operator flow is two steps:
 
    `prep` bumps `Cargo.toml`'s package version automatically, but does **not** bump any declared binary's own literal `PROGRAM_VERSION` — bump that by hand, in every declared binary path, before running `prep`. When doing so, also bump `Cargo.toml`'s version to the same target value in the same pass, before invoking `prep`: its own version bump is idempotent when the file already holds the target value, so pre-bumping causes no conflict, but leaving `Cargo.toml` at the old version until `prep` writes it creates a transient mismatch against the already-bumped `PROGRAM_VERSION` that the pre-check build's own test suite will legitimately fail on, since pre-check runs before `prep`'s writes.
 
-   `CANON_VERSION` (`src/templates.rs`) also requires a manual bump — separately from `PROGRAM_VERSION`, and `prep` never touches it either — whenever any file under `templates/` changed real rendered content (not a typo/formatting-only edit) in the AC being packaged. Unlike `PROGRAM_VERSION`, no build-time validation catches a forgotten bump here; `drift-scan`'s own `canon_version` reporting is the only signal, and it silently under-reports staleness if this is missed.
+   `CANON_VERSION` (`src/templates.rs`) also requires a manual bump — separately from `PROGRAM_VERSION`, and `prep` never touches it either — whenever any file under `templates/` changed real rendered content (not a typo/formatting-only edit) in the AC being packaged. Unlike `PROGRAM_VERSION`, no build-time validation catches a forgotten bump here; `audit`'s own `canon_version` reporting is the only signal, and it silently under-reports staleness if this is missed.
 2. **Run the printed release command (`./build.sh vX.Y.Z "message"`).** Shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → tag → push tag → push branch`.
 
 Present only the release command after prep; do not add trailing commentary about wrapper routing or prompts. The director already knows.
@@ -89,7 +89,7 @@ Present only the release command after prep; do not add trailing commentary abou
 CHANGELOG row shape (enforced by prep's insertion code and by convention):
 
 - File shape: `# Changelog` heading, then a 2-column markdown table (`| Version | Summary |` with a `|---------|---------|` separator); first data row is `| Unreleased | |`, followed by one row per release (e.g., `| <version> | <AC-ref>: <one-line summary> |`).
-- During a drift-scan adoption cycle, the `| Unreleased | |` row's Summary column may carry preserve marker phrases (per `govna/drift-scan.md` `## Preserve-marker phrase set`).
+- During a audit adoption cycle, the `| Unreleased | |` row's Summary column may carry preserve marker phrases (per `govna/audit.md` `## Preserve-marker phrase set`).
 - Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
 - Versions are unprefixed (`0.29.0`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).

@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,6 +34,31 @@ fn no_args_exits_with_usage_error() {
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     assert!(!output.stderr.is_empty());
+    let expected = format!(
+        "govna v{}\nRepo governance templates — github.com/queone/govna\n\nUsage: govna <command> [options]\n\n  apply                         apply governance template to a repo\n  audit                         drift scan an adopted repo against govna canon\n  rm                            emit cleanup AC for removing govna canon\n  render                        render flavor-specific canon files into a target directory\n  ver, v, --version             print version\n  help, h                       show this help\n\nRun 'govna <command> -h' for command-specific flags.\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    assert_eq!(output.stderr, expected.as_bytes());
+}
+
+#[test]
+fn top_level_help_aliases_use_stdout() {
+    for alias in ["help", "h"] {
+        let output = govna().arg(alias).output().unwrap();
+        assert!(output.status.success(), "{alias}");
+        assert!(output.stderr.is_empty(), "{alias}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("  audit"));
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("drift-scan"));
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("render-canon"));
+    }
+}
+
+#[test]
+fn legacy_command_aliases_remain_functional_but_hidden() {
+    for alias in ["render-canon", "drift-scan"] {
+        let output = govna().args([alias, "--help"]).output().unwrap();
+        assert!(output.status.success(), "{alias}");
+    }
 }
 
 #[test]
@@ -46,7 +72,7 @@ fn unrecognized_subcommand_exits_two() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("unknown command: deps"));
 }
 
-// ── render-canon fixtures ──────────────────────────────────────────────────
+// ── render fixtures ──────────────────────────────────────────────────
 
 static FIXTURE_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -76,11 +102,11 @@ fn read(path: &Path) -> String {
 
 // DOC flavor renders; metadata has repo_type = DOC, no code_stack, a canon_version line.
 #[test]
-fn render_canon_doc_flavor_metadata() {
+fn render_doc_flavor_metadata() {
     let cwd = new_fixture();
     let target = new_fixture();
     let output = govna()
-        .args(["render-canon", "--flavor", "doc", target.to_str().unwrap()])
+        .args(["render", "--flavor", "doc", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -96,16 +122,88 @@ fn render_canon_doc_flavor_metadata() {
     assert!(metadata.contains("canon_version = v"), "{metadata}");
 }
 
+fn sha256(content: &str) -> String {
+    Sha256::digest(content.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn validate_baseline(dir: &Path) -> String {
+    let baseline = read(&dir.join("govna/canon-baseline.txt"));
+    let mut lines = baseline.lines();
+    assert_eq!(lines.next(), Some("govna-canon-baseline-v1"));
+    assert!(lines.next().unwrap().starts_with("canon_version = v"));
+    let mut previous = "";
+    for line in lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        assert_eq!(fields.len(), 3, "{line}");
+        assert!(previous < fields[0], "manifest is not sorted: {line}");
+        previous = fields[0];
+        assert_ne!(fields[0], "govna/canon-baseline.txt");
+        let content = read(&dir.join(fields[0]));
+        let region = match fields[1].strip_prefix("before:") {
+            Some(boundary) => content.split(&format!("{boundary}\n")).next().unwrap(),
+            None => {
+                assert_eq!(fields[1], "full");
+                content.as_str()
+            }
+        };
+        assert_eq!(fields[2], sha256(region), "{}", fields[0]);
+    }
+    baseline
+}
+
+#[test]
+fn render_baselines_are_valid_flavor_specific_and_deterministic() {
+    let cwd = new_fixture();
+    let code = new_fixture();
+    let code_again = new_fixture();
+    let doc = new_fixture();
+    for target in [&code, &code_again] {
+        let out = govna()
+            .args([
+                "render",
+                "--flavor",
+                "code",
+                "--stack",
+                "Rust",
+                target.to_str().unwrap(),
+            ])
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    let out = govna()
+        .args(["render", "--flavor", "doc", doc.to_str().unwrap()])
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let code_baseline = validate_baseline(&code);
+    assert_eq!(code_baseline, validate_baseline(&code_again));
+    assert_ne!(code_baseline, validate_baseline(&doc));
+}
+
 // cwd with Cargo.toml infers Rust; case-insensitive --stack override matches.
 #[test]
-fn render_canon_infers_rust_and_accepts_case_insensitive_override() {
+fn render_infers_rust_and_accepts_case_insensitive_override() {
     let cwd = new_fixture();
     fs::write(cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
 
     let inferred_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             inferred_target.to_str().unwrap(),
@@ -123,7 +221,7 @@ fn render_canon_infers_rust_and_accepts_case_insensitive_override() {
     let explicit_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -143,14 +241,14 @@ fn render_canon_infers_rust_and_accepts_case_insensitive_override() {
 
 // cwd with Package.swift infers Swift; case-insensitive --stack override matches.
 #[test]
-fn render_canon_infers_swift_and_accepts_case_insensitive_override() {
+fn render_infers_swift_and_accepts_case_insensitive_override() {
     let cwd = new_fixture();
     fs::write(cwd.join("Package.swift"), "// swift-tools-version:6.0\n").unwrap();
 
     let inferred_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             inferred_target.to_str().unwrap(),
@@ -168,7 +266,7 @@ fn render_canon_infers_swift_and_accepts_case_insensitive_override() {
     let explicit_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -188,12 +286,12 @@ fn render_canon_infers_swift_and_accepts_case_insensitive_override() {
 
 // DOC flavor rejects --stack.
 #[test]
-fn render_canon_doc_rejects_stack() {
+fn render_doc_rejects_stack() {
     let cwd = new_fixture();
     let target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "doc",
             "--stack",
@@ -209,13 +307,13 @@ fn render_canon_doc_rejects_stack() {
 
 // module-path is Go-only — rejected for DOC and for non-Go CODE stacks.
 #[test]
-fn render_canon_module_path_rejected_outside_go_code() {
+fn render_module_path_rejected_outside_go_code() {
     let cwd = new_fixture();
 
     let doc_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "doc",
             "--module-path",
@@ -231,7 +329,7 @@ fn render_canon_module_path_rejected_outside_go_code() {
     let rust_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -249,14 +347,14 @@ fn render_canon_module_path_rejected_outside_go_code() {
 
 // Go module path read from go.mod; explicit --module-path overrides it.
 #[test]
-fn render_canon_go_module_path_and_override() {
+fn render_go_module_path_and_override() {
     let cwd = new_fixture();
     fs::write(cwd.join("go.mod"), "module example.com/thing\n\ngo 1.22\n").unwrap();
 
     let inferred_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -279,7 +377,7 @@ fn render_canon_go_module_path_and_override() {
     let override_target = new_fixture();
     let out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -303,12 +401,12 @@ fn render_canon_go_module_path_and_override() {
 // .gitignore carries the stack ignore block; development-guidelines.md carries the
 // stack guideline block above ## Project Practices.
 #[test]
-fn render_canon_stitches_gitignore_and_guidelines() {
+fn render_stitches_gitignore_and_guidelines() {
     let cwd = new_fixture();
     fs::write(cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", "--flavor", "code", target.to_str().unwrap()])
+        .args(["render", "--flavor", "code", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -335,8 +433,8 @@ fn render_canon_stitches_gitignore_and_guidelines() {
 
 // help output documents --stack and --module-path.
 #[test]
-fn render_canon_help_documents_flags() {
-    let out = govna().args(["render-canon", "--help"]).output().unwrap();
+fn render_help_documents_flags() {
+    let out = govna().args(["render", "--help"]).output().unwrap();
     assert!(out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("-s, --stack <name>"), "{stderr}");
@@ -347,12 +445,12 @@ fn render_canon_help_documents_flags() {
 // Deliberately scoped to these two paths, not all rendered output: the Go stack's
 // build.sh legitimately contains `{{.Path}}` (Go's own `go list -f` syntax).
 #[test]
-fn render_canon_output_is_fully_substituted() {
+fn render_output_is_fully_substituted() {
     let cwd = new_fixture();
     fs::write(cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", "--flavor", "code", target.to_str().unwrap()])
+        .args(["render", "--flavor", "code", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -380,16 +478,11 @@ fn render_canon_output_is_fully_substituted() {
 // proves the DOC overlay's AGENTS.md.tmpl overrides base/AGENTS.md, per the
 // last-write-wins output-precedence rule, rather than base silently winning for both flavors.
 #[test]
-fn render_canon_doc_agents_overrides_base() {
+fn render_doc_agents_overrides_base() {
     let doc_cwd = new_fixture();
     let doc_target = new_fixture();
     let out = govna()
-        .args([
-            "render-canon",
-            "--flavor",
-            "doc",
-            doc_target.to_str().unwrap(),
-        ])
+        .args(["render", "--flavor", "doc", doc_target.to_str().unwrap()])
         .current_dir(&doc_cwd)
         .output()
         .unwrap();
@@ -403,12 +496,7 @@ fn render_canon_doc_agents_overrides_base() {
     fs::write(code_cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
     let code_target = new_fixture();
     let out = govna()
-        .args([
-            "render-canon",
-            "--flavor",
-            "code",
-            code_target.to_str().unwrap(),
-        ])
+        .args(["render", "--flavor", "code", code_target.to_str().unwrap()])
         .current_dir(&code_cwd)
         .output()
         .unwrap();
@@ -432,13 +520,13 @@ fn render_canon_doc_agents_overrides_base() {
 }
 
 // CLAUDE.md is a symlink to AGENTS.md, for both flavors (govna's deliberate
-// divergence from governa parity — governa's own render-canon never creates this).
+// divergence from governa parity — governa's own render never creates this).
 #[test]
-fn render_canon_creates_claude_symlink() {
+fn render_creates_claude_symlink() {
     let cwd = new_fixture();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", "--flavor", "doc", target.to_str().unwrap()])
+        .args(["render", "--flavor", "doc", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -454,7 +542,7 @@ fn render_canon_creates_claude_symlink() {
 
 // govna's own root docs no longer carry stale governa Go-implementation tokens;
 // .gitignore and development-guidelines.md carry the Rust stitching; README shows
-// render-canon as implemented.
+// render as implemented.
 #[test]
 fn root_docs_have_no_stale_governa_tokens() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -465,7 +553,7 @@ fn root_docs_have_no_stale_governa_tokens() {
         "code-stacks",
         "development-cycle",
         "development-guidelines",
-        "drift-scan",
+        "audit",
         "operator-contract-rationale",
         "README",
         "roles",
@@ -497,10 +585,7 @@ fn root_docs_have_no_stale_governa_tokens() {
     assert!(rust_pos < boundary_pos, "{guidelines}");
 
     let readme = read(&repo_root.join("README.md"));
-    assert!(
-        readme.contains("| `render-canon` | implemented |"),
-        "{readme}"
-    );
+    assert!(readme.contains("| `render` | implemented |"), "{readme}");
 }
 
 // govna's own repo root carries no self-referential govna/metadata.txt,
@@ -517,7 +602,7 @@ fn root_has_no_self_referential_metadata() {
 // confirms the prose is accurate for govna's actual implementation. No automated
 // coverage possible; tracked here as a marker only.
 
-// ── drift-scan fixtures ─────────────────────────────────────────────────────
+// ── audit fixtures ─────────────────────────────────────────────────────
 
 fn git(dir: &Path, args: &[&str]) {
     let out = Command::new("git")
@@ -532,7 +617,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A fresh `render-canon --flavor code --stack Rust` output, `git init`'d
+/// A fresh `render --flavor code --stack Rust` output, `git init`'d
 /// but with nothing committed yet — so `git log` is empty for every path,
 /// giving any subsequently-edited file a true zero-commit-history state
 /// (`ClearSync`-eligible). A single full commit would *not* achieve this:
@@ -540,7 +625,7 @@ fn git(dir: &Path, args: &[&str]) {
 fn rendered_code_fixture_no_commit() -> PathBuf {
     let dir = new_fixture();
     let out = govna()
-        .args(["render-canon", "--flavor", "code", "--stack", "Rust", "."])
+        .args(["render", "--flavor", "code", "--stack", "Rust", "."])
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -562,9 +647,9 @@ fn rendered_code_fixture() -> PathBuf {
     dir
 }
 
-fn drift_scan_json(dir: &Path) -> serde_json::Value {
+fn audit_json(dir: &Path) -> serde_json::Value {
     let out = govna()
-        .args(["drift-scan", "--json"])
+        .args(["audit", "--json"])
         .current_dir(dir)
         .output()
         .unwrap();
@@ -590,7 +675,7 @@ fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a s
 }
 
 /// Reads the live-rendered canon_version from `dir`'s own govna/metadata.txt
-/// (e.g. "v0.3.0") — avoids hardcoding CANON_VERSION's current value in
+/// (e.g. "v0.4.0") — avoids hardcoding CANON_VERSION's current value in
 /// filename/content assertions, which would otherwise need manual updating
 /// in every affected test on every bump.
 fn canon_version(dir: &Path) -> String {
@@ -602,16 +687,16 @@ fn canon_version(dir: &Path) -> String {
         .to_string()
 }
 
-// drift-scan refuses to run against govna's own source checkout —
+// audit refuses to run against govna's own source checkout —
 // proves refuse_govna_source runs before require_govna_adopted, even though
 // this repo would otherwise pass the positive adoption check (it has
 // AGENTS.md + govna/ac-template.md). Safe against the real repo: the
 // self-check is the very first thing run_inner does, before any writes.
 #[test]
-fn drift_scan_refuses_govna_source() {
+fn audit_refuses_govna_source() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let out = govna()
-        .arg("drift-scan")
+        .arg("audit")
         .current_dir(repo_root)
         .output()
         .unwrap();
@@ -621,14 +706,10 @@ fn drift_scan_refuses_govna_source() {
 
 // no AGENTS.md at all fails require_govna_adopted's exact wording.
 #[test]
-fn drift_scan_requires_agents_md() {
+fn audit_requires_agents_md() {
     let dir = new_fixture();
     git(&dir, &["init", "-q"]);
-    let out = govna()
-        .arg("drift-scan")
-        .current_dir(&dir)
-        .output()
-        .unwrap();
+    let out = govna().arg("audit").current_dir(&dir).output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("is not a govna-adopted repo"));
 }
@@ -636,16 +717,12 @@ fn drift_scan_requires_agents_md() {
 // passes require_govna_adopted (AGENTS.md + govna/ac-template.md) but
 // has no .git/ — fails on the git-worktree requirement before classification.
 #[test]
-fn drift_scan_requires_git_worktree() {
+fn audit_requires_git_worktree() {
     let dir = new_fixture();
     fs::write(dir.join("AGENTS.md"), "# AGENTS.md\n").unwrap();
     fs::create_dir_all(dir.join("govna")).unwrap();
     fs::write(dir.join("govna/ac-template.md"), "template\n").unwrap();
-    let out = govna()
-        .arg("drift-scan")
-        .current_dir(&dir)
-        .output()
-        .unwrap();
+    let out = govna().arg("audit").current_dir(&dir).output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a git worktree"));
 }
@@ -655,9 +732,9 @@ fn drift_scan_requires_git_worktree() {
 // ExpectedDivergence once actually customized), zero sync/migration/routing
 // entries, "No sync items." in the emitted stub.
 #[test]
-fn drift_scan_fresh_fixture_all_match() {
+fn audit_fresh_fixture_all_match() {
     let dir = rendered_code_fixture();
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     for f in report["files"].as_array().unwrap() {
         assert_eq!(f["classification"], "match", "{f}");
     }
@@ -668,11 +745,130 @@ fn drift_scan_fresh_fixture_all_match() {
     assert!(!stub.contains("**AT2**"), "{stub}");
 }
 
+fn replace_baseline_hash(dir: &Path, relpath: &str, content: &str) {
+    let path = dir.join("govna/canon-baseline.txt");
+    let baseline = read(&path);
+    let replacement = baseline
+        .lines()
+        .map(|line| {
+            if line.starts_with(&format!("{relpath}\t")) {
+                let mut fields = line.split('\t');
+                let path = fields.next().unwrap();
+                let scope = fields.next().unwrap();
+                format!("{path}\t{scope}\t{}", sha256(content))
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(path, replacement).unwrap();
+}
+
+#[test]
+fn audit_baseline_distinguishes_untouched_prior_canon_from_consumer_edit() {
+    let clear_dir = rendered_code_fixture();
+    let relpath = "govna/roles.md";
+    let prior_canon = "# Prior canon roles\n";
+    fs::write(clear_dir.join(relpath), prior_canon).unwrap();
+    replace_baseline_hash(&clear_dir, relpath, prior_canon);
+    git(&clear_dir, &["add", "-A"]);
+    git(&clear_dir, &["commit", "-q", "-m", "adopt prior canon"]);
+    let clear = audit_json(&clear_dir);
+    assert_eq!(
+        file_result(&clear, relpath).unwrap()["classification"],
+        "clear-sync"
+    );
+
+    let edited_dir = rendered_code_fixture();
+    let baseline_before = read(&edited_dir.join("govna/canon-baseline.txt"));
+    fs::write(edited_dir.join(relpath), "# Consumer edit\n").unwrap();
+    git(&edited_dir, &["add", "-A"]);
+    git(&edited_dir, &["commit", "-q", "-m", "consumer edit"]);
+    let edited = audit_json(&edited_dir);
+    assert_eq!(
+        file_result(&edited, relpath).unwrap()["classification"],
+        "ambiguity"
+    );
+    assert_eq!(
+        read(&edited_dir.join("govna/canon-baseline.txt")),
+        baseline_before,
+        "audit must not advance trust state"
+    );
+}
+
+#[test]
+fn audit_missing_baseline_and_entry_route_without_silent_trust() {
+    let missing_manifest = rendered_code_fixture();
+    fs::remove_file(missing_manifest.join("govna/canon-baseline.txt")).unwrap();
+    let report = audit_json(&missing_manifest);
+    assert_eq!(
+        file_result(&report, "govna/canon-baseline.txt").unwrap()["classification"],
+        "migration-required"
+    );
+
+    let missing_entry = rendered_code_fixture();
+    let path = missing_entry.join("govna/canon-baseline.txt");
+    let baseline = read(&path)
+        .lines()
+        .filter(|line| !line.starts_with("govna/roles.md\t"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(path, baseline).unwrap();
+    fs::write(missing_entry.join("govna/roles.md"), "# changed\n").unwrap();
+    let report = audit_json(&missing_entry);
+    assert_eq!(
+        file_result(&report, "govna/roles.md").unwrap()["classification"],
+        "ambiguity"
+    );
+}
+
+#[test]
+fn audit_rejects_malformed_baseline_before_emission() {
+    let valid_hash = "0".repeat(64);
+    let cases = [
+        "govna-canon-baseline-v1\ncanon_version = v0.4.0\nbad-fields\n".to_string(),
+        "govna-canon-baseline-v1\ncanon_version = v0.4.0\ngovna/roles.md\tfull\tnot-a-hash\n"
+            .to_string(),
+        format!(
+            "govna-canon-baseline-v1\ncanon_version = v0.4.0\ngovna/roles.md\tfull\t{valid_hash}\ngovna/roles.md\tfull\t{valid_hash}\n"
+        ),
+        format!("govna-canon-baseline-v1\ncanon_version = v0.4.0\nAGENTS.md\tfull\t{valid_hash}\n"),
+        format!(
+            "govna-canon-baseline-v1\ncanon_version = v0.4.0\ngovna/roles.md\tbogus\t{valid_hash}\n"
+        ),
+        format!(
+            "govna-canon-baseline-v1\ncanon_version = v99.0.0\ngovna/roles.md\tfull\t{valid_hash}\n"
+        ),
+    ];
+    for content in cases {
+        let dir = rendered_code_fixture();
+        fs::write(dir.join("govna/canon-baseline.txt"), content).unwrap();
+        let out = govna().arg("audit").current_dir(&dir).output().unwrap();
+        assert!(!out.status.success());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("invalid govna/canon-baseline.txt")
+                || stderr.contains("newer than embedded canon"),
+            "{stderr}"
+        );
+        assert!(fs::read_dir(dir.join("govna")).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("audit-v")
+        }));
+    }
+}
+
 // A committed stale canon_version is bookkeeping drift when replacing that
 // field makes metadata byte-equal to canon. Git history does not turn it into
 // a routing decision.
 #[test]
-fn drift_scan_stale_metadata_version_forces_clear_sync() {
+fn audit_stale_metadata_version_forces_clear_sync() {
     let dir = rendered_code_fixture();
     let metadata = read(&dir.join("govna/metadata.txt"));
     let current = format!("canon_version = {}", canon_version(&dir));
@@ -693,7 +889,7 @@ fn drift_scan_stale_metadata_version_forces_clear_sync() {
     fs::write(dir.join("govna/metadata.txt"), stale).unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "stale version"]);
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "govna/metadata.txt").unwrap();
     assert_eq!(fr["classification"], "clear-sync");
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
@@ -712,7 +908,7 @@ fn drift_scan_stale_metadata_version_forces_clear_sync() {
 // A preserve marker cannot pin the canon-owned freshness field when it is
 // the only metadata difference.
 #[test]
-fn drift_scan_stale_metadata_version_overrides_preserve_marker() {
+fn audit_stale_metadata_version_overrides_preserve_marker() {
     let dir = rendered_code_fixture();
     let metadata = read(&dir.join("govna/metadata.txt"));
     fs::write(
@@ -739,7 +935,7 @@ fn drift_scan_stale_metadata_version_overrides_preserve_marker() {
         &dir,
         &["commit", "-q", "-m", "mark stale metadata preserved"],
     );
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "govna/metadata.txt").unwrap();
     assert_eq!(fr["classification"], "clear-sync");
     assert!(fr.get("preserve_markers").is_none(), "{fr}");
@@ -748,7 +944,7 @@ fn drift_scan_stale_metadata_version_overrides_preserve_marker() {
 // A lower canon_version does not authorize a field-level merge. Any other
 // metadata difference keeps the whole file in review.
 #[test]
-fn drift_scan_stale_metadata_with_other_difference_routes_to_review() {
+fn audit_stale_metadata_with_other_difference_routes_to_review() {
     let dir = rendered_code_fixture();
     let metadata = read(&dir.join("govna/metadata.txt"));
     let stale = metadata.replacen(
@@ -763,7 +959,7 @@ fn drift_scan_stale_metadata_with_other_difference_routes_to_review() {
     .unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "edit another metadata field"]);
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "govna/metadata.txt").unwrap();
     assert_eq!(fr["classification"], "ambiguity");
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
@@ -777,7 +973,7 @@ fn drift_scan_stale_metadata_with_other_difference_routes_to_review() {
 
 // A newer or malformed target marker fails before AC allocation/emission.
 #[test]
-fn drift_scan_rejects_non_adoptable_metadata_versions_before_emission() {
+fn audit_rejects_non_adoptable_metadata_versions_before_emission() {
     for (version, expected) in [
         ("v99.0.0", "upgrade govna"),
         ("v1.2", "strict vMAJOR.MINOR.PATCH"),
@@ -793,11 +989,7 @@ fn drift_scan_rejects_non_adoptable_metadata_versions_before_emission() {
             ),
         )
         .unwrap();
-        let out = govna()
-            .arg("drift-scan")
-            .current_dir(&dir)
-            .output()
-            .unwrap();
+        let out = govna().arg("audit").current_dir(&dir).output().unwrap();
         assert!(!out.status.success());
         assert!(
             String::from_utf8_lossy(&out.stderr).contains(expected),
@@ -808,7 +1000,7 @@ fn drift_scan_rejects_non_adoptable_metadata_versions_before_emission() {
             fs::read_dir(dir.join("govna"))
                 .unwrap()
                 .filter_map(|entry| entry.ok())
-                .all(|entry| !entry.file_name().to_string_lossy().contains("drift-scan-v"))
+                .all(|entry| !entry.file_name().to_string_lossy().contains("audit-v"))
         );
     }
 }
@@ -816,7 +1008,7 @@ fn drift_scan_rejects_non_adoptable_metadata_versions_before_emission() {
 // a committed edit to a non-format-defining file with git history
 // classifies Ambiguity, routed to Routing Decisions (not silently synced).
 #[test]
-fn drift_scan_ambiguity_routes_to_review() {
+fn audit_ambiguity_routes_to_review() {
     let dir = rendered_code_fixture();
     fs::write(
         dir.join("govna/roles.md"),
@@ -825,7 +1017,7 @@ fn drift_scan_ambiguity_routes_to_review() {
     .unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "edit roles"]);
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "govna/roles.md").unwrap();
     assert_eq!(fr["classification"], "ambiguity");
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
@@ -854,7 +1046,7 @@ fn drift_scan_ambiguity_routes_to_review() {
 // actually changes the outcome, i.e. raw != ClearSync/MissingTarget; this
 // scenario exercises that real branch, not a vacuous one).
 #[test]
-fn drift_scan_format_defining_forces_sync() {
+fn audit_format_defining_forces_sync() {
     let dir = rendered_code_fixture();
     let agents = read(&dir.join("AGENTS.md"));
     let edited = agents.replacen(
@@ -865,7 +1057,7 @@ fn drift_scan_format_defining_forces_sync() {
     fs::write(dir.join("AGENTS.md"), edited).unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "edit AGENTS.md canon zone"]);
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "AGENTS.md").unwrap();
     assert_eq!(fr["classification"], "ambiguity");
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
@@ -880,21 +1072,21 @@ fn drift_scan_format_defining_forces_sync() {
         "{stub}"
     );
     // Something landed in ## In Scope (AGENTS.md, forced to sync) — the
-    // final AT is the non-mutating render-canon + diff -ru recipe, not the
-    // old self-defeating "re-run drift-scan" instruction.
+    // final AT is the non-mutating render + diff -ru recipe, not the
+    // old self-defeating "re-run audit" instruction.
     assert!(
         stub.contains(
-            "For each file listed under `## In Scope`, `govna render-canon` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary."
+            "For each file listed under `## In Scope`, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last."
         ),
         "{stub}"
     );
-    assert!(!stub.contains("Re-running `govna drift-scan`"), "{stub}");
+    assert!(!stub.contains("Re-running `govna audit`"), "{stub}");
 }
 
 // a preserve marker in CHANGELOG.md suppresses sync — classifies
 // Preserve, routed to Out Of Scope with the marker citation shown.
 #[test]
-fn drift_scan_preserve_marker_routes_to_out_of_scope() {
+fn audit_preserve_marker_routes_to_out_of_scope() {
     let dir = rendered_code_fixture();
     fs::write(
         dir.join("govna/roles.md"),
@@ -909,7 +1101,7 @@ fn drift_scan_preserve_marker_routes_to_out_of_scope() {
     .unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "preserve marker"]);
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "govna/roles.md").unwrap();
     assert_eq!(fr["classification"], "preserve");
     assert_eq!(fr["preserve_markers"][0], "preserve govna/roles.md");
@@ -923,7 +1115,7 @@ fn drift_scan_preserve_marker_routes_to_out_of_scope() {
 // (the repo-owned tail) classifies Match — canon-zone byte-equal, not a
 // false divergence.
 #[test]
-fn drift_scan_mixed_content_below_boundary_matches() {
+fn audit_mixed_content_below_boundary_matches() {
     let dir = rendered_code_fixture();
     let guidelines = read(&dir.join("govna/development-guidelines.md"));
     fs::write(
@@ -933,7 +1125,7 @@ fn drift_scan_mixed_content_below_boundary_matches() {
     .unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "edit below boundary"]);
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "govna/development-guidelines.md").unwrap();
     assert_eq!(fr["classification"], "match", "{fr}");
 }
@@ -942,11 +1134,11 @@ fn drift_scan_mixed_content_below_boundary_matches() {
 // editing the stub's body then re-running fails with the edit-detection
 // guard's exact wording.
 #[test]
-fn drift_scan_idempotent_reuse_and_edit_detection_guard() {
+fn audit_idempotent_reuse_and_edit_detection_guard() {
     let dir = rendered_code_fixture();
-    let report1 = drift_scan_json(&dir);
+    let report1 = audit_json(&dir);
     let stub_rel = report1["emitted"]["ac_stub"].as_str().unwrap().to_string();
-    let report2 = drift_scan_json(&dir);
+    let report2 = audit_json(&dir);
     assert_eq!(
         report1["emitted"]["ac_stub"], report2["emitted"]["ac_stub"],
         "AC number should be reused"
@@ -955,15 +1147,10 @@ fn drift_scan_idempotent_reuse_and_edit_detection_guard() {
     let stub_path = dir.join(&stub_rel);
     let tampered = format!("{}\ntampered\n", read(&stub_path));
     fs::write(&stub_path, tampered).unwrap();
-    let out = govna()
-        .arg("drift-scan")
-        .current_dir(&dir)
-        .output()
-        .unwrap();
+    let out = govna().arg("audit").current_dir(&dir).output().unwrap();
     assert!(!out.status.success());
     assert!(
-        String::from_utf8_lossy(&out.stderr)
-            .contains("has been edited since last drift-scan emission")
+        String::from_utf8_lossy(&out.stderr).contains("has been edited since last audit emission")
     );
 }
 
@@ -971,10 +1158,10 @@ fn drift_scan_idempotent_reuse_and_edit_detection_guard() {
 // CODE over the same directory leaves DOC-only files orphaned; scanning
 // with --flavor code classifies all of them target-has-no-canon.
 #[test]
-fn drift_scan_cross_flavor_orphans() {
+fn audit_cross_flavor_orphans() {
     let dir = new_fixture();
     let out = govna()
-        .args(["render-canon", "--flavor", "doc", "."])
+        .args(["render", "--flavor", "doc", "."])
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -984,7 +1171,7 @@ fn drift_scan_cross_flavor_orphans() {
         String::from_utf8_lossy(&out.stderr)
     );
     let out = govna()
-        .args(["render-canon", "--flavor", "code", "--stack", "Rust", "."])
+        .args(["render", "--flavor", "code", "--stack", "Rust", "."])
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -997,7 +1184,7 @@ fn drift_scan_cross_flavor_orphans() {
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "doc-then-code fixture"]);
 
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     for orphan in [
         "govna/editing-cycle.md",
         "govna/editing-guidelines.md",
@@ -1017,7 +1204,7 @@ fn drift_scan_cross_flavor_orphans() {
 // git-tracked file classifies target-has-no-canon via the name-reference
 // branch, not silently dropped.
 #[test]
-fn drift_scan_name_referenced_target_only_file() {
+fn audit_name_referenced_target_only_file() {
     let dir = rendered_code_fixture();
     fs::write(dir.join("scripts.sh"), "custom helper script\n").unwrap();
     let roles = read(&dir.join("govna/roles.md"));
@@ -1032,7 +1219,7 @@ fn drift_scan_name_referenced_target_only_file() {
         &["commit", "-q", "-m", "add referenced target-only file"],
     );
 
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     let fr = file_result(&report, "scripts.sh")
         .unwrap_or_else(|| panic!("scripts.sh missing from report: {report}"));
     assert_eq!(fr["classification"], "target-has-no-canon");
@@ -1047,9 +1234,9 @@ fn drift_scan_name_referenced_target_only_file() {
 // --json output is valid JSON, deserializes to the expected shape,
 // and canon_content never appears in it.
 #[test]
-fn drift_scan_json_output_shape() {
+fn audit_json_output_shape() {
     let dir = rendered_code_fixture();
-    let report = drift_scan_json(&dir);
+    let report = audit_json(&dir);
     assert!(report["header"]["canon_sha"].is_string());
     assert!(report["files"].is_array());
     assert!(!report["files"].as_array().unwrap().is_empty());
@@ -1057,13 +1244,13 @@ fn drift_scan_json_output_shape() {
     assert!(!raw.contains("canon_content"), "{raw}");
 }
 
-// `drift-scan extra-arg` fails with the exact "no positional
+// `audit extra-arg` fails with the exact "no positional
 // arguments accepted" wording.
 #[test]
-fn drift_scan_rejects_positional_args() {
+fn audit_rejects_positional_args() {
     let dir = rendered_code_fixture();
     let out = govna()
-        .args(["drift-scan", "extra-arg"])
+        .args(["audit", "extra-arg"])
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -1071,7 +1258,7 @@ fn drift_scan_rejects_positional_args() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("no positional arguments accepted"));
 }
 
-// [Manual] — Director runs drift-scan against a real, organically-
+// [Manual] — Director runs audit against a real, organically-
 // drifted consumer repo and confirms the emitted AC stub reads sensibly
 // end-to-end. No automated fixture substitutes for a genuinely messy real
 // repo; tracked here as a marker only.
@@ -1079,15 +1266,10 @@ fn drift_scan_rejects_positional_args() {
 // CLI surface beyond the ATs above (closure-audit gap, not a named AT):
 // --repo-name overrides the basename-of-cwd default.
 #[test]
-fn drift_scan_repo_name_override() {
+fn audit_repo_name_override() {
     let dir = rendered_code_fixture();
     let out = govna()
-        .args([
-            "drift-scan",
-            "--json",
-            "--repo-name",
-            "totally-different-name",
-        ])
+        .args(["audit", "--json", "--repo-name", "totally-different-name"])
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -1103,7 +1285,7 @@ fn drift_scan_repo_name_override() {
 // CLI surface beyond the ATs above (closure-audit gap, not a named AT):
 // --diff-lines truncates a long diff and reports the omitted-line count.
 #[test]
-fn drift_scan_diff_lines_truncates() {
+fn audit_diff_lines_truncates() {
     let dir = rendered_code_fixture();
     let long_addition: String = (0..50).map(|i| format!("extra line {i}\n")).collect();
     fs::write(
@@ -1115,7 +1297,7 @@ fn drift_scan_diff_lines_truncates() {
     git(&dir, &["commit", "-q", "-m", "long edit"]);
 
     let out = govna()
-        .args(["drift-scan", "--json", "--diff-lines", "5"])
+        .args(["audit", "--json", "--diff-lines", "5"])
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -1138,7 +1320,7 @@ fn drift_scan_diff_lines_truncates() {
 // Flavor resolution beyond the ATs above (closure-audit gap, not a named AT):
 // govna/metadata.txt takes priority over manifest inference when present.
 #[test]
-fn render_canon_metadata_txt_wins_over_manifest_inference() {
+fn render_metadata_txt_wins_over_manifest_inference() {
     let cwd = new_fixture();
     fs::create_dir_all(cwd.join("govna")).unwrap();
     fs::write(
@@ -1148,7 +1330,7 @@ fn render_canon_metadata_txt_wins_over_manifest_inference() {
     .unwrap();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", target.to_str().unwrap()])
+        .args(["render", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -1163,13 +1345,13 @@ fn render_canon_metadata_txt_wins_over_manifest_inference() {
 // Fallback flavor heuristic: conflicting signals (Jekyll marker + a strong CODE
 // manifest) error rather than guessing.
 #[test]
-fn render_canon_fallback_flavor_conflict_errors() {
+fn render_fallback_flavor_conflict_errors() {
     let cwd = new_fixture();
     fs::write(cwd.join("_config.yml"), "").unwrap();
     fs::write(cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", target.to_str().unwrap()])
+        .args(["render", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -1179,11 +1361,11 @@ fn render_canon_fallback_flavor_conflict_errors() {
 
 // Fallback flavor heuristic: no signals at all errors rather than defaulting.
 #[test]
-fn render_canon_fallback_flavor_absent_errors() {
+fn render_fallback_flavor_absent_errors() {
     let cwd = new_fixture();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", target.to_str().unwrap()])
+        .args(["render", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -1193,12 +1375,12 @@ fn render_canon_fallback_flavor_absent_errors() {
 
 // Stack inference: *.tf glob fallback (no canonical Terraform manifest file present).
 #[test]
-fn render_canon_infers_terraform_from_tf_glob() {
+fn render_infers_terraform_from_tf_glob() {
     let cwd = new_fixture();
     fs::write(cwd.join("main.tf"), "resource \"null_resource\" \"x\" {}\n").unwrap();
     let target = new_fixture();
     let out = govna()
-        .args(["render-canon", "--flavor", "code", target.to_str().unwrap()])
+        .args(["render", "--flavor", "code", target.to_str().unwrap()])
         .current_dir(&cwd)
         .output()
         .unwrap();
@@ -1401,7 +1583,7 @@ fn apply_init_git_then_skips_on_rerun() {
 }
 
 // apply against govna's own source checkout refuses with a non-zero
-// exit, mirroring drift-scan's existing refusal test. Safe against the
+// exit, mirroring audit's existing refusal test. Safe against the
 // real repo: refuse_govna_source is the very first thing run_inner does.
 #[test]
 fn apply_refuses_govna_source() {
@@ -1482,7 +1664,7 @@ fn apply_adoption_ac_has_required_sections() {
 
 // ── rm fixtures ──────────────────────────────────────────────────────────────
 //
-// Reuses `rendered_code_fixture()` (render-canon-based, no adoption AC) as
+// Reuses `rendered_code_fixture()` (render-based, no adoption AC) as
 // the baseline rather than an `apply`-based fixture: `apply` would write its
 // own `govna/ac1-govna-apply.md`, which itself matches the `^ac(\d+)-`
 // AC-numbering scan and would bump rm's first allocation to ac2 instead of
@@ -1635,7 +1817,7 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
     );
     assert!(
         stub.contains(
-            "Compare with: `govna render-canon --flavor code --stack Rust <scratch> && diff -ru <scratch>/govna/roles.md govna/roles.md`"
+            "Compare with: `govna render --flavor code --stack Rust <scratch> && diff -ru <scratch>/govna/roles.md govna/roles.md`"
         ),
         "{stub}"
     );
@@ -1758,16 +1940,16 @@ fn governa_metadata_fixture(code_stack: Option<&str>) -> PathBuf {
 }
 
 /// Writes an executable `governa` stub script into `dir` (prepend `dir` to
-/// `PATH` to make it discoverable). `render_canon_ok`: when true, `render-canon`
+/// `PATH` to make it discoverable). `render_ok`: when true, `render`
 /// writes `governa/roles.md` with `roles_content` into the target and exits 0;
-/// when false, `--version` still succeeds but `render-canon` exits 1
+/// when false, `--version` still succeeds but `render` exits 1
 /// (simulating an unsupported stack or bad-flag failure).
-fn fake_governa_binary(dir: &Path, render_canon_ok: bool, roles_content: &str) {
+fn fake_governa_binary(dir: &Path, render_ok: bool, roles_content: &str) {
     use std::os::unix::fs::PermissionsExt;
     let script_path = dir.join("governa");
     // Matches governa's real CLI: `version` is a subcommand, not a `--version`
     // flag — `governa --version` actually exits non-zero on the real binary.
-    let script = if render_canon_ok {
+    let script = if render_ok {
         format!(
             "#!/bin/bash\nif [ \"$1\" = \"version\" ]; then\n  echo 'governa v0.160.2'\n  exit 0\nfi\nif [ \"$1\" = \"render-canon\" ]; then\n  target=\"${{@: -1}}\"\n  mkdir -p \"$target/governa\"\n  printf '%s' '{roles_content}' > \"$target/governa/roles.md\"\n  exit 0\nfi\nexit 1\n"
         )
@@ -1943,10 +2125,10 @@ fn apply_migration_crude_tier_fallback_no_governa_binary() {
 }
 
 // a `governa` binary that succeeds on --version but fails on
-// render-canon (e.g. unsupported stack) falls back to the crude path —
+// render (e.g. unsupported stack) falls back to the crude path —
 // apply does not error or crash.
 #[test]
-fn apply_migration_falls_back_when_render_canon_fails() {
+fn apply_migration_falls_back_when_render_fails() {
     let stub_dir = new_fixture();
     fake_governa_binary(&stub_dir, false, "");
 
@@ -2330,12 +2512,12 @@ fn apply_ac_at3_reflects_symlink_conflict() {
 // contains CODE/data-pipeline vocabulary, and DOC's render differs from
 // CODE's at that exact bullet.
 #[test]
-fn render_canon_doc_closure_audit_bullet_has_no_code_vocabulary() {
+fn render_doc_closure_audit_bullet_has_no_code_vocabulary() {
     let code_dir = new_fixture();
     let doc_dir = new_fixture();
     govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -2345,7 +2527,7 @@ fn render_canon_doc_closure_audit_bullet_has_no_code_vocabulary() {
         .output()
         .unwrap();
     govna()
-        .args(["render-canon", "--flavor", "doc", doc_dir.to_str().unwrap()])
+        .args(["render", "--flavor", "doc", doc_dir.to_str().unwrap()])
         .output()
         .unwrap();
     let code_agents = read(&code_dir.join("AGENTS.md"));
@@ -2368,18 +2550,18 @@ fn render_canon_doc_closure_audit_bullet_has_no_code_vocabulary() {
     assert!(doc_agents.contains("published page"), "{doc_agents}");
 }
 
-// The authoritative drift-scan documentation is mirrored byte-for-byte into
+// The authoritative audit documentation is mirrored byte-for-byte into
 // both consumer flavors, and the rendered identity record carries this canon
 // behavior's version.
 #[test]
-fn render_canon_drift_scan_docs_and_version_match_authority() {
+fn render_audit_docs_and_version_match_authority() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let authority = read(&repo_root.join("govna/drift-scan.md"));
+    let authority = read(&repo_root.join("govna/audit.md"));
     let code_dir = new_fixture();
     let doc_dir = new_fixture();
     let code_out = govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -2390,14 +2572,14 @@ fn render_canon_drift_scan_docs_and_version_match_authority() {
         .unwrap();
     assert!(code_out.status.success());
     let doc_out = govna()
-        .args(["render-canon", "--flavor", "doc", doc_dir.to_str().unwrap()])
+        .args(["render", "--flavor", "doc", doc_dir.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(doc_out.status.success());
 
     for dir in [&code_dir, &doc_dir] {
-        assert_eq!(read(&dir.join("govna/drift-scan.md")), authority);
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.3.0\n"));
+        assert_eq!(read(&dir.join("govna/audit.md")), authority);
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.4.0\n"));
     }
 }
 
@@ -2405,12 +2587,12 @@ fn render_canon_drift_scan_docs_and_version_match_authority() {
 // generic bullet — no govna-specific utility-versioning or IE-tracking
 // content leaked into what a fresh consumer gets.
 #[test]
-fn render_canon_project_rules_seed_has_no_govna_specific_content() {
+fn render_project_rules_seed_has_no_govna_specific_content() {
     let code_dir = new_fixture();
     let doc_dir = new_fixture();
     govna()
         .args([
-            "render-canon",
+            "render",
             "--flavor",
             "code",
             "--stack",
@@ -2420,7 +2602,7 @@ fn render_canon_project_rules_seed_has_no_govna_specific_content() {
         .output()
         .unwrap();
     govna()
-        .args(["render-canon", "--flavor", "doc", doc_dir.to_str().unwrap()])
+        .args(["render", "--flavor", "doc", doc_dir.to_str().unwrap()])
         .output()
         .unwrap();
     for dir in [&code_dir, &doc_dir] {

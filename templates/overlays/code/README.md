@@ -15,7 +15,7 @@ Current contents (`files/`):
 - `govna/code-stacks.md`
 - `govna/development-cycle.md`
 - `govna/development-guidelines.md`
-- `govna/drift-scan.md`
+- `govna/audit.md`
 - `govna/metadata.txt`
 - `govna/operator-contract-rationale.md`
 - `govna/README.md`
