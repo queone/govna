@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.17.0 | AC26: suppress no-op AC emission for clean audits |
 | 0.16.0 | AC25: enforce AT timing axes and one-step Ratify |
 | 0.15.0 | AC24: complete audit migration and validation contracts |
 | 0.14.1 | AC23: retire build recompilation investigation |

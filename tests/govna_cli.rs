@@ -691,7 +691,7 @@ fn assert_at_axes(stub: &str) {
     }
 }
 
-fn audit_json(dir: &Path) -> serde_json::Value {
+fn audit_json_output(dir: &Path) -> (serde_json::Value, std::process::Output) {
     let out = govna()
         .args(["audit", "--json"])
         .current_dir(dir)
@@ -708,9 +708,24 @@ fn audit_json(dir: &Path) -> serde_json::Value {
             String::from_utf8_lossy(&out.stdout)
         )
     });
+    (report, out)
+}
+
+fn audit_json(dir: &Path) -> serde_json::Value {
+    let (report, _) = audit_json_output(dir);
     let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
     assert_at_axes(&stub);
     report
+}
+
+fn audit_stub_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<_> = fs::read_dir(dir.join("govna"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("ac") && name.contains("-audit-v"))
+        .collect();
+    names.sort();
+    names
 }
 
 fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a serde_json::Value> {
@@ -774,31 +789,51 @@ fn audit_requires_git_worktree() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a git worktree"));
 }
 
-// fresh, unmodified fixture — everything Match (or, byte-equal right
-// after a fresh render, plan.md/arch.md also Match; they only classify
-// ExpectedDivergence once actually customized), zero sync/migration/routing
-// entries, "No sync items." in the emitted stub.
+// Fresh, unmodified CODE and DOC fixtures are clean and do not create no-op ACs.
 #[test]
 fn audit_fresh_fixture_all_match() {
-    let dir = rendered_code_fixture();
-    let report = audit_json(&dir);
-    for f in report["files"].as_array().unwrap() {
-        assert_eq!(f["classification"], "match", "{f}");
+    for dir in [rendered_code_fixture(), rendered_doc_fixture()] {
+        let out = govna().arg("audit").current_dir(&dir).output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(stdout.starts_with("clean ("), "{stdout}");
+        assert!(stdout.ends_with("); no AC emitted\n"), "{stdout}");
+        assert!(
+            out.stderr.is_empty(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(audit_stub_names(&dir).is_empty());
+
+        let (report, json_out) = audit_json_output(&dir);
+        for file in report["files"].as_array().unwrap() {
+            assert_eq!(file["classification"], "match", "{file}");
+        }
+        assert!(report["emitted"].is_null(), "{report}");
+        assert!(json_out.stderr.is_empty());
+        assert!(audit_stub_names(&dir).is_empty());
     }
-    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
-    let stub = read(&stub_path);
-    assert!(stub.contains("No sync items."), "{stub}");
+}
+
+#[test]
+fn audit_expected_divergence_only_does_not_emit() {
+    let dir = rendered_code_fixture();
+    fs::write(dir.join("plan.md"), "# Local plan\n").unwrap();
+    git(&dir, &["add", "plan.md"]);
+    git(&dir, &["commit", "-q", "-m", "customize plan"]);
+
+    let (report, out) = audit_json_output(&dir);
     assert_eq!(
-        markdown_section(&stub, "Migration findings").trim(),
-        "`None`."
+        file_result(&report, "plan.md").unwrap()["classification"],
+        "expected-divergence"
     );
-    assert!(!stub.contains("**Validation disposition**"), "{stub}");
-    assert!(stub.find("## Out Of Scope").unwrap() < stub.find("## Migration findings").unwrap());
-    assert!(
-        stub.find("## Migration findings").unwrap() < stub.find("## Acceptance Tests").unwrap()
-    );
-    // Nothing to sync/migrate/review — no vacuous "verify via diff" AT.
-    assert!(!stub.contains("**AT2**"), "{stub}");
+    assert!(report["emitted"].is_null());
+    assert!(out.stderr.is_empty());
+    assert!(audit_stub_names(&dir).is_empty());
 }
 
 fn replace_baseline_hash(dir: &Path, relpath: &str, content: &str) {
@@ -1348,29 +1383,27 @@ fn audit_format_defining_forces_sync() {
 // a preserve marker in CHANGELOG.md suppresses sync — classifies
 // Preserve, routed to Out Of Scope with the marker citation shown.
 #[test]
-fn audit_preserve_marker_routes_to_out_of_scope() {
+fn audit_preserve_marker_is_non_actionable() {
     let dir = rendered_code_fixture();
     fs::write(
         dir.join("govna/roles.md"),
         format!("{}\nextra line\n", read(&dir.join("govna/roles.md"))),
     )
     .unwrap();
-    let changelog = read(&dir.join("CHANGELOG.md"));
     fs::write(
-        dir.join("CHANGELOG.md"),
-        format!("{changelog}\n| 0.0.1 | preserve govna/roles.md |\n"),
+        dir.join("govna/ac1-preserve-roles.md"),
+        "# Preserve decision\n\npreserve govna/roles.md\n",
     )
     .unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "preserve marker"]);
-    let report = audit_json(&dir);
+    let (report, out) = audit_json_output(&dir);
     let fr = file_result(&report, "govna/roles.md").unwrap();
     assert_eq!(fr["classification"], "preserve");
     assert_eq!(fr["preserve_markers"][0], "preserve govna/roles.md");
-    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
-    let stub = read(&stub_path);
-    assert!(stub.contains("## Out Of Scope"));
-    assert!(stub.contains("preserve govna/roles.md"));
+    assert!(report["emitted"].is_null());
+    assert!(out.stderr.is_empty());
+    assert!(audit_stub_names(&dir).is_empty());
 }
 
 // mixed-content boundary. An edit strictly below `## Project Practices`
@@ -1387,9 +1420,41 @@ fn audit_mixed_content_below_boundary_matches() {
     .unwrap();
     git(&dir, &["add", "-A"]);
     git(&dir, &["commit", "-q", "-m", "edit below boundary"]);
-    let report = audit_json(&dir);
+    let (report, _) = audit_json_output(&dir);
     let fr = file_result(&report, "govna/development-guidelines.md").unwrap();
     assert_eq!(fr["classification"], "match", "{fr}");
+    assert!(report["emitted"].is_null());
+}
+
+#[test]
+fn audit_clean_run_leaves_existing_edited_stub_untouched() {
+    let dir = rendered_code_fixture();
+    let stub_path = dir.join("govna/ac1-audit-v0.9.0.md");
+    let edited = "director-owned edited audit stub\n";
+    fs::write(&stub_path, edited).unwrap();
+
+    let out = govna().arg("audit").current_dir(&dir).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("no AC emitted"));
+    assert_eq!(read(&stub_path), edited);
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.9.0.md"]);
+}
+
+#[test]
+fn audit_clean_run_does_not_consume_next_ac_number() {
+    let dir = rendered_code_fixture();
+    let clean = govna().arg("audit").current_dir(&dir).output().unwrap();
+    assert!(clean.status.success());
+    assert!(audit_stub_names(&dir).is_empty());
+
+    fs::remove_file(dir.join("govna/roles.md")).unwrap();
+    let report = audit_json(&dir);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.9.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.9.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -1398,6 +1463,7 @@ fn audit_mixed_content_below_boundary_matches() {
 #[test]
 fn audit_idempotent_reuse_and_edit_detection_guard() {
     let dir = rendered_code_fixture();
+    fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report1 = audit_json(&dir);
     let stub_rel = report1["emitted"]["ac_stub"].as_str().unwrap().to_string();
     let report2 = audit_json(&dir);
@@ -1498,10 +1564,12 @@ fn audit_name_referenced_target_only_file() {
 #[test]
 fn audit_json_output_shape() {
     let dir = rendered_code_fixture();
-    let report = audit_json(&dir);
+    let (report, out) = audit_json_output(&dir);
     assert!(report["header"]["canon_sha"].is_string());
     assert!(report["files"].is_array());
     assert!(!report["files"].as_array().unwrap().is_empty());
+    assert!(report["emitted"].is_null());
+    assert!(out.stderr.is_empty());
     let raw = serde_json::to_string(&report).unwrap();
     assert!(!raw.contains("canon_content"), "{raw}");
 }
@@ -2880,7 +2948,22 @@ fn render_audit_docs_and_version_match_authority() {
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.8.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.9.0\n"));
+        let audit_doc = read(&dir.join("govna/audit.md"));
+        for contract in [
+            "only when the completed report contains actionable work",
+            "ordinary preserve results are non-actionable",
+            "no AC emitted",
+            "never deletes, overwrites, or validates an existing audit stub",
+            "`emitted` is `null`",
+        ] {
+            assert!(authority.contains(contract), "authority: {contract}");
+            assert!(
+                audit_doc.contains(contract),
+                "{}: {contract}",
+                dir.display()
+            );
+        }
         for relpath in [
             "govna/ac-template.md",
             "govna/build-release.md",
@@ -2991,7 +3074,7 @@ fn render_code_build_reuse_rationale_matches_authority() {
     ] {
         assert!(section(&authority).contains(expected), "{expected}");
     }
-    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.8.0\n"));
+    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.9.0\n"));
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
 }
 

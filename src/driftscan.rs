@@ -4,10 +4,10 @@
 //! after a positive govna-adoption check, walks the canon overlay embedded
 //! in the binary, byte-compares each governed file against the cwd,
 //! classifies divergences, collects evidence (preserve markers, git log),
-//! allocates a monotonic AC number, and emits one file under `<cwd>/govna/`:
-//! the AC stub (`ac<N>-audit-v<X.Y.Z>.md`, conforming to
-//! `govna/ac-template.md`). Per-file diffs are not snapshotted — adopters
-//! use `govna render` + standard `diff -ru` to inspect changes.
+//! emits an AC stub when actionable drift exists, and reports a clean result
+//! without writing when only match, expected-divergence, and ordinary preserve
+//! classifications remain. Per-file diffs are not snapshotted — adopters use
+//! `govna render` + standard `diff -ru` to inspect changes.
 
 use crate::emission;
 use crate::governance::{self, RepoType};
@@ -700,6 +700,20 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
             fr.diff = unified_diff("", &bytes, &rel, cfg.diff_lines);
         }
         report.files.push(fr);
+    }
+
+    if !report.files.iter().any(is_actionable_file) {
+        if cfg.json {
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|e| format!("audit: encode JSON report: {e}"))?;
+            println!("{json}");
+        } else {
+            println!(
+                "clean ({}); no AC emitted",
+                tally_classifications(&report.files)
+            );
+        }
+        return Ok(ExitCode::SUCCESS);
     }
 
     let (ac_num, reused) = emission::allocate_ac_number(&cfg.target, "audit", &sha)?;
@@ -1585,6 +1599,21 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         "`PENDING` — audit emission; awaiting Director review and implementation authorization.\n",
     );
     b
+}
+
+fn is_actionable_file(file: &FileResult) -> bool {
+    if is_format_defining(&file.relpath) {
+        return file.classification != Classification::Match
+            && file.classification != Classification::ExpectedDivergence;
+    }
+    matches!(
+        file.classification,
+        Classification::Ambiguity
+            | Classification::ClearSync
+            | Classification::MissingTarget
+            | Classification::TargetNoCanon
+            | Classification::MigrationRequired
+    )
 }
 
 #[cfg(test)]
