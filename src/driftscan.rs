@@ -15,7 +15,7 @@ use crate::templates;
 use regex::Regex;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
@@ -63,7 +63,7 @@ impl std::fmt::Display for Classification {
 }
 
 const REACHABILITY_HEADER_REMINDER: &str = "Reachability check: verify divergent canon-code branches reach this consumer's structure before treating as drift.";
-const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: resolve every routing decision in chat and leave this emitted stub unchanged. Every Director-resolved routing target is effective implementation scope even when absent from `## In Scope`; an explicitly named migration destination joins that scope, and `CHANGELOG.md` joins it when a preserve marker is required. Do not infer an unnamed migration destination.";
+const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: resolve every routing decision in chat and leave this emitted stub unchanged. Every Director-resolved routing target is effective implementation scope even when absent from `## In Scope`; an explicitly named migration destination joins that scope, and `govna/preserve.txt` joins it only when the resolved outcome requires creating or changing the preserve registry. No second scope authorization is required. Do not infer an unnamed migration destination.";
 const AUDIT_MARKER_PREFIX: &str = "<!-- audit: emitted-by govna ";
 const BASELINE_SCHEMA: &str = "govna-canon-baseline-v1";
 const RETIRED_CANON_PATHS: &[(&str, &str)] = &[("govna/drift-scan.md", "govna/audit.md")];
@@ -241,8 +241,13 @@ pub struct FileResult {
     pub diff: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub commits: Vec<String>,
-    #[serde(rename = "preserve_markers", skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "preserve_entries", skip_serializing_if = "Vec::is_empty")]
     pub markers: Vec<String>,
+    #[serde(
+        rename = "legacy_preserve_markers",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub legacy_markers: Vec<String>,
     #[serde(rename = "canon_ref", skip_serializing_if = "String::is_empty")]
     pub canon_ref: String,
     #[serde(rename = "compare_command", skip_serializing_if = "String::is_empty")]
@@ -268,6 +273,7 @@ impl FileResult {
             diff: String::new(),
             commits: Vec::new(),
             markers: Vec::new(),
+            legacy_markers: Vec::new(),
             canon_ref: String::new(),
             compare_command: String::new(),
             canon_content: String::new(),
@@ -548,6 +554,15 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         .into_iter()
         .map(|op| (op.rel_path, op.content))
         .collect();
+    let preserve_registry =
+        emission::preserve_registry(&cfg.target).map_err(|error| format!("audit: {error}"))?;
+    let mut legacy_by_path: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for marker in emission::legacy_preserve_markers(&cfg.target) {
+        legacy_by_path
+            .entry(marker.relpath)
+            .or_default()
+            .push(marker.phrase);
+    }
 
     let canon_metadata = canon
         .get("govna/metadata.txt")
@@ -631,6 +646,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
             relpath,
             canon_content,
             baseline.as_ref(),
+            &preserve_registry,
             &sha,
             cfg.diff_lines,
         );
@@ -662,6 +678,18 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
                 );
             }
         }
+        if let Some(markers) = legacy_by_path.remove(relpath) {
+            fr.legacy_markers = markers;
+            if relpath != "govna/metadata.txt"
+                && !(relpath == "govna/build-release.md" && fr.boundary.is_empty())
+            {
+                fr.classification = Classification::Ambiguity;
+                fr.compare_command = format!(
+                    "legacy CHANGELOG preserve phrase is migration evidence only; convert {relpath} to {} or remove the phrase after resolving sync (canon @ {sha})",
+                    emission::PRESERVE_PATH
+                );
+            }
+        }
         report.files.push(fr);
     }
 
@@ -685,6 +713,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         other_flavor_canon_paths(other_flavor, &repo_name, &cfg.target).unwrap_or_default();
     let mut target_only =
         target_only_evidence(&cfg.target, &canon, baseline.as_ref(), &other_canon);
+    target_only.remove(emission::PRESERVE_PATH);
 
     let divergent_for_scan: Vec<FileResult> = report
         .files
@@ -693,6 +722,9 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         .cloned()
         .collect();
     for rel in name_referenced_target_only_files(&cfg.target, &divergent_for_scan, &canon) {
+        if rel == emission::PRESERVE_PATH {
+            continue;
+        }
         target_only.entry(rel).or_default().name_reference = true;
     }
     for (rel, evidence) in target_only {
@@ -703,8 +735,26 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         if let Ok(bytes) = std::fs::read_to_string(cfg.target.join(&rel)) {
             fr.diff = unified_diff("", &bytes, &rel, cfg.diff_lines);
         }
+        if let Some(markers) = legacy_by_path.remove(&rel) {
+            fr.legacy_markers = markers;
+            fr.compare_command.push_str(&format!(
+                "; legacy CHANGELOG phrase must be converted to {} or removed",
+                emission::PRESERVE_PATH
+            ));
+        }
         report.files.push(fr);
     }
+    for (relpath, markers) in legacy_by_path {
+        let mut fr = FileResult::new(relpath.clone());
+        fr.classification = Classification::Ambiguity;
+        fr.legacy_markers = markers;
+        fr.compare_command = format!(
+            "legacy CHANGELOG preserve phrase names no current canon result; convert {relpath} to {} only if preserve remains intended, otherwise remove the phrase",
+            emission::PRESERVE_PATH
+        );
+        report.files.push(fr);
+    }
+    report.files.sort_by(|a, b| a.relpath.cmp(&b.relpath));
 
     if !report.files.iter().any(is_actionable_file) {
         if cfg.json {
@@ -778,22 +828,25 @@ fn classify_file(
     relpath: &str,
     canon: &str,
     baseline: Option<&Baseline>,
+    preserve_registry: &BTreeSet<String>,
     sha: &str,
     diff_lines: usize,
 ) -> FileResult {
     let mut fr = FileResult::new(relpath);
     fr.canon_ref = format!("govna @ {sha}: templates/overlays/<flavor>/files/{relpath}");
     fr.canon_content = canon.to_string();
+    if preserve_registry.contains(relpath) {
+        fr.markers.push(relpath.to_string());
+    }
 
     let target_path = target.join(relpath);
     let target_bytes = match std::fs::read_to_string(&target_path) {
         Ok(s) => s,
         Err(_) => {
-            let markers = emission::preserve_markers(target, relpath);
-            if !markers.is_empty() {
+            if !fr.markers.is_empty() {
                 fr.classification = Classification::Match;
                 fr.compare_command = format!(
-                    "absent from target; preserve marker found — suppressed (canon @ {sha})"
+                    "absent from target; preserve registry entry found — suppressed (canon @ {sha})"
                 );
                 return fr;
             }
@@ -823,7 +876,6 @@ fn classify_file(
         }
         if relpath == "govna/build-release.md" && canon_zone.is_some() && target_zone.is_none() {
             fr.diff = unified_diff(canon, &target_bytes, relpath, diff_lines);
-            fr.markers = emission::preserve_markers(target, relpath);
             fr.classification = Classification::Ambiguity;
             fr.compare_command = format!(
                 "target lacks registered {boundary} boundary; review the full file and migrate repository-owned practices below the boundary (canon @ {sha})"
@@ -841,7 +893,6 @@ fn classify_file(
     }
 
     fr.diff = unified_diff(canon, &target_bytes, relpath, diff_lines);
-    fr.markers = emission::preserve_markers(target, relpath);
     if !fr.markers.is_empty() {
         fr.classification = Classification::Preserve;
         return fr;
@@ -1419,8 +1470,19 @@ fn build_ac_stub(
         .iter()
         .copied()
         .find(|f| f.relpath == governance::BASELINE_PATH);
+    let legacy_routing_entries: Vec<&FileResult> = r
+        .files
+        .iter()
+        .filter(|f| {
+            !f.legacy_markers.is_empty()
+                && !review_entries
+                    .iter()
+                    .any(|review| review.relpath == f.relpath)
+        })
+        .collect();
+    let routing_entry_count = review_entries.len() + legacy_routing_entries.len();
     let unresolved_validation = baseline_migration.is_some() && validation.is_unresolved();
-    let has_routing_decisions = !review_entries.is_empty() || unresolved_validation;
+    let has_routing_decisions = routing_entry_count > 0 || unresolved_validation;
 
     let mut b = String::new();
     b.push_str(&format!(
@@ -1430,8 +1492,8 @@ fn build_ac_stub(
         b.push_str(&format!(
             "Adopt {} canon-owned changes from govna {canon_version}; {} {} require routing decisions.\n\n",
             sync_entries.len(),
-            review_entries.len(),
-            count_noun(review_entries.len(), "entry", "entries")
+            routing_entry_count,
+            count_noun(routing_entry_count, "entry", "entries")
         ));
     } else {
         b.push_str(&format!(
@@ -1439,8 +1501,8 @@ fn build_ac_stub(
             sync_entries.len(),
             migration_entries.len(),
             count_noun(migration_entries.len(), "migration item", "migration items"),
-            review_entries.len(),
-            count_noun(review_entries.len(), "entry", "entries")
+            routing_entry_count,
+            count_noun(routing_entry_count, "entry", "entries")
         ));
     }
 
@@ -1482,8 +1544,14 @@ fn build_ac_stub(
                         f.relpath
                     ))
                 }
+                Classification::Ambiguity if !f.legacy_markers.is_empty() => b.push_str(&format!(
+                    "{}. **`{}`**: legacy CHANGELOG preserve phrase(s) are migration evidence only ({}) — resolve the file, then convert the exact path to `govna/preserve.txt` for preserve or remove only the exact legacy phrase for a non-preserve outcome.\n",
+                    i + 1,
+                    f.relpath,
+                    f.legacy_markers.join("; ")
+                )),
                 Classification::Ambiguity => b.push_str(&format!(
-                    "{}. **`{}`**: diverges from canon — sync to canon, preserve as repo-owned, or pin via preserve marker?\n",
+                    "{}. **`{}`**: diverges from canon — sync to canon, preserve as repo-owned by adding its exact path to `govna/preserve.txt`, or leave the registry unchanged when already correct?\n",
                     i + 1,
                     f.relpath
                 )),
@@ -1496,8 +1564,17 @@ fn build_ac_stub(
                 _ => {}
             }
         }
+        for (i, f) in legacy_routing_entries.iter().enumerate() {
+            b.push_str(&format!(
+                "{}. **`{}` legacy preserve phrase**: normal classification remains `{}`; convert the exact path to `govna/preserve.txt` only for a preserve outcome, or remove only the exact legacy phrase for the required non-preserve outcome ({}).\n",
+                review_entries.len() + i + 1,
+                f.relpath,
+                f.classification,
+                f.legacy_markers.join("; ")
+            ));
+        }
         if unresolved_validation {
-            let item = review_entries.len() + 1;
+            let item = routing_entry_count + 1;
             if r.header.flavor == "code" {
                 b.push_str(&format!(
                     "{item}. **Validation disposition**: proposed `./build.sh` based on the CODE flavor. Director must confirm it or override it in chat when this repository declares a different validation command; leave this emitted stub unchanged.\n"
@@ -1551,7 +1628,7 @@ fn build_ac_stub(
         for f in &oos_entries {
             b.push_str(&format!("- `{}` — {}", f.relpath, f.classification));
             if !f.markers.is_empty() {
-                b.push_str(&format!(" (markers: {})", f.markers.join("; ")));
+                b.push_str(&format!(" (registry entries: {})", f.markers.join("; ")));
             }
             b.push('\n');
         }
@@ -1602,9 +1679,15 @@ fn build_ac_stub(
         ));
         at_num += 1;
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] [Pre-release gate] — Every resolved routing outcome is verified conditionally: sync targets match their rendered canon region; migration sources are absent unless explicitly preserved; canon-backed migration destinations match rendered canon; repo-owned migration destinations satisfy the Director's stated result; delete targets are absent; preserve targets remain and `CHANGELOG.md` carries the required preserve marker.\n\n"
+            "**AT{at_num}** [Automated] [Pre-release gate] — Every resolved routing outcome is verified conditionally: sync targets match their rendered canon region and have no preserve-registry entry; migration sources are absent unless explicitly preserved; canon-backed migration destinations match rendered canon and have no obsolete preserve-registry entry; repo-owned migration destinations satisfy the Director's stated result; delete targets are absent and unregistered; preserve targets remain and their exact paths occur in `govna/preserve.txt`. Leave the registry unchanged when its state already satisfies every outcome.\n\n"
         ));
         at_num += 1;
+        if r.files.iter().any(|f| !f.legacy_markers.is_empty()) {
+            b.push_str(&format!(
+                "**AT{at_num}** [Automated] [Pre-release gate] — Every legacy Unreleased CHANGELOG preserve phrase is removed only after its resolved registry state is verified; unrelated Summary text and historical rows remain unchanged.\n\n"
+            ));
+            at_num += 1;
+        }
         for f in &review_entries {
             if !f.boundary.is_empty() {
                 b.push_str(&format!(

@@ -16,7 +16,7 @@ use crate::driftscan;
 use crate::emission;
 use crate::governance::{self, RepoType};
 use crate::templates;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -196,6 +196,8 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         .into_iter()
         .map(|op| (op.rel_path, op.content))
         .collect();
+    let preserve_registry =
+        emission::preserve_registry(&cwd).map_err(|error| format!("rm: {error}"))?;
 
     let canon_version = format!("v{}", templates::CANON_VERSION);
     let (ac_num, reused) = emission::allocate_ac_number(&cwd, "govna-rm", &canon_version)?;
@@ -211,7 +213,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         }
     }
 
-    let (in_scope, out_of_scope, review) = classify(&cwd, &canon);
+    let (in_scope, out_of_scope, review) = classify(&cwd, &canon, &preserve_registry);
     let stub_body = build_stub(
         ac_num,
         &canon_version,
@@ -239,6 +241,7 @@ struct Routing {
 fn classify(
     target: &Path,
     canon: &BTreeMap<String, String>,
+    preserve_registry: &BTreeSet<String>,
 ) -> (Vec<Routing>, Vec<Routing>, Vec<Routing>) {
     let mut in_scope = Vec::new();
     let mut out_of_scope = Vec::new();
@@ -259,12 +262,11 @@ fn classify(
             continue;
         }
 
-        let markers = emission::preserve_markers(target, relpath);
-        if !markers.is_empty() {
+        if preserve_registry.contains(relpath) {
             out_of_scope.push(Routing {
                 path: relpath.clone(),
                 kind: "keep",
-                reason: format!("preserve marker: {}", markers.join(" | ")),
+                reason: format!("registered in {}", emission::PRESERVE_PATH),
             });
             continue;
         }
@@ -307,6 +309,13 @@ fn classify(
     }
 
     out_of_scope.extend(target_only_routes(target, canon));
+    if target.join(emission::PRESERVE_PATH).is_file() {
+        in_scope.push(Routing {
+            path: emission::PRESERVE_PATH.to_string(),
+            kind: "delete control state last",
+            reason: "preserve decisions applied before registry removal".to_string(),
+        });
+    }
 
     (in_scope, out_of_scope, review)
 }
@@ -340,7 +349,7 @@ fn collect_target_only(
             continue;
         };
         let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if rel_str == "CLAUDE.md" {
+        if rel_str == "CLAUDE.md" || rel_str == emission::PRESERVE_PATH {
             continue;
         }
         if canon.contains_key(&rel_str) {
@@ -399,6 +408,12 @@ fn build_stub(
     b.push_str("\n## Acceptance Tests\n\n");
     b.push_str("**AT1** [Automated] [Pre-release gate] — Removed files listed under `## In Scope` no longer exist.\n");
     b.push_str("**AT2** [Manual] [Pre-release gate] — Director confirms every routing-pending file under `### Routing Decisions` was routed exactly as decided.\n");
+    if in_scope
+        .iter()
+        .any(|route| route.path == emission::PRESERVE_PATH)
+    {
+        b.push_str("**AT3** [Automated] [Pre-release gate] — Every preserve-registry decision is applied and verified before `govna/preserve.txt` is deleted as the final control-state removal.\n");
+    }
     b.push_str("\n## Status\n\n");
     b.push_str("`PENDING` — Emitted by `govna rm`; awaiting Director review.\n");
     b

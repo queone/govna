@@ -61,8 +61,6 @@ The agent never runs the release command — only the director does. Do not add 
 ## CHANGELOG Conventions
 
 - File shape: `# Changelog` heading, then a 2-column markdown table (`| Version | Summary |` with a `|---------|---------|` separator); first data row is `| Unreleased | |`, followed by one row per release (e.g., `| <version> | <AC-ref>: <one-line summary> |`).
-- During an audit adoption cycle, the `| Unreleased | |` row's Summary column may carry preserve marker phrases (per `govna/audit.md` `## Preserve-marker phrase set`).
 - Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
 - Versions are unprefixed (`0.29.0`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
-- When an AC locks a local form against canon (preserves a customization, declares intentional divergence, blocks a sync), include an explicit `preserve <path> <qualifier>` phrase in the summary — `govna audit` recognizes this phrase set: `preserve <path>`, `do not sync <path>`, `intentional divergence: <path>`, `<path>: keep local`.

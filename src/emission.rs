@@ -3,6 +3,7 @@
 
 use regex::Regex;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 const MARKER_INFIX: &str = "; emission-sha=";
@@ -80,73 +81,100 @@ pub fn ensure_docs_dir(target: &Path, tool: &str) -> Result<(), String> {
         .map_err(|e| format!("{tool}: ensure govna/ exists: {e}"))
 }
 
-fn preserve_marker_phrases(relpath: &str) -> [String; 4] {
-    [
-        format!("preserve {relpath}"),
-        format!("do not sync {relpath}"),
-        format!("intentional divergence: {relpath}"),
-        format!("{relpath}: keep local"),
-    ]
+pub const PRESERVE_PATH: &str = "govna/preserve.txt";
+const PRESERVE_SCHEMA: &str = "govna-preserve-v1";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LegacyPreserveMarker {
+    pub relpath: String,
+    pub phrase: String,
 }
 
-/// Returns verbatim changelog/AC marker phrases (phrase-only; not the
-/// surrounding row) that preserve relpath. Each match captures from the
-/// phrase start to the first of `;`, `|`, `\r`, or end-of-line.
-pub fn preserve_markers(target_root: &Path, relpath: &str) -> Vec<String> {
-    let anchor = r"(?:^|[|;])\s*(?:[-*]\s+|\*\*[^*]+\*\*\s+)?";
-    let patterns: Vec<Regex> = preserve_marker_phrases(relpath)
-        .iter()
-        .map(|phrase| Regex::new(&format!("{anchor}({})", regex::escape(phrase))).unwrap())
-        .collect();
-
-    let mut hits = Vec::new();
-    if let Ok(changelog) = std::fs::read_to_string(target_root.join("CHANGELOG.md")) {
-        scan_for_markers(&changelog, &patterns, &mut hits);
+/// Reads the optional consumer-owned preserve registry. Absence is empty;
+/// presence is strict so malformed durable routing state cannot be ignored.
+pub fn preserve_registry(target_root: &Path) -> Result<BTreeSet<String>, String> {
+    let path = target_root.join(PRESERVE_PATH);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(error) => return Err(format!("read {PRESERVE_PATH}: {error}")),
+    };
+    if !content.ends_with('\n') {
+        return Err(format!("invalid {PRESERVE_PATH}: require a final newline"));
     }
-    if let Ok(entries) = std::fs::read_dir(target_root.join("govna")) {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name.starts_with("ac")
-                && name.ends_with(".md")
-                && let Ok(content) = std::fs::read_to_string(entry.path())
-            {
-                scan_for_markers(&content, &patterns, &mut hits);
-            }
+    let mut lines = content.strip_suffix('\n').unwrap().split('\n');
+    if lines.next() != Some(PRESERVE_SCHEMA) {
+        return Err(format!(
+            "invalid {PRESERVE_PATH}: first line must be {PRESERVE_SCHEMA}"
+        ));
+    }
+    let mut entries = BTreeSet::new();
+    let mut previous: Option<String> = None;
+    for relpath in lines {
+        validate_preserve_path(relpath)?;
+        if previous.as_deref().is_some_and(|prior| prior >= relpath) {
+            return Err(format!(
+                "invalid {PRESERVE_PATH}: entries must be unique and byte-sorted"
+            ));
+        }
+        previous = Some(relpath.to_string());
+        entries.insert(relpath.to_string());
+    }
+    Ok(entries)
+}
+
+fn validate_preserve_path(relpath: &str) -> Result<(), String> {
+    let invalid = relpath.is_empty()
+        || relpath == PRESERVE_PATH
+        || relpath.starts_with('/')
+        || relpath.ends_with('/')
+        || relpath.contains('\\')
+        || relpath.contains('\t')
+        || relpath
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..");
+    if invalid {
+        return Err(format!(
+            "invalid {PRESERVE_PATH}: invalid repo-relative path {relpath:?}"
+        ));
+    }
+    Ok(())
+}
+
+/// Finds accepted legacy phrases only in the Unreleased CHANGELOG Summary.
+/// They are migration evidence, never preserve authority.
+pub fn legacy_preserve_markers(target_root: &Path) -> Vec<LegacyPreserveMarker> {
+    let Ok(changelog) = std::fs::read_to_string(target_root.join("CHANGELOG.md")) else {
+        return Vec::new();
+    };
+    let Some(summary) = changelog.lines().find_map(|line| {
+        let cells: Vec<&str> = line.split('|').collect();
+        (cells.len() >= 4 && cells[1].trim() == "Unreleased").then(|| cells[2].trim())
+    }) else {
+        return Vec::new();
+    };
+    let mut markers = Vec::new();
+    for segment in summary.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+        let relpath = if let Some(rest) = segment.strip_prefix("preserve ") {
+            rest.split_whitespace().next()
+        } else if let Some(rest) = segment.strip_prefix("do not sync ") {
+            rest.split_whitespace().next()
+        } else if let Some(rest) = segment.strip_prefix("intentional divergence: ") {
+            rest.split_whitespace().next()
+        } else {
+            segment.strip_suffix(": keep local").map(str::trim)
+        };
+        let Some(relpath) = relpath else { continue };
+        if validate_preserve_path(relpath).is_ok() {
+            markers.push(LegacyPreserveMarker {
+                relpath: relpath.to_string(),
+                phrase: segment.to_string(),
+            });
         }
     }
-    uniq(hits)
-}
-
-fn scan_for_markers(content: &str, patterns: &[Regex], hits: &mut Vec<String>) {
-    for line in content.split('\n') {
-        for pattern in patterns {
-            for caps in pattern.captures_iter(line) {
-                let m = caps.get(1).unwrap();
-                let phrase_start = m.start();
-                let bytes = line.as_bytes();
-                let mut end = line.len();
-                for (i, &b) in bytes.iter().enumerate().skip(phrase_start) {
-                    if b == b';' || b == b'|' || b == b'\r' {
-                        end = i;
-                        break;
-                    }
-                }
-                let citation = line[phrase_start..end].trim();
-                if !citation.is_empty() {
-                    hits.push(citation.to_string());
-                }
-            }
-        }
-    }
-}
-
-fn uniq(items: Vec<String>) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    items
-        .into_iter()
-        .filter(|s| seen.insert(s.clone()))
-        .collect()
+    markers.sort_by(|a, b| (&a.relpath, &a.phrase).cmp(&(&b.relpath, &b.phrase)));
+    markers.dedup();
+    markers
 }
 
 /// Reuses a same-canon-version stub's AC number if one exists, else

@@ -25,16 +25,16 @@ Preconditions: the target must be a govna-adopted repo (`AGENTS.md` present, plu
 
 Each canon-governed file gets exactly one of 8 classifications, decided by an ordered check:
 
-1. **Missing from target, preserve marker found** → `match` (suppressed) — a Director has already declared the omission intentional.
-2. **Missing from target, no marker** → `missing-in-target`.
+1. **Missing from target, preserve-registry entry found** → `match` (suppressed) — a Director has already declared the omission intentional.
+2. **Missing from target, no registry entry** → `missing-in-target`.
 3. **Byte-equal to canon** → `match`.
 4. **Mixed-content file, canon zone byte-equal** (see Mixed-content boundary registry below) → `match` — the repo-owned tail below the boundary is not compared.
 5. **Listed in the expected-divergence registry** → `expected-divergence`.
-6. **Otherwise divergent, preserve marker found** → `preserve`.
+6. **Otherwise divergent, preserve-registry entry found** → `preserve`.
 7. **Otherwise divergent, valid baseline entry matches the target comparison region** → `clear-sync` — the target still equals its previously rendered canon and can safely adopt current canon.
 8. **Otherwise divergent, baseline entry missing or not matching the target comparison region** → `ambiguity` — a Director must decide sync vs. keep. During first baseline migration only, commit history remains the conservative fallback.
 
-`govna/metadata.txt` gets metadata-specific handling layered on top. An absent file is forced to `migration-required` regardless of the byte-comparison result (see Migration-required items). A present `canon_version` must use strict `vMAJOR.MINOR.PATCH` form. When the target version is lower than embedded canon and replacing only that field makes the whole file byte-equal to rendered canon, the file is forced to `clear-sync` regardless of git history or a metadata preserve marker. Other metadata differences remain whole-file review items. A malformed version fails before AC emission; a target version newer than embedded canon also fails and directs the operator to upgrade govna rather than downgrade consumer metadata.
+`govna/metadata.txt` gets metadata-specific handling layered on top. An absent file is forced to `migration-required` regardless of the byte-comparison result (see Migration-required items). A present `canon_version` must use strict `vMAJOR.MINOR.PATCH` form. When the target version is lower than embedded canon and replacing only that field makes the whole file byte-equal to rendered canon, the file is forced to `clear-sync` regardless of git history or a preserve-registry entry. Other metadata differences remain whole-file review items. A malformed version fails before AC emission; a target version newer than embedded canon also fails and directs the operator to upgrade govna rather than downgrade consumer metadata.
 
 Retired and otherwise evidenced target files with no canon counterpart in the target's own flavor route to `target-has-no-canon` (see Target-only detection) rather than through this ordered check.
 
@@ -57,18 +57,26 @@ Files with a documented canon-above/local-below boundary, compared only above th
 | `govna/development-guidelines.md` | `## Project Practices` |
 | `govna/editing-guidelines.md` | `## Project Practices` |
 
-Treat an existing CODE `govna/build-release.md` without its registered boundary as a one-time reviewed migration. Route it to `ambiguity` for full-file review even when a legacy whole-file preserve marker exists, and retain that marker as evidence. During reapply, leave the boundary-less file unchanged and emit a manual migration item. Place reviewed repository-specific release mechanics below the new boundary, sync rendered canon above it, and remove any obsolete whole-file preserve marker only through the consumer's authorized adoption cycle. Keep DOC `govna/release.md` outside this mixed-content model.
+Treat an existing CODE `govna/build-release.md` without its registered boundary as a one-time reviewed migration. Route it to `ambiguity` for full-file review even when a legacy whole-file preserve phrase exists, and retain that phrase as migration evidence. During reapply, leave the boundary-less file unchanged and emit a manual migration item. Place reviewed repository-specific release mechanics below the new boundary, sync rendered canon above it, and remove any obsolete registry entry and exact legacy phrase only through the consumer's authorized adoption cycle. Keep DOC `govna/release.md` outside this mixed-content model.
 
-## Preserve-marker phrase set
+## Preserve registry
 
-A Director locks a local variant against future sync by placing one of these four phrases (with `<path>` replaced by the file's repo-relative path) in `CHANGELOG.md`'s `| Unreleased | |` row Summary column, or in any governance doc audit scans:
+Use optional `govna/preserve.txt` as the sole durable preserve authority. Treat an absent file as an empty registry. Require an existing file to use this exact schema:
 
-- `preserve <path>`
-- `do not sync <path>`
-- `intentional divergence: <path>`
-- `<path>: keep local`
+```text
+govna-preserve-v1
+<repo-relative-path>
+```
 
-A marker on a missing file suppresses `missing-in-target` to a suppressed `match`; a marker on a divergent file routes it to `preserve` instead of `ambiguity`/`clear-sync`. Exceptions are an eligible stale-version-only `govna/metadata.txt`, whose canon-owned `canon_version` cannot be pinned, and a boundary-less CODE `govna/build-release.md`, whose legacy whole-file marker remains migration evidence without suppressing review.
+Require a final newline. Keep entries nonempty, slash-normalized, unique, and byte-sorted. Reject absolute paths, backslashes, tabs, blank entries, `.` or `..` components, leading or trailing slashes, duplicates, and `govna/preserve.txt` itself. Accept a header-only file as the canonical empty on-disk registry.
+
+Add an exact path for a resolved preserve outcome. Remove an exact path for a resolved sync, delete, or canon-backed migration outcome. Preserve unrelated entries. Leave the registry absent or unchanged when its state already satisfies every resolved outcome. Verify registry changes before installing the canon baseline.
+
+Exclude `govna/preserve.txt` from rendered canon, canon baselines, ordinary audit drift, name-referenced target-only evidence, and ordinary rm target-only content. Include it in rm only as the final control-state deletion after applying all registered preserve decisions.
+
+Treat only exact legacy preserve phrases in the Unreleased CHANGELOG Summary as migration evidence: `preserve <path>`, `do not sync <path>`, `intentional divergence: <path>`, and `<path>: keep local`. Route each phrase to an explicit convert-or-remove decision. Remove it only after verifying the resolved registry state. Preserve unrelated Summary text and historical rows. Ignore matching prose in historical CHANGELOG rows, emitted ACs, and every other governance document.
+
+A registry entry on a missing file suppresses `missing-in-target` to a suppressed `match`; an entry on a divergent file routes it to `preserve` instead of `ambiguity` or `clear-sync`. Exceptions are an eligible stale-version-only `govna/metadata.txt`, whose canon-owned `canon_version` cannot be pinned, and a boundary-less CODE `govna/build-release.md`, which remains a reviewed migration.
 
 ## Target-only detection
 
@@ -84,7 +92,7 @@ Audit does not flag arbitrary consumer-owned governance documents that have none
 
 ## Canon baseline manifest
 
-`govna/canon-baseline.txt` records the exact prior rendered comparison region for each governed file. Its first line is `govna-canon-baseline-v1`, its second line is `canon_version = vMAJOR.MINOR.PATCH`, and each sorted remaining line is `<path><TAB><scope><TAB><sha256>`. Scope is `full` or `before:<boundary-heading>`. The manifest excludes itself and is never classified as an ordinary governed file.
+`govna/canon-baseline.txt` records the exact prior rendered comparison region for each governed file. Its first line is `govna-canon-baseline-v1`, its second line is `canon_version = vMAJOR.MINOR.PATCH`, and each sorted remaining line is `<path><TAB><scope><TAB><sha256>`. Scope is `full` or `before:<boundary-heading>`. The manifest excludes itself and `govna/preserve.txt`; neither is classified as an ordinary governed file.
 
 Audit fails before emission for malformed fields, duplicate or unsorted paths, invalid hashes, unknown or mismatched scopes, or a baseline canon version newer than embedded canon. A valid manifest missing one file entry routes that divergent file to `ambiguity`. Audit leaves the baseline unchanged; the emitted AC installs or replaces it last after all other work succeeds.
 
@@ -112,7 +120,7 @@ The stub carries an edit-detection marker (SHA-256 body hash). Re-running audit 
 
 A non-actionable audit exits successfully, prints the classification tally followed by `no AC emitted`, and performs no AC-number allocation, stub inspection, directory creation, or file write. It never deletes, overwrites, or validates an existing audit stub. With `--json`, the complete report remains available and `emitted` is `null`; no additional prose is written.
 
-Every Director-resolved routing target becomes effective implementation scope while the emitted stub remains unchanged. Explicitly named migration destinations join that scope, and `CHANGELOG.md` joins it when a preserve marker is required.
+Every Director-resolved routing target becomes effective implementation scope while the emitted stub remains unchanged. Explicitly named migration destinations join that scope. `govna/preserve.txt` joins that scope only when a resolved outcome requires creating or changing it, without a second Director authorization.
 
 When baseline migration is present, audit infers validation only from bounded target governance evidence. Positive declarations come only from exactly one AGENTS.md rule shaped ``Run `<command>` as the first validation command ...`` and exactly one rule shaped ``Use `<command>` for repository-wide ... validation ...``; CODE infers `./build.sh` only when both name that command and root `build.sh` is a regular file. DOC infers `Not applicable` only when `govna/release.md` contains the exact canon no-automated-content-validation declaration and AGENTS.md contains no recognized positive declaration. Missing, duplicate, incomplete, mismatched, positive-plus-negative, non-`./build.sh`, or non-regular-file evidence stays unresolved for a Director decision. Audit ignores other prose, governance documents, executables, manifests, CI files, and flavor defaults.
 
@@ -122,4 +130,4 @@ Emitted acceptance tests verify sync, migration, deletion, and preservation acco
 
 Every audit-emitted AT carries exactly one source axis and one explicit timing axis. Current audit ATs use `[Automated] [Pre-release gate]` or `[Manual] [Pre-release gate]`; none defer verification until after release.
 
-Pass `--json` to print a machine-readable report (`header`: invocation, canon SHA, target, flavor and its source, repo name, govna/code-stack versions from metadata; `files`: one entry per scanned file with its classification, diff, prior commits, matched preserve markers, canon reference, and mixed-content boundary where applicable; `emitted`: the stub's path for actionable reports or `null` for clean reports).
+Pass `--json` to print a machine-readable report (`header`: invocation, canon SHA, target, flavor and its source, repo name, govna/code-stack versions from metadata; `files`: one entry per scanned file with its classification, diff, prior commits, matched preserve-registry entries, legacy preserve-phrase evidence, canon reference, and mixed-content boundary where applicable; `emitted`: the stub's path for actionable reports or `null` for clean reports).

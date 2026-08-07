@@ -100,6 +100,22 @@ fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
 }
 
+fn write_preserve_registry(dir: &Path, paths: &[&str]) {
+    let mut entries = paths.to_vec();
+    entries.sort_unstable();
+    fs::write(
+        dir.join("govna/preserve.txt"),
+        format!(
+            "govna-preserve-v1\n{}",
+            entries
+                .iter()
+                .map(|path| format!("{path}\n"))
+                .collect::<String>()
+        ),
+    )
+    .unwrap();
+}
+
 // DOC flavor renders; metadata has repo_type = DOC, no code_stack, a canon_version line.
 #[test]
 fn render_doc_flavor_metadata() {
@@ -141,6 +157,7 @@ fn validate_baseline(dir: &Path) -> String {
         assert!(previous < fields[0], "manifest is not sorted: {line}");
         previous = fields[0];
         assert_ne!(fields[0], "govna/canon-baseline.txt");
+        assert_ne!(fields[0], "govna/preserve.txt");
         let content = read(&dir.join(fields[0]));
         let region = match fields[1].strip_prefix("before:") {
             Some(boundary) => content.split(&format!("{boundary}\n")).next().unwrap(),
@@ -981,7 +998,7 @@ fn audit_accepts_only_eligible_legacy_build_release_full_scope() {
         );
         if with_marker {
             assert_eq!(
-                result["preserve_markers"][0],
+                result["legacy_preserve_markers"][0],
                 "preserve govna/build-release.md"
             );
         }
@@ -1462,10 +1479,35 @@ fn audit_stale_metadata_version_forces_clear_sync() {
     assert!(!stub.contains("**`govna/metadata.txt`**"), "{stub}");
 }
 
-// A preserve marker cannot pin the canon-owned freshness field when it is
+// A preserve-registry entry cannot pin the canon-owned freshness field when it is
 // the only metadata difference.
 #[test]
-fn audit_stale_metadata_version_overrides_preserve_marker() {
+fn audit_stale_metadata_version_overrides_preserve_registry() {
+    let dir = rendered_code_fixture();
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    fs::write(
+        dir.join("govna/metadata.txt"),
+        metadata.replacen(
+            &format!("canon_version = {}", canon_version(&dir)),
+            "canon_version = v0.1.0",
+            1,
+        ),
+    )
+    .unwrap();
+    write_preserve_registry(&dir, &["govna/metadata.txt"]);
+    git(&dir, &["add", "-A"]);
+    git(
+        &dir,
+        &["commit", "-q", "-m", "mark stale metadata preserved"],
+    );
+    let report = audit_json(&dir);
+    let fr = file_result(&report, "govna/metadata.txt").unwrap();
+    assert_eq!(fr["classification"], "clear-sync");
+    assert!(fr.get("preserve_entries").is_none(), "{fr}");
+}
+
+#[test]
+fn audit_stale_metadata_legacy_phrase_emits_explicit_removal_decision() {
     let dir = rendered_code_fixture();
     let metadata = read(&dir.join("govna/metadata.txt"));
     fs::write(
@@ -1487,15 +1529,22 @@ fn audit_stale_metadata_version_overrides_preserve_marker() {
         ),
     )
     .unwrap();
-    git(&dir, &["add", "-A"]);
-    git(
-        &dir,
-        &["commit", "-q", "-m", "mark stale metadata preserved"],
-    );
     let report = audit_json(&dir);
-    let fr = file_result(&report, "govna/metadata.txt").unwrap();
-    assert_eq!(fr["classification"], "clear-sync");
-    assert!(fr.get("preserve_markers").is_none(), "{fr}");
+    let result = file_result(&report, "govna/metadata.txt").unwrap();
+    assert_eq!(result["classification"], "clear-sync", "{result}");
+    let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    assert!(
+        stub.contains("**`govna/metadata.txt` legacy preserve phrase**"),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("normal classification remains `clear-sync`"),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("remove only the exact legacy phrase"),
+        "{stub}"
+    );
 }
 
 // A lower canon_version does not authorize a field-level merge. Any other
@@ -1608,7 +1657,7 @@ fn audit_ambiguity_routes_to_review() {
         stub.contains("explicitly named migration destination"),
         "{stub}"
     );
-    assert!(stub.contains("`CHANGELOG.md` joins it"), "{stub}");
+    assert!(stub.contains("`govna/preserve.txt` joins it"), "{stub}");
     assert!(
         stub.contains("Do not infer an unnamed migration destination"),
         "{stub}"
@@ -1623,7 +1672,7 @@ fn audit_ambiguity_routes_to_review() {
         "canon-backed migration destinations match rendered canon",
         "repo-owned migration destinations satisfy the Director's stated result",
         "delete targets are absent",
-        "preserve targets remain and `CHANGELOG.md` carries the required preserve marker",
+        "preserve targets remain and their exact paths occur in `govna/preserve.txt`",
     ] {
         assert!(stub.contains(outcome), "missing {outcome}:\n{stub}");
     }
@@ -1673,30 +1722,100 @@ fn audit_format_defining_forces_sync() {
     assert!(!stub.contains("Re-running `govna audit`"), "{stub}");
 }
 
-// a preserve marker in CHANGELOG.md suppresses sync — classifies
-// Preserve, routed to Out Of Scope with the marker citation shown.
+// A preserve-registry entry suppresses sync and remains non-actionable.
 #[test]
-fn audit_preserve_marker_is_non_actionable() {
+fn audit_preserve_registry_is_non_actionable() {
     let dir = rendered_code_fixture();
     fs::write(
         dir.join("govna/roles.md"),
         format!("{}\nextra line\n", read(&dir.join("govna/roles.md"))),
     )
     .unwrap();
-    fs::write(
-        dir.join("govna/ac1-preserve-roles.md"),
-        "# Preserve decision\n\npreserve govna/roles.md\n",
-    )
-    .unwrap();
+    write_preserve_registry(&dir, &["govna/roles.md"]);
     git(&dir, &["add", "-A"]);
-    git(&dir, &["commit", "-q", "-m", "preserve marker"]);
+    git(&dir, &["commit", "-q", "-m", "preserve registry"]);
     let (report, out) = audit_json_output(&dir);
     let fr = file_result(&report, "govna/roles.md").unwrap();
     assert_eq!(fr["classification"], "preserve");
-    assert_eq!(fr["preserve_markers"][0], "preserve govna/roles.md");
+    assert_eq!(fr["preserve_entries"][0], "govna/roles.md");
     assert!(report["emitted"].is_null());
     assert!(out.stderr.is_empty());
     assert!(audit_stub_names(&dir).is_empty());
+}
+
+#[test]
+fn audit_accepts_empty_registry_and_suppresses_registered_missing_target() {
+    let empty = rendered_code_fixture();
+    write_preserve_registry(&empty, &[]);
+    let (clean, _) = audit_json_output(&empty);
+    assert!(clean["emitted"].is_null(), "{clean}");
+
+    let missing = rendered_code_fixture();
+    fs::remove_file(missing.join("govna/roles.md")).unwrap();
+    write_preserve_registry(&missing, &["govna/roles.md"]);
+    let (report, _) = audit_json_output(&missing);
+    let result = file_result(&report, "govna/roles.md").unwrap();
+    assert_eq!(result["classification"], "match", "{result}");
+    assert_eq!(result["preserve_entries"][0], "govna/roles.md");
+    assert!(report["emitted"].is_null(), "{report}");
+}
+
+#[test]
+fn audit_and_rm_reject_malformed_preserve_registry_before_emission() {
+    for invalid in [
+        "wrong-header\n",
+        "govna-preserve-v1",
+        "govna-preserve-v1\n\n",
+        "govna-preserve-v1\n/absolute.md\n",
+        "govna-preserve-v1\ntrailing/\n",
+        "govna-preserve-v1\na\\b.md\n",
+        "govna-preserve-v1\na\tb.md\n",
+        "govna-preserve-v1\na/./b.md\n",
+        "govna-preserve-v1\na/../b.md\n",
+        "govna-preserve-v1\nb.md\na.md\n",
+        "govna-preserve-v1\na.md\na.md\n",
+        "govna-preserve-v1\ngovna/preserve.txt\n",
+    ] {
+        for command in ["audit", "rm"] {
+            let dir = rendered_code_fixture();
+            fs::write(dir.join("govna/preserve.txt"), invalid).unwrap();
+            let output = govna().arg(command).current_dir(&dir).output().unwrap();
+            assert!(!output.status.success(), "{command}: {invalid:?}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("govna/preserve.txt"),
+                "{command}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(audit_stub_names(&dir).is_empty(), "{command}: {invalid:?}");
+        }
+    }
+}
+
+#[test]
+fn audit_ignores_legacy_phrases_outside_unreleased_summary() {
+    let dir = rendered_code_fixture();
+    fs::write(
+        dir.join("govna/ac1-old.md"),
+        "# Historical decision\n\npreserve govna/roles.md\n",
+    )
+    .unwrap();
+    let changelog = read(&dir.join("CHANGELOG.md"));
+    fs::write(
+        dir.join("CHANGELOG.md"),
+        format!("{changelog}\n| 0.0.1 | preserve govna/roles.md |\n"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{}\nlocal edit\n", read(&dir.join("govna/roles.md"))),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "historical preserve prose"]);
+    let report = audit_json(&dir);
+    let result = file_result(&report, "govna/roles.md").unwrap();
+    assert_eq!(result["classification"], "ambiguity", "{result}");
+    assert!(result.get("legacy_preserve_markers").is_none(), "{result}");
 }
 
 // mixed-content boundary. An edit strictly below `## Project Practices`
@@ -1751,9 +1870,12 @@ fn audit_boundaryless_build_release_requires_review_even_with_preserve_marker() 
             "{fr}"
         );
         if with_marker {
-            assert_eq!(fr["preserve_markers"][0], "preserve govna/build-release.md");
+            assert_eq!(
+                fr["legacy_preserve_markers"][0],
+                "preserve govna/build-release.md"
+            );
         } else {
-            assert!(fr.get("preserve_markers").is_none(), "{fr}");
+            assert!(fr.get("legacy_preserve_markers").is_none(), "{fr}");
         }
     }
 }
@@ -1807,7 +1929,7 @@ fn audit_build_release_boundary_scopes_local_and_canon_changes() {
 #[test]
 fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     let dir = rendered_code_fixture();
-    let stub_path = dir.join("govna/ac1-audit-v0.12.0.md");
+    let stub_path = dir.join("govna/ac1-audit-v0.13.0.md");
     let edited = "director-owned edited audit stub\n";
     fs::write(&stub_path, edited).unwrap();
 
@@ -1819,7 +1941,7 @@ fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("no AC emitted"));
     assert_eq!(read(&stub_path), edited);
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.12.0.md"]);
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.13.0.md"]);
 }
 
 #[test]
@@ -1831,8 +1953,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.12.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.12.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.13.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.13.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -2466,21 +2588,20 @@ fn rm_expected_divergence_files_kept() {
     }
 }
 
-// a preserve marker routes that file to Out Of Scope, not In Scope or Review.
+// A preserve-registry entry routes that file to Out Of Scope.
 #[test]
-fn rm_preserve_marker_routes_to_keep() {
+fn rm_preserve_registry_routes_to_keep() {
     let dir = rendered_code_fixture();
-    let changelog = read(&dir.join("CHANGELOG.md"));
-    fs::write(
-        dir.join("CHANGELOG.md"),
-        format!("{changelog}\n| 0.0.1 | preserve govna/roles.md |\n"),
-    )
-    .unwrap();
+    write_preserve_registry(&dir, &["govna/roles.md"]);
     git(&dir, &["add", "-A"]);
-    git(&dir, &["commit", "-q", "-m", "preserve marker"]);
+    git(&dir, &["commit", "-q", "-m", "preserve registry"]);
     let stub = rm_stub(&dir);
     assert!(
-        stub.contains("- `govna/roles.md` — keep; preserve marker: preserve govna/roles.md."),
+        stub.contains("- `govna/roles.md` — keep; registered in govna/preserve.txt."),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("- `govna/preserve.txt` — delete control state last;"),
         "{stub}"
     );
 }
@@ -3364,7 +3485,7 @@ fn render_audit_docs_and_version_match_authority() {
         for rule in [
             "Treat every Director-resolved routing target as effective implementation scope",
             "Treat each explicitly named migration destination as effective implementation scope",
-            "Treat `CHANGELOG.md` as effective implementation scope",
+            "Treat `govna/preserve.txt` as effective implementation scope",
             "Require the Director to name every migration destination",
             "Verify each resolved sync target",
             "Verify each migration source",
@@ -3388,7 +3509,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.12.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.13.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3453,7 +3574,8 @@ fn render_audit_docs_and_version_match_authority() {
         assert_at_axes(&rendered_template);
         assert!(rendered_template.contains("always write the selected label explicitly"));
     }
-    for relpath in ["govna/ac-template.md", "govna/build-release.md"] {
+    {
+        let relpath = "govna/ac-template.md";
         let content = read(&repo_root.join(relpath));
         assert!(!content.contains("During a audit"), "{relpath}: {content}");
         assert!(
@@ -3510,7 +3632,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.12.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.13.0\n"));
     }
     assert!(
         govna()
@@ -3531,7 +3653,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.12.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.13.0\n"));
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one
