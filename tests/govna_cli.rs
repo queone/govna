@@ -1583,9 +1583,94 @@ fn audit_mixed_content_below_boundary_matches() {
 }
 
 #[test]
+fn audit_boundaryless_build_release_requires_review_even_with_preserve_marker() {
+    for with_marker in [false, true] {
+        let dir = rendered_code_fixture();
+        fs::write(
+            dir.join("govna/build-release.md"),
+            "# Local Build and Release\n\nUse SkitVersion.current.\n",
+        )
+        .unwrap();
+        if with_marker {
+            let changelog = read(&dir.join("CHANGELOG.md"));
+            fs::write(
+                dir.join("CHANGELOG.md"),
+                changelog.replacen(
+                    "| Unreleased | |",
+                    "| Unreleased | preserve govna/build-release.md |",
+                    1,
+                ),
+            )
+            .unwrap();
+        }
+        let report = audit_json(&dir);
+        let fr = file_result(&report, "govna/build-release.md").unwrap();
+        assert_eq!(fr["classification"], "ambiguity", "{fr}");
+        assert!(
+            fr["compare_command"]
+                .as_str()
+                .unwrap()
+                .contains("full file"),
+            "{fr}"
+        );
+        if with_marker {
+            assert_eq!(fr["preserve_markers"][0], "preserve govna/build-release.md");
+        } else {
+            assert!(fr.get("preserve_markers").is_none(), "{fr}");
+        }
+    }
+}
+
+#[test]
+fn audit_build_release_boundary_scopes_local_and_canon_changes() {
+    let local_dir = rendered_code_fixture();
+    let local_path = local_dir.join("govna/build-release.md");
+    fs::write(
+        &local_path,
+        format!(
+            "{}- Keep a repository-specific release marker.\n",
+            read(&local_path)
+        ),
+    )
+    .unwrap();
+    let (local_report, _) = audit_json_output(&local_dir);
+    let local_result = file_result(&local_report, "govna/build-release.md").unwrap();
+    assert_eq!(local_result["classification"], "match", "{local_result}");
+    assert_eq!(local_result["boundary"], "## Project Practices");
+
+    let canon_dir = rendered_code_fixture();
+    let canon_path = canon_dir.join("govna/build-release.md");
+    let content = read(&canon_path);
+    fs::write(
+        &canon_path,
+        content.replacen(
+            "Reuse the canonical build color policy",
+            "Change the canonical build color policy",
+            1,
+        ),
+    )
+    .unwrap();
+    let canon_report = audit_json(&canon_dir);
+    let canon_result = file_result(&canon_report, "govna/build-release.md").unwrap();
+    assert_ne!(canon_result["classification"], "match", "{canon_result}");
+    assert_eq!(canon_result["boundary"], "## Project Practices");
+    let stub = read(
+        &canon_dir.join(
+            canon_report["emitted"]["ac_stub"]
+                .as_str()
+                .expect("audit stub missing"),
+        ),
+    );
+    assert!(
+        stub.contains("canon zone above `## Project Practices`"),
+        "{stub}"
+    );
+}
+
+#[test]
 fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     let dir = rendered_code_fixture();
-    let stub_path = dir.join("govna/ac1-audit-v0.10.0.md");
+    let stub_path = dir.join("govna/ac1-audit-v0.11.0.md");
     let edited = "director-owned edited audit stub\n";
     fs::write(&stub_path, edited).unwrap();
 
@@ -1597,7 +1682,7 @@ fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("no AC emitted"));
     assert_eq!(read(&stub_path), edited);
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.10.0.md"]);
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.11.0.md"]);
 }
 
 #[test]
@@ -1609,8 +1694,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.10.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.10.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.11.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.11.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -2870,6 +2955,55 @@ fn apply_falls_back_to_overwrite_when_boundary_missing() {
     assert!(agents.contains("## Governed Sections"), "{agents}");
 }
 
+#[test]
+fn apply_preserves_boundaryless_build_release_for_manual_migration() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "swift"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let legacy = "# Local Swift Build and Release\n\nUse SkitVersion.current.\n";
+    fs::write(dir.join("govna/build-release.md"), legacy).unwrap();
+
+    let out = govna()
+        .args(["apply", "-f", "code", "-s", "swift"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(read(&dir.join("govna/build-release.md")), legacy);
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains("existing content preserved for manual migration")
+    );
+    let ac = read(&dir.join("govna/ac2-govna-apply.md"));
+    assert!(ac.contains("manual boundary migration required"), "{ac}");
+    assert!(
+        ac.contains("Merge rendered canon above `## Project Practices`"),
+        "{ac}"
+    );
+}
+
+#[test]
+fn apply_merges_build_release_project_practices() {
+    let dir = new_fixture();
+    govna()
+        .args(["apply", "-f", "code", "-s", "swift"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let path = dir.join("govna/build-release.md");
+    let customized = format!("{}- Keep SkitVersion.current aligned.\n", read(&path));
+    fs::write(&path, customized).unwrap();
+    govna()
+        .args(["apply", "-f", "code", "-s", "swift"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(read(&path).ends_with("## Project Practices\n- Keep SkitVersion.current aligned.\n"));
+}
+
 // ── apply must not overwrite EXPECTED_DIVERGENCE_PATHS files ───────────────
 
 // existing-mode apply preserves pre-existing arch.md/plan.md
@@ -3077,6 +3211,18 @@ fn render_audit_docs_and_version_match_authority() {
             read(&dir.join("govna/canon-cycle.md")),
             canon_cycle_authority
         );
+        let canon_cycle = read(&dir.join("govna/canon-cycle.md"));
+        assert!(
+            canon_cycle.contains("CODE `govna/build-release.md` (boundary `## Project Practices`)"),
+            "{}: {canon_cycle}",
+            dir.display()
+        );
+        assert!(
+            canon_cycle.contains("DOC `govna/release.md` remains full canon"),
+            "{}: {canon_cycle}",
+            dir.display()
+        );
+        assert!(!canon_cycle.contains("DOC `govna/release.md` use"));
         let agents = read(&dir.join("AGENTS.md"));
         for rule in [
             "Treat every Director-resolved routing target as effective implementation scope",
@@ -3105,7 +3251,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.10.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.11.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3182,36 +3328,53 @@ fn render_audit_docs_and_version_match_authority() {
 }
 
 #[test]
-fn render_code_build_reuse_rationale_matches_authority() {
-    fn section(content: &str) -> &str {
-        content
-            .split_once("## Rust Compilation Reuse\n")
-            .expect("Rust Compilation Reuse section missing")
-            .1
-            .split_once("\n## ")
-            .expect("section terminator missing")
-            .0
-    }
-
+fn render_code_build_release_is_stack_aware_and_bounded() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let authority = read(&repo_root.join("govna/build-release.md"));
-    let code_dir = new_fixture();
     let doc_dir = new_fixture();
-    assert!(
-        govna()
-            .args([
-                "render",
-                "--flavor",
-                "code",
-                "--stack",
-                "rust",
-                code_dir.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap()
-            .status
-            .success()
-    );
+    let authority_zone = authority
+        .split_once("## Project Practices\n")
+        .expect("source build-release boundary missing")
+        .0;
+    for stack in ["go", "rust", "swift", "terraform", "node", "python", "java"] {
+        let code_dir = new_fixture();
+        let mut args = vec!["render", "--flavor", "code", "--stack", stack];
+        if stack == "go" {
+            args.extend(["--module-path", "example.com/build-release-test"]);
+        }
+        args.push(code_dir.to_str().unwrap());
+        let output = govna().args(args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{stack}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let rendered = read(&code_dir.join("govna/build-release.md"));
+        let (canon_zone, tail) = rendered
+            .split_once("## Project Practices\n")
+            .expect("rendered build-release boundary missing");
+        assert_eq!(rendered.matches("## Project Practices").count(), 1);
+        assert!(tail.trim().is_empty(), "{stack}: {tail}");
+        if stack == "rust" {
+            assert_eq!(canon_zone, authority_zone);
+            assert!(canon_zone.contains("## Rust Compilation Reuse"));
+        } else {
+            for excluded in [
+                "Rust Compilation Reuse",
+                "Cargo",
+                "Clippy",
+                "PROGRAM_VERSION",
+            ] {
+                assert!(
+                    !canon_zone.contains(excluded),
+                    "{stack}: {excluded}: {canon_zone}"
+                );
+            }
+        }
+        let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
+        assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.11.0\n"));
+    }
     assert!(
         govna()
             .args(["render", "--flavor", "doc", doc_dir.to_str().unwrap()])
@@ -3221,18 +3384,17 @@ fn render_code_build_reuse_rationale_matches_authority() {
             .success()
     );
 
-    let rendered = read(&code_dir.join("govna/build-release.md"));
-    assert_eq!(section(&rendered), section(&authority));
     for expected in [
         "build duration becomes materially costly",
         "stable Cargo or Clippy behavior offers measurable artifact reuse",
         "compiler-cache evaluation only with Director authorization",
         "toolchain version, exact commands, isolated target-directory conditions, repeated timings, and unchanged validation coverage",
     ] {
-        assert!(section(&authority).contains(expected), "{expected}");
+        assert!(authority_zone.contains(expected), "{expected}");
     }
-    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.10.0\n"));
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
+    assert!(!doc_dir.join("govna/build-release.md").exists());
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.11.0\n"));
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one

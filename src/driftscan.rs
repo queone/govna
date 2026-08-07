@@ -808,7 +808,7 @@ fn classify_file(
     if let Some(boundary) = mixed_content_boundary(relpath) {
         let canon_zone = extract_canon_zone(canon, boundary);
         let target_zone = extract_canon_zone(&target_bytes, boundary);
-        if let (Some(cz), Some(tz)) = (canon_zone, target_zone) {
+        if let (Some(cz), Some(tz)) = (&canon_zone, &target_zone) {
             fr.boundary = boundary.to_string();
             if cz == tz {
                 fr.classification = Classification::Match;
@@ -816,6 +816,15 @@ fn classify_file(
                     format!("canon-zone byte-equal above {boundary} (canon @ {sha} vs {relpath})");
                 return fr;
             }
+        }
+        if relpath == "govna/build-release.md" && canon_zone.is_some() && target_zone.is_none() {
+            fr.diff = unified_diff(canon, &target_bytes, relpath, diff_lines);
+            fr.markers = emission::preserve_markers(target, relpath);
+            fr.classification = Classification::Ambiguity;
+            fr.compare_command = format!(
+                "target lacks registered {boundary} boundary; review the full file and migrate repository-owned practices below the boundary (canon @ {sha})"
+            );
+            return fr;
         }
     }
 
@@ -1592,6 +1601,15 @@ fn build_ac_stub(
             "**AT{at_num}** [Automated] [Pre-release gate] — Every resolved routing outcome is verified conditionally: sync targets match their rendered canon region; migration sources are absent unless explicitly preserved; canon-backed migration destinations match rendered canon; repo-owned migration destinations satisfy the Director's stated result; delete targets are absent; preserve targets remain and `CHANGELOG.md` carries the required preserve marker.\n\n"
         ));
         at_num += 1;
+        for f in &review_entries {
+            if !f.boundary.is_empty() {
+                b.push_str(&format!(
+                    "**AT{at_num}** [Automated] [Pre-release gate] — When `{}` is resolved as sync, its canon zone above `{}` matches canon byte-for-byte; otherwise verify its resolved preserve outcome.\n\n",
+                    f.relpath, f.boundary
+                ));
+                at_num += 1;
+            }
+        }
     }
     if baseline_migration.is_some() {
         b.push_str(&format!(

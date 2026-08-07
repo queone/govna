@@ -53,8 +53,11 @@ Files with a documented canon-above/local-below boundary, compared only above th
 | File | Boundary |
 |---|---|
 | `AGENTS.md` | `## Project Rules` |
+| CODE `govna/build-release.md` | `## Project Practices` |
 | `govna/development-guidelines.md` | `## Project Practices` |
 | `govna/editing-guidelines.md` | `## Project Practices` |
+
+Treat an existing CODE `govna/build-release.md` without its registered boundary as a one-time reviewed migration. Route it to `ambiguity` for full-file review even when a legacy whole-file preserve marker exists, and retain that marker as evidence. During reapply, leave the boundary-less file unchanged and emit a manual migration item. Place reviewed repository-specific release mechanics below the new boundary, sync rendered canon above it, and remove any obsolete whole-file preserve marker only through the consumer's authorized adoption cycle. Keep DOC `govna/release.md` outside this mixed-content model.
 
 ## Preserve-marker phrase set
 
@@ -65,7 +68,7 @@ A Director locks a local variant against future sync by placing one of these fou
 - `intentional divergence: <path>`
 - `<path>: keep local`
 
-A marker on a missing file suppresses `missing-in-target` to a suppressed `match`; a marker on a divergent file routes it to `preserve` instead of `ambiguity`/`clear-sync`. The sole exception is an eligible stale-version-only `govna/metadata.txt`, whose canon-owned `canon_version` cannot be pinned by a preserve marker.
+A marker on a missing file suppresses `missing-in-target` to a suppressed `match`; a marker on a divergent file routes it to `preserve` instead of `ambiguity`/`clear-sync`. Exceptions are an eligible stale-version-only `govna/metadata.txt`, whose canon-owned `canon_version` cannot be pinned, and a boundary-less CODE `govna/build-release.md`, whose legacy whole-file marker remains migration evidence without suppressing review.
 
 ## Target-only detection
 

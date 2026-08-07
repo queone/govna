@@ -196,7 +196,9 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Categorize each `## In Scope` item as pure-canon or mixed-content before applying.
 - Apply pure-canon items by copying from canon: `cp <scratch>/<path> <path>`.
 - Apply mixed-content items by hunk-merge.
-- Replace canon-zone content above the boundary heading (`## Project Rules` for AGENTS.md; `## Project Practices` for `govna/development-guidelines.md` and `govna/editing-guidelines.md`).
+- Replace canon-zone content above each registered boundary heading.
+- Use `## Project Rules` as the AGENTS.md boundary.
+- Use `## Project Practices` as the boundary for `govna/development-guidelines.md`, `govna/editing-guidelines.md`, and CODE `govna/build-release.md`.
 - Preserve the boundary heading and every line below it as repo-owned content.
 - Confirm or override an unresolved emitted validation disposition in chat.
 - Run the resolved validation command after all selected sync, migration, and deletion work.

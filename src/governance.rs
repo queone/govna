@@ -31,9 +31,9 @@ const BASELINE_SCHEMA: &str = "govna-canon-baseline-v1";
 pub fn mixed_content_boundary(relpath: &str) -> Option<&'static str> {
     match relpath {
         "AGENTS.md" => Some("## Project Rules"),
-        "govna/development-guidelines.md" | "govna/editing-guidelines.md" => {
-            Some("## Project Practices")
-        }
+        "govna/build-release.md"
+        | "govna/development-guidelines.md"
+        | "govna/editing-guidelines.md" => Some("## Project Practices"),
         _ => None,
     }
 }
@@ -113,6 +113,17 @@ pub fn render_canonical_files(cfg: &Config) -> Result<Vec<WriteOp>, String> {
         format!("v{}", templates::CANON_VERSION),
     );
     placeholders.insert("{{CODE_STACK}}", value_or_default(&canonical_stack, "TBD"));
+    let stack_build_release = if canonical_stack.eq_ignore_ascii_case("rust") {
+        templates::read_raw("stack-build-release/rust.md")
+            .ok_or_else(|| {
+                "compose stack build/release guidance: Rust block not found".to_string()
+            })?
+            .trim()
+            .to_string()
+    } else {
+        String::new()
+    };
+    placeholders.insert("{{STACK_BUILD_RELEASE_GUIDANCE}}", stack_build_release);
 
     let mut out: BTreeMap<String, String> = BTreeMap::new();
 

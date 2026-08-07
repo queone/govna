@@ -26,15 +26,7 @@ This repo uses a self-contained `build.sh` for all build, release-prep, and rele
 - automated tests pass
 - changed docs match actual behavior
 
-## Rust Compilation Reuse
-
-- Keep separate Clippy, test, and release-build validation unless a measured change preserves their coverage.
-- Reopen optimization work when build duration becomes materially costly.
-- Reopen optimization work when stable Cargo or Clippy behavior offers measurable artifact reuse.
-- Reopen compiler-cache evaluation only with Director authorization.
-- Record the toolchain version, exact commands, isolated target-directory conditions, repeated timings, and unchanged validation coverage in any renewed investigation.
-
-Note: Cargo may compile overlapping dependency graphs separately because Clippy, tests, and release builds use different analysis, code-generation, and profile artifacts. Direct measurements did not demonstrate a reliable wall-clock improvement from command reordering alone.
+{{STACK_BUILD_RELEASE_GUIDANCE}}
 
 ## Canonical Build Commands
 
@@ -75,7 +67,7 @@ The operator flow is two steps:
 
 1. **Run `./build.sh prep vX.Y.Z "message"`.** Stages version bumps, inserts the CHANGELOG row, deletes completed AC files, sweeps matching AC-pointer IE lines from `plan.md`, runs validation builds before and after, and prints the canonical release command. The agent determines the version (semver classification from the AC's scope) and drafts the release message (≤ 80 characters) before invoking prep. Flags: `--dry-run`/`-n` prints intended writes without touching the working tree; `--no-build`/`-B` skips the pre- and post-check builds.
 
-   `prep` bumps `Cargo.toml`'s package version automatically, but does **not** bump any declared binary's own literal `PROGRAM_VERSION` — bump that by hand, in every declared binary path, before running `prep`. When doing so, also bump `Cargo.toml`'s version to the same target value in the same pass, before invoking `prep`: its own version bump is idempotent when the file already holds the target value, so pre-bumping causes no conflict, but leaving `Cargo.toml` at the old version until `prep` writes it creates a transient mismatch against the already-bumped `PROGRAM_VERSION` that the pre-check build's own test suite will legitimately fail on, since pre-check runs before `prep`'s writes.
+   Before running prep, satisfy this repository's declared version-target contract and keep repository/package and independently versioned utility declarations aligned as required by its Project Practices.
 2. **Run the printed release command (`./build.sh vX.Y.Z "message"`).** Shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → tag → push tag → push branch`.
 
 Present only the release command after prep; do not add trailing commentary about wrapper routing or prompts. The director already knows.
@@ -87,7 +79,7 @@ Present only the release command after prep; do not add trailing commentary abou
 1. **Validate inputs.** Semver pattern (`vX.Y.Z`), message non-empty and ≤ 80 characters.
 2. **Validate git state.** Inside a git work tree, target tag does not exist yet, HEAD is not at the latest tag with a clean working tree.
 3. **Pre-check build.** `./build.sh` runs before any writes; skip it with `--no-build`/`-B` only for single-utility repositories or with `--dry-run`/`-n`.
-4. **Detect and validate version targets.** For Rust, map each explicit `[[bin]]` target to one literal `PROGRAM_VERSION: &str` declaration in its declared path. Preserve Rust utility declarations and independent versions. In a multi-utility repository, validate exactly one strict stable SemVer declaration and successful accepted `--version` output for every utility, skip all individual utility bumps, reject `--no-build`/`-B`, and fail before any write when validation fails.
+4. **Detect and validate version targets.** Follow this repository's Project Practices and stack build implementation. Reject missing, malformed, duplicate, or unsafe targets before any write.
 5. **Detect CHANGELOG targets + fail-fast idempotency guard.** Root `CHANGELOG.md`. If it already contains a row for the target version, prep exits with a fatal error before any writes.
 6. **Parse AC refs.** `AC[0-9]+` scan on the release message; composites like `AC<m>+AC<n>` yield multiple refs.
 7. **Apply writes.** Version bumps (per-file idempotent no-op when the file already has the target value); CHANGELOG row insertion under `| Unreleased | |`; AC file deletions (AC files are deleted whole; there are no separate companion files); AC-pointer IE-line sweep from `plan.md` (lines matching `→ govna/ac<N>-` for each released AC). Skipped when `--dry-run`/`-n`. Idempotent re-runs leave already-swept lines alone.
@@ -101,3 +93,5 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
 - Versions are unprefixed (`0.29.0`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
+
+## Project Practices

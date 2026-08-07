@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.19.0 | AC28: make build-release canon stack-aware |
 | 0.18.0 | AC27: infer audit validation and fix count grammar |
 | 0.17.0 | AC26: suppress no-op AC emission for clean audits |
 | 0.16.0 | AC25: enforce AT timing axes and one-step Ratify |

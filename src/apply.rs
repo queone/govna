@@ -334,6 +334,9 @@ enum WriteOutcome {
     /// A `mixed_content_boundary` file had no matching boundary, so it fell
     /// back to a blind overwrite (with a printed warning) instead of a merge.
     WrittenFallback,
+    /// The existing build/release document predates its mixed-content boundary;
+    /// preserve it for an explicit manual migration instead of overwriting it.
+    BoundaryMigration,
     Skipped,
     Merged,
 }
@@ -371,6 +374,14 @@ fn write_canon_op(
                     return Ok(WriteOutcome::Merged);
                 }
                 None => {
+                    if op.rel_path == "govna/build-release.md" {
+                        eprintln!(
+                            "warning: {} has no `{boundary}` boundary; existing content preserved for manual migration",
+                            op.rel_path
+                        );
+                        println!("skip {} (manual boundary migration required)", op.rel_path);
+                        return Ok(WriteOutcome::BoundaryMigration);
+                    }
                     eprintln!(
                         "warning: {} has no `{boundary}` boundary; overwriting whole file",
                         op.rel_path
@@ -920,6 +931,9 @@ fn render_apply_ac(
             WriteOutcome::WrittenFallback => {
                 "written — no boundary found, blind overwrite; see warning".to_string()
             }
+            WriteOutcome::BoundaryMigration => {
+                "existing content preserved — manual boundary migration required".to_string()
+            }
             WriteOutcome::Skipped => "existing content preserved".to_string(),
             WriteOutcome::Merged => "canon zone merged, existing tail preserved".to_string(),
         };
@@ -983,13 +997,24 @@ fn render_apply_ac(
             );
         }
     }
+    let mut at_num = 4;
+    for (op, outcome) in ops.iter().zip(outcomes.iter()) {
+        if matches!(outcome, WriteOutcome::BoundaryMigration) {
+            b.push_str(&format!(
+                "**AT{at_num}** [Manual] [Pre-release gate] — Merge rendered canon above `## Project Practices` into `{}` while preserving reviewed repository-specific release mechanics below that boundary.\n\n",
+                op.rel_path
+            ));
+            at_num += 1;
+        }
+    }
     if migration.is_some() {
-        b.push_str(
-            "**AT4** [Manual] [Pre-release gate] — Director confirms every listed `governa/` file was reviewed and either removed or intentionally kept.\n\n",
-        );
-        b.push_str(
-            "**AT5** [Automated] [Pre-release gate] — `governa/` no longer exists in the repo.\n\n",
-        );
+        b.push_str(&format!(
+            "**AT{at_num}** [Manual] [Pre-release gate] — Director confirms every listed `governa/` file was reviewed and either removed or intentionally kept.\n\n"
+        ));
+        at_num += 1;
+        b.push_str(&format!(
+            "**AT{at_num}** [Automated] [Pre-release gate] — `governa/` no longer exists in the repo.\n\n"
+        ));
     }
     b.push_str("## Status\n\n");
     b.push_str("`PENDING` — review applied governance and adapt to repo needs.\n");

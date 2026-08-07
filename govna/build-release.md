@@ -75,9 +75,7 @@ The operator flow is two steps:
 
 1. **Run `./build.sh prep vX.Y.Z "message"`.** Stages version bumps, inserts the CHANGELOG row, deletes completed AC files, sweeps matching AC-pointer IE lines from `plan.md`, runs validation builds before and after, and prints the canonical release command. The agent determines the version (semver classification from the AC's scope) and drafts the release message (≤ 80 characters) before invoking prep. Flags: `--dry-run`/`-n` prints intended writes without touching the working tree; `--no-build`/`-B` skips the pre- and post-check builds.
 
-   `prep` bumps `Cargo.toml`'s package version automatically, but does **not** bump any declared binary's own literal `PROGRAM_VERSION` — bump that by hand, in every declared binary path, before running `prep`. When doing so, also bump `Cargo.toml`'s version to the same target value in the same pass, before invoking `prep`: its own version bump is idempotent when the file already holds the target value, so pre-bumping causes no conflict, but leaving `Cargo.toml` at the old version until `prep` writes it creates a transient mismatch against the already-bumped `PROGRAM_VERSION` that the pre-check build's own test suite will legitimately fail on, since pre-check runs before `prep`'s writes.
-
-   `CANON_VERSION` (`src/templates.rs`) also requires a manual bump — separately from `PROGRAM_VERSION`, and `prep` never touches it either — whenever any file under `templates/` changed real rendered content (not a typo/formatting-only edit) in the AC being packaged. Unlike `PROGRAM_VERSION`, no build-time validation catches a forgotten bump here; `audit`'s own `canon_version` reporting is the only signal, and it silently under-reports staleness if this is missed.
+   Before running prep, satisfy this repository's declared version-target contract and keep repository/package and independently versioned utility declarations aligned as required by its Project Practices.
 2. **Run the printed release command (`./build.sh vX.Y.Z "message"`).** Shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → tag → push tag → push branch`.
 
 Present only the release command after prep; do not add trailing commentary about wrapper routing or prompts. The director already knows.
@@ -89,7 +87,7 @@ Present only the release command after prep; do not add trailing commentary abou
 1. **Validate inputs.** Semver pattern (`vX.Y.Z`), message non-empty and ≤ 80 characters.
 2. **Validate git state.** Inside a git work tree, target tag does not exist yet, HEAD is not at the latest tag with a clean working tree.
 3. **Pre-check build.** `./build.sh` runs before any writes; skip it with `--no-build`/`-B` only for single-utility repositories or with `--dry-run`/`-n`.
-4. **Detect and validate version targets.** For Rust, map each explicit `[[bin]]` target to one literal `PROGRAM_VERSION: &str` declaration in its declared path. Preserve Rust utility declarations and independent versions. In a multi-utility repository, validate exactly one strict stable SemVer declaration and successful accepted `--version` output for every utility, skip all individual utility bumps, reject `--no-build`/`-B`, and fail before any write when validation fails.
+4. **Detect and validate version targets.** Follow this repository's Project Practices and stack build implementation. Reject missing, malformed, duplicate, or unsafe targets before any write.
 5. **Detect CHANGELOG targets + fail-fast idempotency guard.** Root `CHANGELOG.md`. If it already contains a row for the target version, prep exits with a fatal error before any writes.
 6. **Parse AC refs.** `AC[0-9]+` scan on the release message; composites like `AC<m>+AC<n>` yield multiple refs.
 7. **Apply writes.** Version bumps (per-file idempotent no-op when the file already has the target value); CHANGELOG row insertion under `| Unreleased | |`; AC file deletions (AC files are deleted whole; there are no separate companion files); AC-pointer IE-line sweep from `plan.md` (lines matching `→ govna/ac<N>-` for each released AC). Skipped when `--dry-run`/`-n`. Idempotent re-runs leave already-swept lines alone.
@@ -103,3 +101,13 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
 - Versions are unprefixed (`0.29.0`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
+
+## Project Practices
+
+- Bump each declared binary's literal `PROGRAM_VERSION` before running prep.
+- Bump `Cargo.toml` to the same target version in the same pass.
+- Preserve every independent utility version during repository release prep.
+- Bump `CANON_VERSION` in `src/templates.rs` when template changes alter rendered canon behavior.
+- Keep `CANON_VERSION` independent from `PROGRAM_VERSION` and the repository package version.
+
+Note: Prep's Cargo version bump is idempotent when `Cargo.toml` already holds the target value. Pre-bumping prevents the pre-check build from observing a transient mismatch with `PROGRAM_VERSION`. Prep never changes `PROGRAM_VERSION` or `CANON_VERSION`; audit silently reports stale canon metadata if a rendered-content change ships without its required canon-version bump.
