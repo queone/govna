@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.16.0 | AC25: enforce AT timing axes and one-step Ratify |
 | 0.15.0 | AC24: complete audit migration and validation contracts |
 | 0.14.1 | AC23: retire build recompilation investigation |
 | 0.14.0 | AC22: route retired canon paths and verify audit decisions |

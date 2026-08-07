@@ -968,24 +968,24 @@ fn render_apply_ac(
     );
     b.push_str("\n## Acceptance Tests\n\n");
     b.push_str(
-        "**AT1** [Manual] — Director reads AGENTS.md and confirms it reflects this repo's actual practices; adjust any section that doesn't.\n\n",
+        "**AT1** [Manual] [Pre-release gate] — Director reads AGENTS.md and confirms it reflects this repo's actual practices; adjust any section that doesn't.\n\n",
     );
     b.push_str(
-        "**AT2** [Manual] — Verify govna/roles.md reflects the repo's delivery model (Operator + Director).\n\n",
+        "**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repo's delivery model (Operator + Director).\n\n",
     );
     match symlink_outcome {
         SymlinkOutcome::Created => {
-            b.push_str("**AT3** [Manual] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n");
+            b.push_str("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n");
         }
         SymlinkOutcome::Skipped => {
             b.push_str(
-                "**AT3** [Manual] — CLAUDE.md exists as a regular file, not a symlink to AGENTS.md; this apply left it untouched (see the warning above) — resolve manually if a symlink is needed here.\n\n",
+                "**AT3** [Manual] [Pre-release gate] — CLAUDE.md exists as a regular file, not a symlink to AGENTS.md; this apply left it untouched (see the warning above) — resolve manually if a symlink is needed here.\n\n",
             );
         }
     }
     if migration.is_some() {
         b.push_str(
-            "**AT4** [Manual] — Director confirms every listed `governa/` file was reviewed and either removed or intentionally kept.\n\n",
+            "**AT4** [Manual] [Pre-release gate] — Director confirms every listed `governa/` file was reviewed and either removed or intentionally kept.\n\n",
         );
         b.push_str(
             "**AT5** [Automated] [Pre-release gate] — `governa/` no longer exists in the repo.\n\n",

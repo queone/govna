@@ -1526,18 +1526,18 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
 
     b.push_str("## Acceptance Tests\n\n");
     b.push_str(
-        "**AT1** [Automated] — Canon-coherence precondition passed (emission was not blocked).\n\n",
+        "**AT1** [Automated] [Pre-release gate] — Canon-coherence precondition passed (emission was not blocked).\n\n",
     );
     let mut at_num = 2;
     for f in &sync_entries {
         if !f.boundary.is_empty() {
             b.push_str(&format!(
-                "**AT{at_num}** [Automated] — canon zone of `{}` (above `{}`) matches canon byte-for-byte after sync.\n\n",
+                "**AT{at_num}** [Automated] [Pre-release gate] — canon zone of `{}` (above `{}`) matches canon byte-for-byte after sync.\n\n",
                 f.relpath, f.boundary
             ));
         } else {
             b.push_str(&format!(
-                "**AT{at_num}** [Automated] — `{}` matches canon byte-for-byte after sync.\n\n",
+                "**AT{at_num}** [Automated] [Pre-release gate] — `{}` matches canon byte-for-byte after sync.\n\n",
                 f.relpath
             ));
         }
@@ -1546,7 +1546,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     for f in &migration_entries {
         if f.relpath != governance::BASELINE_PATH {
             b.push_str(&format!(
-                "**AT{at_num}** [Automated] — `{}` is explicitly migrated to the metadata contract before audit adoption completes.\n\n",
+                "**AT{at_num}** [Automated] [Pre-release gate] — `{}` is explicitly migrated to the metadata contract before audit adoption completes.\n\n",
                 f.relpath
             ));
             at_num += 1;
@@ -1554,29 +1554,29 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     }
     if !review_entries.is_empty() || baseline_migration.is_some() {
         b.push_str(&format!(
-            "**AT{at_num}** [Manual] — Director resolved every `### Routing Decisions` item listed above, and the resolution is reflected in the repo.\n\n"
+            "**AT{at_num}** [Manual] [Pre-release gate] — Director resolved every `### Routing Decisions` item listed above, and the resolution is reflected in the repo.\n\n"
         ));
         at_num += 1;
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — Every resolved routing outcome is verified conditionally: sync targets match their rendered canon region; migration sources are absent unless explicitly preserved; canon-backed migration destinations match rendered canon; repo-owned migration destinations satisfy the Director's stated result; delete targets are absent; preserve targets remain and `CHANGELOG.md` carries the required preserve marker.\n\n"
+            "**AT{at_num}** [Automated] [Pre-release gate] — Every resolved routing outcome is verified conditionally: sync targets match their rendered canon region; migration sources are absent unless explicitly preserved; canon-backed migration destinations match rendered canon; repo-owned migration destinations satisfy the Director's stated result; delete targets are absent; preserve targets remain and `CHANGELOG.md` carries the required preserve marker.\n\n"
         ));
         at_num += 1;
     }
     if baseline_migration.is_some() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — The Director-confirmed validation disposition is satisfied after all selected sync, migration, and deletion work: the resolved command succeeds, or `Not applicable` cites repository evidence that no automated content-validation command is declared.\n\n"
+            "**AT{at_num}** [Automated] [Pre-release gate] — The Director-confirmed validation disposition is satisfied after all selected sync, migration, and deletion work: the resolved command succeeds, or `Not applicable` cites repository evidence that no automated content-validation command is declared.\n\n"
         ));
         at_num += 1;
     }
     if !sync_entries.is_empty() || !migration_entries.is_empty() || !review_entries.is_empty() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — For each file listed under `## In Scope` except `govna/canon-baseline.txt`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary.\n\n"
+            "**AT{at_num}** [Automated] [Pre-release gate] — For each file listed under `## In Scope` except `govna/canon-baseline.txt`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary.\n\n"
         ));
         at_num += 1;
     }
     if baseline_migration.is_some() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — After every other applicable automated AT, resolved routing outcome, and the resolved validation disposition passes, `govna/canon-baseline.txt` is installed or replaced from the same scratch render and verified as the final audit-adoption step.\n\n"
+            "**AT{at_num}** [Automated] [Pre-release gate] — After every other applicable automated AT, resolved routing outcome, and the resolved validation disposition passes, `govna/canon-baseline.txt` is installed or replaced from the same scratch render and verified as the final audit-adoption step.\n\n"
         ));
     }
 

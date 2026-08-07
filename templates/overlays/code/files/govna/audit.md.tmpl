@@ -104,4 +104,6 @@ Every Director-resolved routing target becomes effective implementation scope wh
 
 Emitted acceptance tests verify sync, migration, deletion, and preservation according to the resolved outcome. The pre-install rendered-canon blanket covers declared sync items except `govna/canon-baseline.txt`, routing targets resolved as sync, and canon-backed migration destinations. After all selected work, the resolved validation command must succeed, or the `Not applicable` evidence must hold. Only after every other applicable automated AT and routing outcome passes does the baseline get installed and verified separately from the same scratch render as the final adoption step.
 
+Every audit-emitted AT carries exactly one source axis and one explicit timing axis. Current audit ATs use `[Automated] [Pre-release gate]` or `[Manual] [Pre-release gate]`; none defer verification until after release.
+
 Pass `--json` to also print a machine-readable report (`header`: invocation, canon SHA, target, flavor and its source, repo name, govna/code-stack versions from metadata; `files`: one entry per scanned file with its classification, diff, prior commits, matched preserve markers, canon reference, and mixed-content boundary where applicable; `emitted`: the stub's path) alongside the markdown emission.

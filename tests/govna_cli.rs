@@ -675,6 +675,22 @@ fn markdown_section<'a>(content: &'a str, heading: &str) -> &'a str {
         .map_or(after_heading, |(section, _)| section)
 }
 
+fn assert_at_axes(stub: &str) {
+    let lines: Vec<_> = stub
+        .lines()
+        .filter(|line| line.starts_with("**AT"))
+        .collect();
+    assert!(!lines.is_empty(), "no AT lines: {stub}");
+    for line in lines {
+        let source_axes = line.matches("[Automated]").count() + line.matches("[Manual]").count();
+        let timing_axes = line.matches("[Pre-release gate]").count()
+            + line.matches("[Post-release verification]").count();
+        assert_eq!(source_axes, 1, "source axis: {line}");
+        assert_eq!(timing_axes, 1, "timing axis: {line}");
+        assert!(!line.contains("[Post-release verification]"), "{line}");
+    }
+}
+
 fn audit_json(dir: &Path) -> serde_json::Value {
     let out = govna()
         .args(["audit", "--json"])
@@ -686,12 +702,15 @@ fn audit_json(dir: &Path) -> serde_json::Value {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
         panic!(
             "invalid JSON: {e}\n{}",
             String::from_utf8_lossy(&out.stdout)
         )
-    })
+    });
+    let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    assert_at_axes(&stub);
+    report
 }
 
 fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a serde_json::Value> {
@@ -1892,6 +1911,7 @@ fn apply_adoption_ac_has_required_sections() {
         String::from_utf8_lossy(&out.stderr)
     );
     let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    assert_at_axes(&ac);
     for heading in [
         "## Summary",
         "## In Scope",
@@ -1954,6 +1974,7 @@ fn rm_fresh_fixture_pure_canon_deletes() {
     );
 
     let stub = read(&dir.join(format!("govna/ac1-govna-rm-{version}.md")));
+    assert_at_axes(&stub);
     assert!(
         stub.contains("- `govna/roles.md` — delete file; byte-equal govna canon."),
         "{stub}"
@@ -2278,6 +2299,7 @@ fn apply_migration_emits_single_merged_ac() {
 
     let version = canon_version(&dir);
     let ac = read(&dir.join(format!("govna/ac1-govna-apply-{version}.md")));
+    assert_at_axes(&ac);
     assert!(ac.contains("## Migration findings"), "{ac}");
     assert!(ac.contains("## In Scope"), "{ac}");
     assert!(ac.contains("### In Scope (legacy governa/ tree)"), "{ac}");
@@ -2701,6 +2723,7 @@ fn apply_existing_mode_ac_labels_preserved_files_correctly() {
         .output()
         .unwrap();
     let ac = read(&dir.join("govna/ac2-govna-apply.md"));
+    assert_at_axes(&ac);
     for path in ["README.md", "CHANGELOG.md", "arch.md", "plan.md"] {
         assert!(
             ac.contains(&format!("- `{path}` (existing content preserved)")),
@@ -2721,6 +2744,7 @@ fn apply_ac_at1_is_manual_review_wording() {
         .output()
         .unwrap();
     let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    assert_at_axes(&ac);
     assert!(
         ac.contains(
             "Director reads AGENTS.md and confirms it reflects this repo's actual practices"
@@ -2741,6 +2765,7 @@ fn apply_ac_at3_reflects_symlink_conflict() {
         .output()
         .unwrap();
     let ac = read(&dir.join("govna/ac1-govna-apply.md"));
+    assert_at_axes(&ac);
     assert!(
         ac.contains("CLAUDE.md exists as a regular file, not a symlink to AGENTS.md"),
         "{ac}"
@@ -2844,11 +2869,18 @@ fn render_audit_docs_and_version_match_authority() {
             "Run the resolved validation command after all selected sync, migration, and deletion work",
             "Cite repository evidence when resolving validation as `Not applicable`",
             "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test",
+            "Treat standalone `Ratify` or `ratify` after successful Implement completion as the Director's acceptance action",
+            "Perform the final non-mutating review during the same Ratify turn",
+            "Complete Ratify in that turn when the review finds no issue",
+            "Return Ratify feedback to Refine for contract or scope changes without completing Ratify",
+            "Return Ratify feedback to Implement for implementation-only corrections without completing Ratify",
+            "Skip requests for a second acceptance signal after a clean Ratify review",
         ] {
             assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.7.0\n"));
+        assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.8.0\n"));
         for relpath in [
             "govna/ac-template.md",
             "govna/build-release.md",
@@ -2861,6 +2893,42 @@ fn render_audit_docs_and_version_match_authority() {
                 assert!(!content.contains("resolves a audit"), "{}", path.display());
             }
         }
+    }
+    let development_cycle = read(&repo_root.join("govna/development-cycle.md"));
+    let code_cycle = read(&code_dir.join("govna/development-cycle.md"));
+    let doc_cycle = read(&doc_dir.join("govna/editing-cycle.md"));
+    assert_eq!(code_cycle, development_cycle);
+    for workflow in [&development_cycle, &code_cycle, &doc_cycle] {
+        for rule in [
+            "Treat standalone `Ratify` or `ratify` as the Director acceptance action",
+            "completes Ratify when that review is clean",
+            "request no second acceptance signal",
+            "without completing Ratify",
+            "Perform Package only when explicitly requested",
+        ] {
+            assert!(workflow.contains(rule), "{rule}: {workflow}");
+        }
+    }
+    for roles in [
+        read(&repo_root.join("govna/roles.md")),
+        read(&code_dir.join("govna/roles.md")),
+        read(&doc_dir.join("govna/roles.md")),
+    ] {
+        assert!(roles.contains("Treat Ratify as the director's acceptance of delivered AC work"));
+        assert!(roles.contains("do not begin Package without a separate explicit request"));
+    }
+    let ac_template = read(&repo_root.join("govna/ac-template.md"));
+    assert_at_axes(&ac_template);
+    assert!(ac_template.contains("always write the selected label explicitly"));
+    let authority_acceptance_tests = markdown_section(&ac_template, "Acceptance Tests");
+    for dir in [&code_dir, &doc_dir] {
+        let rendered_template = read(&dir.join("govna/ac-template.md"));
+        assert_eq!(
+            markdown_section(&rendered_template, "Acceptance Tests"),
+            authority_acceptance_tests
+        );
+        assert_at_axes(&rendered_template);
+        assert!(rendered_template.contains("always write the selected label explicitly"));
     }
     for relpath in ["govna/ac-template.md", "govna/build-release.md"] {
         let content = read(&repo_root.join(relpath));
@@ -2923,7 +2991,7 @@ fn render_code_build_reuse_rationale_matches_authority() {
     ] {
         assert!(section(&authority).contains(expected), "{expected}");
     }
-    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.7.0\n"));
+    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.8.0\n"));
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
 }
 
