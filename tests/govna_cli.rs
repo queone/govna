@@ -589,6 +589,19 @@ fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a s
         .find(|f| f["relpath"] == relpath)
 }
 
+/// Reads the live-rendered canon_version from `dir`'s own govna/metadata.txt
+/// (e.g. "v0.2.0") — avoids hardcoding CANON_VERSION's current value in
+/// filename/content assertions, which would otherwise need manual updating
+/// in every affected test on every bump.
+fn canon_version(dir: &Path) -> String {
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    metadata
+        .lines()
+        .find_map(|l| l.strip_prefix("canon_version = "))
+        .expect("canon_version line missing")
+        .to_string()
+}
+
 // drift-scan refuses to run against govna's own source checkout —
 // proves refuse_govna_source runs before require_govna_adopted, even though
 // this repo would otherwise pass the positive adoption check (it has
@@ -651,6 +664,48 @@ fn drift_scan_fresh_fixture_all_match() {
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
     let stub = read(&stub_path);
     assert!(stub.contains("No sync items."), "{stub}");
+    // Nothing to sync/migrate/review — no vacuous "verify via diff" AT.
+    assert!(!stub.contains("**AT2**"), "{stub}");
+}
+
+// govna/metadata.txt's stale canon_version gets bookkeeping-specific
+// Routing Decision wording, not the generic 3-way sync/preserve/pin framing
+// (which offers no coherent "preserve"/"pin" option for a version marker).
+#[test]
+fn drift_scan_metadata_txt_ambiguity_has_stale_version_wording() {
+    let dir = rendered_code_fixture();
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    let current = format!("canon_version = {}", canon_version(&dir));
+    let stale: String = metadata
+        .lines()
+        .map(|l| {
+            if l.starts_with("canon_version = ") {
+                "canon_version = v0.0.0-stale-fixture"
+            } else {
+                l
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    assert_ne!(metadata, stale, "canon_version line not found in fixture");
+    assert!(metadata.contains(&current), "{metadata}");
+    fs::write(dir.join("govna/metadata.txt"), stale).unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "stale version"]);
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "govna/metadata.txt").unwrap();
+    assert_eq!(fr["classification"], "ambiguity");
+    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
+    let stub = read(&stub_path);
+    assert!(
+        stub.contains("most likely a stale `canon_version` marker"),
+        "{stub}"
+    );
+    assert!(
+        !stub.contains("sync to canon, preserve as repo-owned, or pin"),
+        "{stub}"
+    );
 }
 
 // a committed edit to a non-format-defining file with git history
@@ -672,6 +727,19 @@ fn drift_scan_ambiguity_routes_to_review() {
     let stub = read(&stub_path);
     assert!(stub.contains("### Routing Decisions"));
     assert!(stub.contains("govna/roles.md"));
+    // Generic ambiguity wording no longer overstates "local commits" — the
+    // divergence might just be staleness, not necessarily a local edit.
+    assert!(
+        stub.contains("`govna/roles.md`**: diverges from canon"),
+        "{stub}"
+    );
+    assert!(!stub.contains("local commits diverge"), "{stub}");
+    // A non-empty Routing Decisions section gets a Manual AT confirming
+    // every listed item was actually resolved.
+    assert!(
+        stub.contains("Director resolved every `### Routing Decisions` item"),
+        "{stub}"
+    );
 }
 
 // format-defining override. AGENTS.md edited above its canon-zone
@@ -706,6 +774,14 @@ fn drift_scan_format_defining_forces_sync() {
         stub.contains("- `AGENTS.md` — ambiguity (format-defining)"),
         "{stub}"
     );
+    // Something landed in ## In Scope (AGENTS.md, forced to sync) — the
+    // final AT is the non-mutating render-canon + diff -ru recipe, not the
+    // old self-defeating "re-run drift-scan" instruction.
+    assert!(
+        stub.contains("`govna render-canon` (per the recipe in `## Summary`) plus `diff -ru`"),
+        "{stub}"
+    );
+    assert!(!stub.contains("Re-running `govna drift-scan`"), "{stub}");
 }
 
 // a preserve marker in CHANGELOG.md suppresses sync — classifies
@@ -1326,6 +1402,7 @@ fn rm_stub(dir: &Path) -> String {
 #[test]
 fn rm_fresh_fixture_pure_canon_deletes() {
     let dir = rendered_code_fixture();
+    let version = canon_version(&dir);
     let out = govna().arg("rm").current_dir(&dir).output().unwrap();
     assert!(
         out.status.success(),
@@ -1335,10 +1412,16 @@ fn rm_fresh_fixture_pure_canon_deletes() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("ac1-govna-rm-"), "{stdout}");
     assert!(!stdout.contains("-diffs.md"), "{stdout}");
-    assert!(dir.join("govna/ac1-govna-rm-v0.2.0.md").is_file());
-    assert!(!dir.join("govna/ac1-govna-rm-v0.2.0-diffs.md").exists());
+    assert!(
+        dir.join(format!("govna/ac1-govna-rm-{version}.md"))
+            .is_file()
+    );
+    assert!(
+        !dir.join(format!("govna/ac1-govna-rm-{version}-diffs.md"))
+            .exists()
+    );
 
-    let stub = read(&dir.join("govna/ac1-govna-rm-v0.2.0.md"));
+    let stub = read(&dir.join(format!("govna/ac1-govna-rm-{version}.md")));
     assert!(
         stub.contains("- `govna/roles.md` — delete file; byte-equal govna canon."),
         "{stub}"
@@ -1423,6 +1506,7 @@ fn rm_target_only_file_kept() {
 #[test]
 fn rm_edited_canon_file_routes_to_ambiguity() {
     let dir = rendered_code_fixture();
+    let version = canon_version(&dir);
     fs::write(
         dir.join("govna/roles.md"),
         format!("{}\nextra line\n", read(&dir.join("govna/roles.md"))),
@@ -1437,7 +1521,7 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let stub = read(&dir.join("govna/ac1-govna-rm-v0.2.0.md"));
+    let stub = read(&dir.join(format!("govna/ac1-govna-rm-{version}.md")));
     assert!(
         stub.contains("`govna/roles.md` is consumer-edited canon file"),
         "{stub}"
@@ -1448,7 +1532,10 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
         ),
         "{stub}"
     );
-    assert!(!dir.join("govna/ac1-govna-rm-v0.2.0-diffs.md").exists());
+    assert!(
+        !dir.join(format!("govna/ac1-govna-rm-{version}-diffs.md"))
+            .exists()
+    );
 }
 
 // re-running unedited reuses the same AC number for both files;
@@ -1456,6 +1543,7 @@ fn rm_edited_canon_file_routes_to_ambiguity() {
 #[test]
 fn rm_idempotent_reuse_and_edit_detection_guard() {
     let dir = rendered_code_fixture();
+    let version = canon_version(&dir);
     let out1 = govna().arg("rm").current_dir(&dir).output().unwrap();
     assert!(out1.status.success());
     let stdout1 = String::from_utf8_lossy(&out1.stdout).to_string();
@@ -1465,7 +1553,7 @@ fn rm_idempotent_reuse_and_edit_detection_guard() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout).to_string();
     assert_eq!(stdout1, stdout2, "AC number should be reused");
 
-    let stub_path = dir.join("govna/ac1-govna-rm-v0.2.0.md");
+    let stub_path = dir.join(format!("govna/ac1-govna-rm-{version}.md"));
     let tampered = format!("{}\ntampered\n", read(&stub_path));
     fs::write(&stub_path, tampered).unwrap();
     let out3 = govna().arg("rm").current_dir(&dir).output().unwrap();
@@ -1510,6 +1598,7 @@ fn rm_requires_adoption_and_git_worktree() {
 #[test]
 fn rm_flavor_override_changes_canon_set() {
     let dir = rendered_code_fixture();
+    let version = canon_version(&dir);
     let out = govna()
         .args(["rm", "--flavor", "doc"])
         .current_dir(&dir)
@@ -1520,7 +1609,7 @@ fn rm_flavor_override_changes_canon_set() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let stub = read(&dir.join("govna/ac1-govna-rm-v0.2.0.md"));
+    let stub = read(&dir.join(format!("govna/ac1-govna-rm-{version}.md")));
     // Under DOC's canon (forced via --flavor), development-guidelines.md
     // isn't a canon path at all — it becomes target-only, not a hybrid
     // Routing Decision the way it is under CODE's canon.
@@ -1655,7 +1744,8 @@ fn apply_migration_emits_single_merged_ac() {
         "expected exactly one AC file: {ac_files:?}"
     );
 
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
+    let version = canon_version(&dir);
+    let ac = read(&dir.join(format!("govna/ac1-govna-apply-{version}.md")));
     assert!(ac.contains("## Migration findings"), "{ac}");
     assert!(ac.contains("## In Scope"), "{ac}");
     assert!(ac.contains("### In Scope (legacy governa/ tree)"), "{ac}");
@@ -1682,7 +1772,8 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
+    let version = canon_version(&dir);
+    let ac = read(&dir.join(format!("govna/ac1-govna-apply-{version}.md")));
     assert!(
         ac.contains("- `governa/roles.md` — confirmed safe; confirmed byte-identical"),
         "{ac}"
@@ -1701,7 +1792,8 @@ fn apply_migration_precise_tier_classifies_via_fake_governa() {
         "{}",
         String::from_utf8_lossy(&out2.stderr)
     );
-    let ac2 = read(&dir2.join("govna/ac1-govna-apply-v0.2.0.md"));
+    let version2 = canon_version(&dir2);
+    let ac2 = read(&dir2.join(format!("govna/ac1-govna-apply-{version2}.md")));
     assert!(
         ac2.contains(
             "Compare with: `governa render-canon --flavor code --stack Rust <scratch> && diff -ru <scratch>/governa/roles.md governa/roles.md`"
@@ -1729,7 +1821,8 @@ fn apply_migration_crude_tier_fallback_no_governa_binary() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
+    let version = canon_version(&dir);
+    let ac = read(&dir.join(format!("govna/ac1-govna-apply-{version}.md")));
     assert!(
         ac.contains("- `governa/roles.md` — likely superseded; likely superseded by `govna/roles.md`; compare manually before removing."),
         "{ac}"
@@ -1763,7 +1856,8 @@ fn apply_migration_falls_back_when_render_canon_fails() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let ac = read(&dir.join("govna/ac1-govna-apply-v0.2.0.md"));
+    let version = canon_version(&dir);
+    let ac = read(&dir.join(format!("govna/ac1-govna-apply-{version}.md")));
     assert!(ac.contains("likely superseded by `govna/roles.md`"), "{ac}");
 }
 
@@ -1781,7 +1875,11 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
         .output()
         .unwrap();
     assert!(out1.status.success());
-    assert!(dir.join("govna/ac1-govna-apply-v0.2.0.md").is_file());
+    let version = canon_version(&dir);
+    assert!(
+        dir.join(format!("govna/ac1-govna-apply-{version}.md"))
+            .is_file()
+    );
 
     let out2 = govna()
         .args(["apply", "-f", "code", "-s", "rust"])
@@ -1791,11 +1889,12 @@ fn apply_migration_idempotent_reuse_and_edit_detection_guard() {
         .unwrap();
     assert!(out2.status.success());
     assert!(
-        !dir.join("govna/ac2-govna-apply-v0.2.0.md").exists(),
+        !dir.join(format!("govna/ac2-govna-apply-{version}.md"))
+            .exists(),
         "should reuse ac1, not allocate ac2"
     );
 
-    let ac_path = dir.join("govna/ac1-govna-apply-v0.2.0.md");
+    let ac_path = dir.join(format!("govna/ac1-govna-apply-{version}.md"));
     let tampered = format!("{}\ntampered\n", read(&ac_path));
     fs::write(&ac_path, tampered).unwrap();
     let out3 = govna()

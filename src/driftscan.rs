@@ -1151,8 +1151,15 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     } else {
         for (i, f) in review_entries.iter().enumerate() {
             match f.classification {
+                Classification::Ambiguity if f.relpath == "govna/metadata.txt" => {
+                    b.push_str(&format!(
+                        "{}. **`{}`**: diverges from canon, most likely a stale `canon_version` marker — sync to update it; if `repo_type`/`code_stack` were also hand-edited here, preserve those and sync `canon_version` separately.\n",
+                        i + 1,
+                        f.relpath
+                    ))
+                }
                 Classification::Ambiguity => b.push_str(&format!(
-                    "{}. **`{}`**: local commits diverge from canon — sync to canon, preserve as repo-owned, or pin via preserve marker?\n",
+                    "{}. **`{}`**: diverges from canon — sync to canon, preserve as repo-owned, or pin via preserve marker?\n",
                     i + 1,
                     f.relpath
                 )),
@@ -1234,9 +1241,17 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         ));
         at_num += 1;
     }
-    b.push_str(&format!(
-        "**AT{at_num}** [Automated] — Re-running `govna drift-scan` after this AC's sync and migration produces a new AC stub whose `## In Scope` list does not name any file completed under this AC.\n\n"
-    ));
+    if !review_entries.is_empty() {
+        b.push_str(&format!(
+            "**AT{at_num}** [Manual] — Director resolved every `### Routing Decisions` item listed above, and the resolution is reflected in the repo.\n\n"
+        ));
+        at_num += 1;
+    }
+    if !sync_entries.is_empty() || !migration_entries.is_empty() {
+        b.push_str(&format!(
+            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, `govna render-canon` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff.\n\n"
+        ));
+    }
 
     b.push_str("## Status\n\n");
     b.push_str("`PENDING` — drift-scan emission; awaiting Director review and implementation authorization.\n");

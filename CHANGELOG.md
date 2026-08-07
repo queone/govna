@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.11.0 | AC18: fix drift-scan stub metadata.txt routing, missing AT, verify AT |
 | 0.10.0 | AC17: bump/auto-check CANON_VERSION, strip leaked Project Rules seed |
 | 0.9.0 | AC16: apply-AC fidelity, DOC closure-audit fork, single migration AC |
 | 0.8.0 | AC15: rename govna_version to canon_version, fix test version drift |
