@@ -11,7 +11,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const PROGRAM_VERSION: &str = "0.11.1";
+const PROGRAM_VERSION: &str = "0.12.0";
 const SOURCE_REPO: &str = "github.com/queone/govna";
 
 fn main() -> ExitCode {

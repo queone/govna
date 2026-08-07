@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.12.0 | AC20: auto-sync stale metadata canon versions |
 | 0.11.1 | AC19: scope drift-scan blanket verification AT for boundary files |
 | 0.11.0 | AC18: fix drift-scan stub metadata.txt routing, missing AT, verify AT |
 | 0.10.0 | AC17: bump/auto-check CANON_VERSION, strip leaked Project Rules seed |

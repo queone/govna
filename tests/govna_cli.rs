@@ -590,7 +590,7 @@ fn file_result<'a>(report: &'a serde_json::Value, relpath: &str) -> Option<&'a s
 }
 
 /// Reads the live-rendered canon_version from `dir`'s own govna/metadata.txt
-/// (e.g. "v0.2.0") — avoids hardcoding CANON_VERSION's current value in
+/// (e.g. "v0.3.0") — avoids hardcoding CANON_VERSION's current value in
 /// filename/content assertions, which would otherwise need manual updating
 /// in every affected test on every bump.
 fn canon_version(dir: &Path) -> String {
@@ -668,11 +668,11 @@ fn drift_scan_fresh_fixture_all_match() {
     assert!(!stub.contains("**AT2**"), "{stub}");
 }
 
-// govna/metadata.txt's stale canon_version gets bookkeeping-specific
-// Routing Decision wording, not the generic 3-way sync/preserve/pin framing
-// (which offers no coherent "preserve"/"pin" option for a version marker).
+// A committed stale canon_version is bookkeeping drift when replacing that
+// field makes metadata byte-equal to canon. Git history does not turn it into
+// a routing decision.
 #[test]
-fn drift_scan_metadata_txt_ambiguity_has_stale_version_wording() {
+fn drift_scan_stale_metadata_version_forces_clear_sync() {
     let dir = rendered_code_fixture();
     let metadata = read(&dir.join("govna/metadata.txt"));
     let current = format!("canon_version = {}", canon_version(&dir));
@@ -680,7 +680,7 @@ fn drift_scan_metadata_txt_ambiguity_has_stale_version_wording() {
         .lines()
         .map(|l| {
             if l.starts_with("canon_version = ") {
-                "canon_version = v0.0.0-stale-fixture"
+                "canon_version = v0.1.0"
             } else {
                 l
             }
@@ -695,17 +695,122 @@ fn drift_scan_metadata_txt_ambiguity_has_stale_version_wording() {
     git(&dir, &["commit", "-q", "-m", "stale version"]);
     let report = drift_scan_json(&dir);
     let fr = file_result(&report, "govna/metadata.txt").unwrap();
-    assert_eq!(fr["classification"], "ambiguity");
+    assert_eq!(fr["classification"], "clear-sync");
     let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
     let stub = read(&stub_path);
     assert!(
-        stub.contains("most likely a stale `canon_version` marker"),
+        stub.contains("- `govna/metadata.txt` — clear-sync"),
         "{stub}"
     );
     assert!(
-        !stub.contains("sync to canon, preserve as repo-owned, or pin"),
+        stub.contains("`None` — no ambiguities or target-only files surfaced."),
         "{stub}"
     );
+    assert!(!stub.contains("**`govna/metadata.txt`**"), "{stub}");
+}
+
+// A preserve marker cannot pin the canon-owned freshness field when it is
+// the only metadata difference.
+#[test]
+fn drift_scan_stale_metadata_version_overrides_preserve_marker() {
+    let dir = rendered_code_fixture();
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    fs::write(
+        dir.join("govna/metadata.txt"),
+        metadata.replacen(
+            &format!("canon_version = {}", canon_version(&dir)),
+            "canon_version = v0.1.0",
+            1,
+        ),
+    )
+    .unwrap();
+    let changelog = read(&dir.join("CHANGELOG.md"));
+    fs::write(
+        dir.join("CHANGELOG.md"),
+        changelog.replacen(
+            "| Unreleased | |",
+            "| Unreleased | preserve govna/metadata.txt |",
+            1,
+        ),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(
+        &dir,
+        &["commit", "-q", "-m", "mark stale metadata preserved"],
+    );
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "govna/metadata.txt").unwrap();
+    assert_eq!(fr["classification"], "clear-sync");
+    assert!(fr.get("preserve_markers").is_none(), "{fr}");
+}
+
+// A lower canon_version does not authorize a field-level merge. Any other
+// metadata difference keeps the whole file in review.
+#[test]
+fn drift_scan_stale_metadata_with_other_difference_routes_to_review() {
+    let dir = rendered_code_fixture();
+    let metadata = read(&dir.join("govna/metadata.txt"));
+    let stale = metadata.replacen(
+        &format!("canon_version = {}", canon_version(&dir)),
+        "canon_version = v0.1.0",
+        1,
+    );
+    fs::write(
+        dir.join("govna/metadata.txt"),
+        format!("{stale}local_field = keep\n"),
+    )
+    .unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "edit another metadata field"]);
+    let report = drift_scan_json(&dir);
+    let fr = file_result(&report, "govna/metadata.txt").unwrap();
+    assert_eq!(fr["classification"], "ambiguity");
+    let stub_path = dir.join(report["emitted"]["ac_stub"].as_str().unwrap());
+    let stub = read(&stub_path);
+    assert!(stub.contains("**`govna/metadata.txt`**"), "{stub}");
+    assert!(
+        !stub.contains("- `govna/metadata.txt` — clear-sync"),
+        "{stub}"
+    );
+}
+
+// A newer or malformed target marker fails before AC allocation/emission.
+#[test]
+fn drift_scan_rejects_non_adoptable_metadata_versions_before_emission() {
+    for (version, expected) in [
+        ("v99.0.0", "upgrade govna"),
+        ("v1.2", "strict vMAJOR.MINOR.PATCH"),
+    ] {
+        let dir = rendered_code_fixture();
+        let metadata = read(&dir.join("govna/metadata.txt"));
+        fs::write(
+            dir.join("govna/metadata.txt"),
+            metadata.replacen(
+                &format!("canon_version = {}", canon_version(&dir)),
+                &format!("canon_version = {version}"),
+                1,
+            ),
+        )
+        .unwrap();
+        let out = govna()
+            .arg("drift-scan")
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains(expected),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            fs::read_dir(dir.join("govna"))
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .all(|entry| !entry.file_name().to_string_lossy().contains("drift-scan-v"))
+        );
+    }
 }
 
 // a committed edit to a non-format-defining file with git history
@@ -2261,6 +2366,39 @@ fn render_canon_doc_closure_audit_bullet_has_no_code_vocabulary() {
         );
     }
     assert!(doc_agents.contains("published page"), "{doc_agents}");
+}
+
+// The authoritative drift-scan documentation is mirrored byte-for-byte into
+// both consumer flavors, and the rendered identity record carries this canon
+// behavior's version.
+#[test]
+fn render_canon_drift_scan_docs_and_version_match_authority() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let authority = read(&repo_root.join("govna/drift-scan.md"));
+    let code_dir = new_fixture();
+    let doc_dir = new_fixture();
+    let code_out = govna()
+        .args([
+            "render-canon",
+            "--flavor",
+            "code",
+            "--stack",
+            "rust",
+            code_dir.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(code_out.status.success());
+    let doc_out = govna()
+        .args(["render-canon", "--flavor", "doc", doc_dir.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(doc_out.status.success());
+
+    for dir in [&code_dir, &doc_dir] {
+        assert_eq!(read(&dir.join("govna/drift-scan.md")), authority);
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.3.0\n"));
+    }
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one

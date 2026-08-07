@@ -65,6 +65,58 @@ const REACHABILITY_HEADER_REMINDER: &str = "Reachability check: verify divergent
 const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: a Director-resolved `sync` for an `ambiguity` item authorizes editing the named target even when it is absent from `## In Scope`; leave this emitted stub unchanged through sync and post-sync verification.";
 const DRIFT_SCAN_MARKER_PREFIX: &str = "<!-- drift-scan: emitted-by govna ";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct StableVersion(u64, u64, u64);
+
+fn parse_canon_version(value: &str, source: &str) -> Result<StableVersion, String> {
+    let Some(raw) = value.strip_prefix('v') else {
+        return Err(format!(
+            "drift-scan: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+        ));
+    };
+    let parts: Vec<&str> = raw.split('.').collect();
+    if parts.len() != 3
+        || parts.iter().any(|part| {
+            part.is_empty()
+                || !part.bytes().all(|byte| byte.is_ascii_digit())
+                || (part.len() > 1 && part.starts_with('0'))
+        })
+    {
+        return Err(format!(
+            "drift-scan: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+        ));
+    }
+    let mut parsed = [0_u64; 3];
+    for (index, part) in parts.iter().enumerate() {
+        parsed[index] = part.parse::<u64>().map_err(|_| {
+            format!(
+                "drift-scan: invalid {source} canon_version {value:?}; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+            )
+        })?;
+    }
+    Ok(StableVersion(parsed[0], parsed[1], parsed[2]))
+}
+
+fn metadata_value<'a>(content: &'a str, key: &str) -> Option<&'a str> {
+    content
+        .lines()
+        .find_map(|line| line.strip_prefix(&format!("{key} = ")))
+}
+
+fn validate_metadata_versions(
+    target_value: &str,
+    embedded_value: &str,
+) -> Result<(StableVersion, StableVersion), String> {
+    let target = parse_canon_version(target_value, "target")?;
+    let embedded = parse_canon_version(embedded_value, "embedded")?;
+    if target > embedded {
+        return Err(format!(
+            "drift-scan: target canon_version {target_value} is newer than embedded canon {embedded_value}; upgrade govna before scanning so consumer metadata is not downgraded"
+        ));
+    }
+    Ok((target, embedded))
+}
+
 // ── report types ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
@@ -380,6 +432,28 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         .map(|op| (op.rel_path, op.content))
         .collect();
 
+    let canon_metadata = canon
+        .get("govna/metadata.txt")
+        .ok_or_else(|| "drift-scan: rendered canon is missing govna/metadata.txt".to_string())?;
+    let embedded_canon_version = metadata_value(canon_metadata, "canon_version")
+        .ok_or_else(|| {
+            "drift-scan: invalid embedded canon_version: govna/metadata.txt is missing the field; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+                .to_string()
+        })?;
+    let metadata_versions = if metadata_present {
+        let target_canon_version = metadata.get("canon_version").ok_or_else(|| {
+            "drift-scan: invalid target canon_version: govna/metadata.txt is missing the field; restore a strict vMAJOR.MINOR.PATCH value before re-running"
+                .to_string()
+        })?;
+        Some(validate_metadata_versions(
+            target_canon_version,
+            embedded_canon_version,
+        )?)
+    } else {
+        parse_canon_version(embedded_canon_version, "embedded")?;
+        None
+    };
+
     let coherence_failures = check_canon_coherence(&canon);
     if !coherence_failures.is_empty() {
         return Ok(write_coherence_failure_report(&coherence_failures));
@@ -417,6 +491,30 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         if relpath == "govna/metadata.txt" && !metadata_present {
             fr.classification = Classification::MigrationRequired;
             fr.compare_command = format!("metadata absent; migration required (canon @ {sha})");
+        } else if relpath == "govna/metadata.txt"
+            && let Some((target_version, embedded_version)) = metadata_versions
+            && target_version < embedded_version
+        {
+            let target_canon_version = metadata.get("canon_version").unwrap();
+            let target_content = std::fs::read_to_string(cfg.target.join(relpath))
+                .map_err(|e| format!("drift-scan: read {relpath}: {e}"))?;
+            let replaced = target_content.replacen(
+                &format!("canon_version = {target_canon_version}"),
+                &format!("canon_version = {embedded_canon_version}"),
+                1,
+            );
+            if replaced == *canon_content {
+                fr.classification = Classification::ClearSync;
+                fr.markers.clear();
+                fr.compare_command = format!(
+                    "stale canon_version {target_canon_version}; automatic sync to {embedded_canon_version} (canon @ {sha})"
+                );
+            } else if fr.classification != Classification::Preserve {
+                fr.classification = Classification::Ambiguity;
+                fr.compare_command = format!(
+                    "stale canon_version {target_canon_version} plus other metadata divergence; whole-file review required (canon @ {sha})"
+                );
+            }
         }
         report.files.push(fr);
     }
@@ -1256,4 +1354,24 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     b.push_str("## Status\n\n");
     b.push_str("`PENDING` — drift-scan emission; awaiting Director review and implementation authorization.\n");
     b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_canon_version, validate_metadata_versions};
+
+    #[test]
+    fn canon_version_parser_rejects_non_strict_embedded_values() {
+        for value in ["0.3.0", "v1.2", "v01.2.3", "v1.2.3-beta"] {
+            let error = parse_canon_version(value, "embedded").unwrap_err();
+            assert!(error.contains("strict vMAJOR.MINOR.PATCH"), "{error}");
+        }
+    }
+
+    #[test]
+    fn metadata_version_validation_rejects_newer_target() {
+        let error = validate_metadata_versions("v1.0.0", "v0.3.0").unwrap_err();
+        assert!(error.contains("upgrade govna"), "{error}");
+        assert!(error.contains("not downgraded"), "{error}");
+    }
 }
