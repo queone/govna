@@ -130,7 +130,7 @@ struct Baseline {
     entries: BTreeMap<String, BaselineEntry>,
 }
 
-fn parse_baseline(content: &str, embedded_version: &str) -> Result<Baseline, String> {
+fn parse_baseline(content: &str, embedded_version: &str, flavor: &str) -> Result<Baseline, String> {
     if !content.ends_with('\n') {
         return Err("audit: invalid govna/canon-baseline.txt: require a final newline".to_string());
     }
@@ -187,6 +187,10 @@ fn parse_baseline(content: &str, embedded_version: &str) -> Result<Baseline, Str
         match (scope, expected_boundary) {
             ("full", None) => {}
             (scope, Some(boundary)) if scope == format!("before:{boundary}") => {}
+            ("full", Some(_))
+                if flavor == "code"
+                    && relpath == "govna/build-release.md"
+                    && baseline_version < StableVersion(0, 11, 0) => {}
             (scope, Some(boundary)) => {
                 return Err(format!(
                     "audit: invalid govna/canon-baseline.txt: {relpath} scope {scope:?} does not match registered boundary {boundary:?}"
@@ -583,7 +587,7 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         };
     let baseline = target_baseline_content
         .as_deref()
-        .map(|content| parse_baseline(content, embedded_canon_version))
+        .map(|content| parse_baseline(content, embedded_canon_version, &flavor))
         .transpose()?;
 
     let coherence_failures = check_canon_coherence(&canon);

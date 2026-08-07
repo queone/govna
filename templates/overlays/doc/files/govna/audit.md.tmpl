@@ -88,6 +88,13 @@ Audit does not flag arbitrary consumer-owned governance documents that have none
 
 Audit fails before emission for malformed fields, duplicate or unsorted paths, invalid hashes, unknown or mismatched scopes, or a baseline canon version newer than embedded canon. A valid manifest missing one file entry routes that divergent file to `ambiguity`. Audit leaves the baseline unchanged; the emitted AC installs or replaces it last after all other work succeeds.
 
+- Accept legacy `full` scope only for `govna/build-release.md` in a CODE target whose baseline canon version predates v0.11.0.
+- Retain the legacy hash only as migration evidence.
+- Apply normal boundary migration and comparison behavior after parsing.
+- Reject the exception for DOC targets, other paths, v0.11.0-or-newer baselines, and every other mismatched scope.
+- Leave the accepted baseline unchanged during audit.
+- Replace it with the rendered bounded baseline only as the emitted adoption AC's final step.
+
 ## Canon-coherence precondition
 
 Before comparing anything against the target, audit checks that govna's own rendered canon is internally coherent — a registry-driven, canon-only precondition (`coherence_rules()`) that would catch cases like an overlay template drifting out of sync with its authority doc. The registry ships empty today. If a future rule fails, audit skips target comparison and emits a coherence-failure report.

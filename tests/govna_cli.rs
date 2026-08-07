@@ -869,6 +869,38 @@ fn replace_baseline_hash(dir: &Path, relpath: &str, content: &str) {
     fs::write(path, replacement).unwrap();
 }
 
+fn rewrite_baseline_version(dir: &Path, version: &str) {
+    let path = dir.join("govna/canon-baseline.txt");
+    let baseline = read(&path);
+    let current = baseline
+        .lines()
+        .find(|line| line.starts_with("canon_version = "))
+        .expect("baseline canon_version missing");
+    fs::write(
+        path,
+        baseline.replacen(current, &format!("canon_version = {version}"), 1),
+    )
+    .unwrap();
+}
+
+fn replace_baseline_entry(dir: &Path, relpath: &str, scope: &str, hash: &str) {
+    let path = dir.join("govna/canon-baseline.txt");
+    let baseline = read(&path);
+    let replacement = baseline
+        .lines()
+        .map(|line| {
+            if line.starts_with(&format!("{relpath}\t")) {
+                format!("{relpath}\t{scope}\t{hash}")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(path, replacement).unwrap();
+}
+
 fn add_baseline_entry(dir: &Path, relpath: &str, content: &str) {
     let path = dir.join("govna/canon-baseline.txt");
     let baseline = read(&path);
@@ -915,6 +947,111 @@ fn audit_baseline_distinguishes_untouched_prior_canon_from_consumer_edit() {
         baseline_before,
         "audit must not advance trust state"
     );
+}
+
+#[test]
+fn audit_accepts_only_eligible_legacy_build_release_full_scope() {
+    for with_marker in [false, true] {
+        let dir = rendered_code_fixture();
+        let legacy = "# Legacy Swift Build and Release\n\nUse SkitVersion.current.\n";
+        fs::write(dir.join("govna/build-release.md"), legacy).unwrap();
+        rewrite_baseline_version(&dir, "v0.10.0");
+        replace_baseline_entry(&dir, "govna/build-release.md", "full", &sha256(legacy));
+        if with_marker {
+            let changelog = read(&dir.join("CHANGELOG.md"));
+            fs::write(
+                dir.join("CHANGELOG.md"),
+                changelog.replacen(
+                    "| Unreleased | |",
+                    "| Unreleased | preserve govna/build-release.md |",
+                    1,
+                ),
+            )
+            .unwrap();
+        }
+        let baseline_before = read(&dir.join("govna/canon-baseline.txt"));
+        let report = audit_json(&dir);
+        let result = file_result(&report, "govna/build-release.md").unwrap();
+        assert_eq!(result["classification"], "ambiguity", "{result}");
+        assert!(
+            result["compare_command"]
+                .as_str()
+                .unwrap()
+                .contains("full file")
+        );
+        if with_marker {
+            assert_eq!(
+                result["preserve_markers"][0],
+                "preserve govna/build-release.md"
+            );
+        }
+        assert_eq!(
+            file_result(&report, "govna/canon-baseline.txt").unwrap()["classification"],
+            "migration-required"
+        );
+        assert_eq!(
+            read(&dir.join("govna/canon-baseline.txt")),
+            baseline_before,
+            "audit must not rewrite the accepted legacy baseline"
+        );
+        let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+        assert!(stub.contains("verified as the final audit-adoption step"));
+    }
+
+    let current_code = rendered_code_fixture();
+    let current_content = read(&current_code.join("govna/build-release.md"));
+    replace_baseline_entry(
+        &current_code,
+        "govna/build-release.md",
+        "full",
+        &sha256(&current_content),
+    );
+    assert_audit_fails_scope_validation(&current_code);
+
+    let doc = rendered_doc_fixture();
+    rewrite_baseline_version(&doc, "v0.10.0");
+    add_baseline_entry(&doc, "govna/build-release.md", "# legacy\n");
+    assert_audit_fails_scope_validation(&doc);
+
+    let other_path = rendered_code_fixture();
+    rewrite_baseline_version(&other_path, "v0.10.0");
+    let agents = read(&other_path.join("AGENTS.md"));
+    replace_baseline_entry(&other_path, "AGENTS.md", "full", &sha256(&agents));
+    assert_audit_fails_scope_validation(&other_path);
+
+    let wrong_boundary = rendered_code_fixture();
+    rewrite_baseline_version(&wrong_boundary, "v0.10.0");
+    let build_release = read(&wrong_boundary.join("govna/build-release.md"));
+    replace_baseline_entry(
+        &wrong_boundary,
+        "govna/build-release.md",
+        "before:## Wrong Boundary",
+        &sha256(&build_release),
+    );
+    assert_audit_fails_scope_validation(&wrong_boundary);
+
+    let bad_hash = rendered_code_fixture();
+    rewrite_baseline_version(&bad_hash, "v0.10.0");
+    replace_baseline_entry(&bad_hash, "govna/build-release.md", "full", "bad");
+    let out = govna()
+        .arg("audit")
+        .current_dir(&bad_hash)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("invalid SHA-256"));
+    assert!(audit_stub_names(&bad_hash).is_empty());
+}
+
+fn assert_audit_fails_scope_validation(dir: &Path) {
+    let out = govna().arg("audit").current_dir(dir).output().unwrap();
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("scope"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(audit_stub_names(dir).is_empty());
 }
 
 #[test]
@@ -1670,7 +1807,7 @@ fn audit_build_release_boundary_scopes_local_and_canon_changes() {
 #[test]
 fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     let dir = rendered_code_fixture();
-    let stub_path = dir.join("govna/ac1-audit-v0.11.0.md");
+    let stub_path = dir.join("govna/ac1-audit-v0.12.0.md");
     let edited = "director-owned edited audit stub\n";
     fs::write(&stub_path, edited).unwrap();
 
@@ -1682,7 +1819,7 @@ fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("no AC emitted"));
     assert_eq!(read(&stub_path), edited);
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.11.0.md"]);
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.12.0.md"]);
 }
 
 #[test]
@@ -1694,8 +1831,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.11.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.11.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.12.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.12.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3251,7 +3388,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.11.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.12.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3373,7 +3510,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.11.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.12.0\n"));
     }
     assert!(
         govna()
@@ -3394,7 +3531,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.11.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.12.0\n"));
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one
