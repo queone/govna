@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.14.1 | AC23: retire build recompilation investigation |
 | 0.14.0 | AC22: route retired canon paths and verify audit decisions |
 | 0.13.0 | AC21: add baseline-backed audit and simplify CLI commands |
 | 0.12.0 | AC20: auto-sync stale metadata canon versions |

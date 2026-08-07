@@ -2759,7 +2759,7 @@ fn render_audit_docs_and_version_match_authority() {
             assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.5.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.6.0\n"));
         for relpath in [
             "govna/ac-template.md",
             "govna/build-release.md",
@@ -2782,6 +2782,60 @@ fn render_audit_docs_and_version_match_authority() {
         );
         assert!(content.contains("an audit"), "{relpath}: {content}");
     }
+}
+
+#[test]
+fn render_code_build_reuse_rationale_matches_authority() {
+    fn section(content: &str) -> &str {
+        content
+            .split_once("## Rust Compilation Reuse\n")
+            .expect("Rust Compilation Reuse section missing")
+            .1
+            .split_once("\n## ")
+            .expect("section terminator missing")
+            .0
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let authority = read(&repo_root.join("govna/build-release.md"));
+    let code_dir = new_fixture();
+    let doc_dir = new_fixture();
+    assert!(
+        govna()
+            .args([
+                "render",
+                "--flavor",
+                "code",
+                "--stack",
+                "rust",
+                code_dir.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    assert!(
+        govna()
+            .args(["render", "--flavor", "doc", doc_dir.to_str().unwrap()])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+
+    let rendered = read(&code_dir.join("govna/build-release.md"));
+    assert_eq!(section(&rendered), section(&authority));
+    for expected in [
+        "build duration becomes materially costly",
+        "stable Cargo or Clippy behavior offers measurable artifact reuse",
+        "compiler-cache evaluation only with Director authorization",
+        "toolchain version, exact commands, isolated target-directory conditions, repeated timings, and unchanged validation coverage",
+    ] {
+        assert!(section(&authority).contains(expected), "{expected}");
+    }
+    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.6.0\n"));
+    assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one
