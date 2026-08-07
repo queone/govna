@@ -766,6 +766,22 @@ fn replace_baseline_hash(dir: &Path, relpath: &str, content: &str) {
     fs::write(path, replacement).unwrap();
 }
 
+fn add_baseline_entry(dir: &Path, relpath: &str, content: &str) {
+    let path = dir.join("govna/canon-baseline.txt");
+    let baseline = read(&path);
+    let mut lines = baseline.lines();
+    let schema = lines.next().unwrap();
+    let version = lines.next().unwrap();
+    let mut entries: Vec<String> = lines.map(str::to_string).collect();
+    entries.push(format!("{relpath}\tfull\t{}", sha256(content)));
+    entries.sort();
+    fs::write(
+        path,
+        format!("{schema}\n{version}\n{}\n", entries.join("\n")),
+    )
+    .unwrap();
+}
+
 #[test]
 fn audit_baseline_distinguishes_untouched_prior_canon_from_consumer_edit() {
     let clear_dir = rendered_code_fixture();
@@ -823,6 +839,121 @@ fn audit_missing_baseline_and_entry_route_without_silent_trust() {
         file_result(&report, "govna/roles.md").unwrap()["classification"],
         "ambiguity"
     );
+}
+
+#[test]
+fn audit_routes_prebaseline_retired_path_without_mutation() {
+    let dir = rendered_code_fixture();
+    let retired = "# Retired drift-scan documentation\n";
+    fs::write(dir.join("govna/drift-scan.md"), retired).unwrap();
+    fs::remove_file(dir.join("govna/canon-baseline.txt")).unwrap();
+    let replacement_before = read(&dir.join("govna/audit.md"));
+
+    let report = audit_json(&dir);
+    let matching: Vec<_> = report["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|file| file["relpath"] == "govna/drift-scan.md")
+        .collect();
+    assert_eq!(matching.len(), 1, "{report}");
+    assert_eq!(matching[0]["classification"], "target-has-no-canon");
+    assert!(
+        matching[0]["canon_ref"]
+            .as_str()
+            .unwrap()
+            .contains("replacement: govna/audit.md")
+    );
+    assert!(
+        matching[0]["compare_command"]
+            .as_str()
+            .unwrap()
+            .contains("replacement is present")
+    );
+    assert_eq!(read(&dir.join("govna/drift-scan.md")), retired);
+    assert_eq!(read(&dir.join("govna/audit.md")), replacement_before);
+}
+
+#[test]
+fn audit_routes_prior_baseline_retirement_and_ignores_unrelated_local_doc() {
+    let dir = rendered_code_fixture();
+    let retired_path = "govna/retired-example.md";
+    let retired = "retired canon content\n";
+    fs::write(dir.join(retired_path), retired).unwrap();
+    add_baseline_entry(&dir, retired_path, retired);
+    fs::write(dir.join("govna/local-notes.md"), "consumer owned\n").unwrap();
+
+    let report = audit_json(&dir);
+    assert_eq!(
+        file_result(&report, retired_path).unwrap()["classification"],
+        "target-has-no-canon"
+    );
+    assert!(file_result(&report, "govna/local-notes.md").is_none());
+    assert_eq!(read(&dir.join(retired_path)), retired);
+}
+
+#[test]
+fn audit_merges_retired_path_evidence_and_retains_tombstone_replacement() {
+    let dir = rendered_code_fixture();
+    let retired_path = "govna/drift-scan.md";
+    let retired = "retired canon content\n";
+    fs::write(dir.join(retired_path), retired).unwrap();
+    add_baseline_entry(&dir, retired_path, retired);
+    let later_path = "govna/z-retired.md";
+    fs::write(dir.join(later_path), retired).unwrap();
+    add_baseline_entry(&dir, later_path, retired);
+    let roles = read(&dir.join("govna/roles.md"));
+    fs::write(
+        dir.join("govna/roles.md"),
+        format!("{roles}\nSee `drift-scan.md`.\n"),
+    )
+    .unwrap();
+
+    let report = audit_json(&dir);
+    let matching: Vec<_> = report["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|file| file["relpath"] == retired_path)
+        .collect();
+    assert_eq!(matching.len(), 1, "{report}");
+    assert!(
+        matching[0]["canon_ref"]
+            .as_str()
+            .unwrap()
+            .contains("replacement: govna/audit.md")
+    );
+    let routed_paths: Vec<_> = report["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|file| file["classification"] == "target-has-no-canon")
+        .map(|file| file["relpath"].as_str().unwrap())
+        .collect();
+    let mut sorted_paths = routed_paths.clone();
+    sorted_paths.sort_unstable();
+    assert_eq!(routed_paths, sorted_paths);
+    let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    assert_eq!(stub.matches("**`govna/drift-scan.md`**").count(), 1);
+}
+
+#[test]
+fn audit_requires_replacement_before_recommending_retired_path_deletion() {
+    let dir = rendered_code_fixture();
+    fs::write(dir.join("govna/drift-scan.md"), "retired\n").unwrap();
+    fs::remove_file(dir.join("govna/audit.md")).unwrap();
+    fs::remove_file(dir.join("govna/canon-baseline.txt")).unwrap();
+
+    let report = audit_json(&dir);
+    let retired = file_result(&report, "govna/drift-scan.md").unwrap();
+    assert!(
+        retired["compare_command"]
+            .as_str()
+            .unwrap()
+            .contains("replacement is missing")
+    );
+    assert_eq!(read(&dir.join("govna/drift-scan.md")), "retired\n");
+    assert!(!dir.join("govna/audit.md").exists());
 }
 
 #[test]
@@ -1037,6 +1168,33 @@ fn audit_ambiguity_routes_to_review() {
         stub.contains("Director resolved every `### Routing Decisions` item"),
         "{stub}"
     );
+    assert!(
+        stub.contains("every Director-resolved routing target is effective implementation scope"),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("explicitly named migration destination"),
+        "{stub}"
+    );
+    assert!(stub.contains("`CHANGELOG.md` joins it"), "{stub}");
+    assert!(
+        stub.contains("Do not infer an unnamed migration destination"),
+        "{stub}"
+    );
+    assert!(
+        stub.contains("Every resolved routing outcome is verified conditionally"),
+        "{stub}"
+    );
+    for outcome in [
+        "sync targets match their rendered canon region",
+        "migration sources are absent unless explicitly preserved",
+        "canon-backed migration destinations match rendered canon",
+        "repo-owned migration destinations satisfy the Director's stated result",
+        "delete targets are absent",
+        "preserve targets remain and `CHANGELOG.md` carries the required preserve marker",
+    ] {
+        assert!(stub.contains(outcome), "missing {outcome}:\n{stub}");
+    }
 }
 
 // format-defining override. AGENTS.md edited above its canon-zone
@@ -1076,7 +1234,7 @@ fn audit_format_defining_forces_sync() {
     // old self-defeating "re-run audit" instruction.
     assert!(
         stub.contains(
-            "For each file listed under `## In Scope`, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last."
+            "For each file listed under `## In Scope`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last."
         ),
         "{stub}"
     );
@@ -2557,6 +2715,8 @@ fn render_doc_closure_audit_bullet_has_no_code_vocabulary() {
 fn render_audit_docs_and_version_match_authority() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let authority = read(&repo_root.join("govna/audit.md"));
+    let canon_cycle_authority = read(&repo_root.join("govna/canon-cycle.md"));
+    let agents_authority = read(&repo_root.join("AGENTS.md"));
     let code_dir = new_fixture();
     let doc_dir = new_fixture();
     let code_out = govna()
@@ -2579,7 +2739,48 @@ fn render_audit_docs_and_version_match_authority() {
 
     for dir in [&code_dir, &doc_dir] {
         assert_eq!(read(&dir.join("govna/audit.md")), authority);
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.4.0\n"));
+        assert_eq!(
+            read(&dir.join("govna/canon-cycle.md")),
+            canon_cycle_authority
+        );
+        let agents = read(&dir.join("AGENTS.md"));
+        for rule in [
+            "Treat every Director-resolved routing target as effective implementation scope",
+            "Treat each explicitly named migration destination as effective implementation scope",
+            "Treat `CHANGELOG.md` as effective implementation scope",
+            "Require the Director to name every migration destination",
+            "Verify each resolved sync target",
+            "Verify each migration source",
+            "Verify each canon-backed migration destination",
+            "Verify each repo-owned migration destination",
+            "Verify each resolved delete target",
+            "Verify each resolved preserve target",
+        ] {
+            assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
+            assert!(agents.contains(rule), "{}: {rule}", dir.display());
+        }
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.5.0\n"));
+        for relpath in [
+            "govna/ac-template.md",
+            "govna/build-release.md",
+            "govna/release.md",
+        ] {
+            let path = dir.join(relpath);
+            if path.is_file() {
+                let content = read(&path);
+                assert!(!content.contains("During a audit"), "{}", path.display());
+                assert!(!content.contains("resolves a audit"), "{}", path.display());
+            }
+        }
+    }
+    for relpath in ["govna/ac-template.md", "govna/build-release.md"] {
+        let content = read(&repo_root.join(relpath));
+        assert!(!content.contains("During a audit"), "{relpath}: {content}");
+        assert!(
+            !content.contains("resolves a audit"),
+            "{relpath}: {content}"
+        );
+        assert!(content.contains("an audit"), "{relpath}: {content}");
     }
 }
 

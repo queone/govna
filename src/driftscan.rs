@@ -63,9 +63,10 @@ impl std::fmt::Display for Classification {
 }
 
 const REACHABILITY_HEADER_REMINDER: &str = "Reachability check: verify divergent canon-code branches reach this consumer's structure before treating as drift.";
-const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: a Director-resolved `sync` for an `ambiguity` item authorizes editing the named target even when it is absent from `## In Scope`; leave this emitted stub unchanged through sync and post-sync verification.";
+const ROUTING_RESOLUTION_REMINDER: &str = "Routing resolution: every Director-resolved routing target is effective implementation scope even when absent from `## In Scope`; an explicitly named migration destination joins that scope, and `CHANGELOG.md` joins it when a preserve marker is required. Do not infer an unnamed migration destination. Leave this emitted stub unchanged while implementing and verifying every resolution.";
 const AUDIT_MARKER_PREFIX: &str = "<!-- audit: emitted-by govna ";
 const BASELINE_SCHEMA: &str = "govna-canon-baseline-v1";
+const RETIRED_CANON_PATHS: &[(&str, &str)] = &[("govna/drift-scan.md", "govna/audit.md")];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct StableVersion(u64, u64, u64);
@@ -673,19 +674,13 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         report.files.push(fr);
     }
 
-    // Cross-flavor orphan detection (Part B).
+    // Target-only evidence is merged before report emission so one path can
+    // retain its strongest explanation without appearing more than once.
     let other_flavor = if flavor == "doc" { "code" } else { "doc" };
     let other_canon =
         other_flavor_canon_paths(other_flavor, &repo_name, &cfg.target).unwrap_or_default();
-    for rel in target_governance_files_not_in_canon(&cfg.target, &canon, &other_canon) {
-        let mut fr = FileResult::new(rel.clone());
-        fr.classification = Classification::TargetNoCanon;
-        fr.canon_ref = format!("(no canon path for flavor {flavor})");
-        if let Ok(bytes) = std::fs::read_to_string(cfg.target.join(&rel)) {
-            fr.diff = unified_diff("", &bytes, &rel, cfg.diff_lines);
-        }
-        report.files.push(fr);
-    }
+    let mut target_only =
+        target_only_evidence(&cfg.target, &canon, baseline.as_ref(), &other_canon);
 
     let divergent_for_scan: Vec<FileResult> = report
         .files
@@ -693,24 +688,14 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         .filter(|f| is_divergent_class(f.classification))
         .cloned()
         .collect();
-    let already_surfaced: std::collections::HashSet<String> = report
-        .files
-        .iter()
-        .filter(|f| f.classification == Classification::TargetNoCanon)
-        .map(|f| f.relpath.clone())
-        .collect();
-    for rel in name_referenced_target_only_files(
-        &cfg.target,
-        &divergent_for_scan,
-        &canon,
-        &other_canon,
-        &already_surfaced,
-    ) {
+    for rel in name_referenced_target_only_files(&cfg.target, &divergent_for_scan, &canon) {
+        target_only.entry(rel).or_default().name_reference = true;
+    }
+    for (rel, evidence) in target_only {
         let mut fr = FileResult::new(rel.clone());
         fr.classification = Classification::TargetNoCanon;
-        fr.canon_ref = format!(
-            "(no canon path for flavor {flavor} — name-referenced from a divergent target file)"
-        );
+        fr.canon_ref = evidence.canon_ref(&flavor);
+        fr.compare_command = evidence.routing_explanation(&cfg.target);
         if let Ok(bytes) = std::fs::read_to_string(cfg.target.join(&rel)) {
             fr.diff = unified_diff("", &bytes, &rel, cfg.diff_lines);
         }
@@ -1143,12 +1128,72 @@ fn other_flavor_canon_paths(
 static AC_STUB_PREFIX_RE: std::sync::LazyLock<Regex> =
     std::sync::LazyLock::new(|| Regex::new(r"^ac\d+-").unwrap());
 
-fn target_governance_files_not_in_canon(
+#[derive(Default)]
+struct TargetOnlyEvidence {
+    replacement: Option<&'static str>,
+    prior_baseline: bool,
+    other_flavor: bool,
+    name_reference: bool,
+}
+
+impl TargetOnlyEvidence {
+    fn canon_ref(&self, flavor: &str) -> String {
+        if let Some(replacement) = self.replacement {
+            format!("(retired canon path; replacement: {replacement})")
+        } else if self.prior_baseline {
+            "(present in prior canon baseline; absent from current canon)".to_string()
+        } else if self.other_flavor {
+            format!("(no canon path for flavor {flavor}; present in other flavor canon)")
+        } else {
+            format!(
+                "(no canon path for flavor {flavor}; name-referenced from a divergent target file)"
+            )
+        }
+    }
+
+    fn routing_explanation(&self, target: &Path) -> String {
+        if let Some(replacement) = self.replacement {
+            if target.join(replacement).is_file() {
+                format!(
+                    "retired canon path replaced by {replacement}; replacement is present, so delete or preserve this retired path"
+                )
+            } else {
+                format!(
+                    "retired canon path replaced by {replacement}; replacement is missing, so restore or migrate it before deleting this retired path"
+                )
+            }
+        } else if self.prior_baseline {
+            "path existed in the prior canon baseline but has no current canon counterpart"
+                .to_string()
+        } else if self.other_flavor {
+            "path belongs to the other flavor canon".to_string()
+        } else {
+            "path is name-referenced from a divergent governed file".to_string()
+        }
+    }
+}
+
+fn target_only_evidence(
     target: &Path,
     our_canon: &BTreeMap<String, String>,
+    baseline: Option<&Baseline>,
     other_canon: &std::collections::HashSet<String>,
-) -> Vec<String> {
-    let mut out = Vec::new();
+) -> BTreeMap<String, TargetOnlyEvidence> {
+    let mut out = BTreeMap::<String, TargetOnlyEvidence>::new();
+
+    if let Some(baseline) = baseline {
+        for relpath in baseline.entries.keys() {
+            if !our_canon.contains_key(relpath) && target.join(relpath).is_file() {
+                out.entry(relpath.clone()).or_default().prior_baseline = true;
+            }
+        }
+    }
+    for &(relpath, replacement) in RETIRED_CANON_PATHS {
+        if !our_canon.contains_key(relpath) && target.join(relpath).is_file() {
+            out.entry(relpath.to_string()).or_default().replacement = Some(replacement);
+        }
+    }
+
     let docs_dir = target.join("govna");
     if let Ok(entries) = walk_dir(&docs_dir) {
         for path in entries {
@@ -1165,7 +1210,7 @@ fn target_governance_files_not_in_canon(
                 continue;
             }
             if other_canon.contains(&rel) {
-                out.push(rel);
+                out.entry(rel).or_default().other_flavor = true;
             }
         }
     }
@@ -1179,11 +1224,10 @@ fn target_governance_files_not_in_canon(
                 continue;
             }
             if other_canon.contains(&rel) {
-                out.push(rel);
+                out.entry(rel).or_default().other_flavor = true;
             }
         }
     }
-    out.sort();
     out
 }
 
@@ -1280,8 +1324,6 @@ fn name_referenced_target_only_files(
     target: &Path,
     divergent: &[FileResult],
     our_canon: &BTreeMap<String, String>,
-    other_canon: &std::collections::HashSet<String>,
-    already_surfaced: &std::collections::HashSet<String>,
 ) -> Vec<String> {
     let mut found = std::collections::HashSet::new();
     for f in divergent {
@@ -1297,10 +1339,7 @@ fn name_referenced_target_only_files(
             if !abs_path.is_file() {
                 continue;
             }
-            if our_canon.contains_key(&resolved)
-                || other_canon.contains(&resolved)
-                || already_surfaced.contains(&resolved)
-            {
+            if our_canon.contains_key(&resolved) {
                 continue;
             }
             found.insert(resolved);
@@ -1319,7 +1358,6 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     let mut oos_entries: Vec<&FileResult> = Vec::new();
     let mut review_entries: Vec<&FileResult> = Vec::new();
     let mut format_defining_forced: Vec<&FileResult> = Vec::new();
-    let mut has_ambiguity = false;
 
     for f in &r.files {
         if is_format_defining(&f.relpath)
@@ -1340,9 +1378,6 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
             Classification::Preserve | Classification::ExpectedDivergence => oos_entries.push(f),
             Classification::Ambiguity | Classification::TargetNoCanon => {
                 review_entries.push(f);
-                if f.classification == Classification::Ambiguity {
-                    has_ambiguity = true;
-                }
             }
             Classification::Match => {}
         }
@@ -1372,7 +1407,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         "Sync this repo to govna @ {canon_version} canon as part of the recurring audit cycle. Audit surfaced {}. Use `govna render` to render canon and standard `diff -ru` to inspect per-file changes (see AGENTS.md `### Audit Adoption`).\n\n",
         tally_classifications(&r.files)
     ));
-    if has_ambiguity {
+    if !review_entries.is_empty() {
         b.push_str(ROUTING_RESOLUTION_REMINDER);
         b.push_str("\n\n");
     }
@@ -1423,9 +1458,10 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
                     f.relpath
                 )),
                 Classification::TargetNoCanon => b.push_str(&format!(
-                    "{}. **`{}`**: file exists in target but not in canon for this flavor — keep, delete, or migrate to canon?\n",
+                    "{}. **`{}`**: file exists in target but not in canon for this flavor — keep, delete, or migrate to an explicitly named destination? {}.\n",
                     i + 1,
-                    f.relpath
+                    f.relpath,
+                    f.compare_command
                 )),
                 _ => {}
             }
@@ -1512,10 +1548,14 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
             "**AT{at_num}** [Manual] — Director resolved every `### Routing Decisions` item listed above, and the resolution is reflected in the repo.\n\n"
         ));
         at_num += 1;
-    }
-    if !sync_entries.is_empty() || !migration_entries.is_empty() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against the rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last.\n\n"
+            "**AT{at_num}** [Automated] — Every resolved routing outcome is verified conditionally: sync targets match their rendered canon region; migration sources are absent unless explicitly preserved; canon-backed migration destinations match rendered canon; repo-owned migration destinations satisfy the Director's stated result; delete targets are absent; preserve targets remain and `CHANGELOG.md` carries the required preserve marker.\n\n"
+        ));
+        at_num += 1;
+    }
+    if !sync_entries.is_empty() || !migration_entries.is_empty() || !review_entries.is_empty() {
+        b.push_str(&format!(
+            "**AT{at_num}** [Automated] — For each file listed under `## In Scope`, each routing target resolved as sync, and each canon-backed migration destination, `govna render` (per the recipe in `## Summary`) plus `diff -ru` against rendered canon shows no remaining diff — scoped to the canon zone above the boundary heading for any file whose AT above names a boundary; install or replace `govna/canon-baseline.txt` last.\n\n"
         ));
     }
 

@@ -10,7 +10,7 @@ Provide a self-contained template repo for governed `CODE` and `DOC` repositorie
 - `build.sh` + `tests/build_cli.sh` provide the canonical Rust-stack build/release tooling
 - `govna/` carries the root governance canon docs (`ac-template.md`, `development-guidelines.md`, `audit.md`, `roles.md`, `canon-cycle.md`, `code-stacks.md`, `development-cycle.md`, `operator-contract-rationale.md`, `build-release.md`, `README.md`), describing govna's own implementation
 
-The embedded-template machinery backs `render`, `audit`, and `apply` alike. Rendering also emits `govna/canon-baseline.txt`, a deterministic flavor-specific ledger of SHA-256 hashes over whole-file or registered canon-zone comparison regions.
+The embedded-template machinery backs `render`, `audit`, and `apply` alike. Rendering also emits `govna/canon-baseline.txt`, a deterministic flavor-specific ledger of SHA-256 hashes over whole-file or registered canon-zone comparison regions. Audit uses disappeared baseline entries to route retired canon paths and a bounded tombstone registry to bridge removals that predate baseline adoption; unrelated consumer-owned governance docs remain outside target-only routing.
 
 ## Current Platform
 

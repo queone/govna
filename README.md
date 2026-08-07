@@ -105,7 +105,7 @@ The migration findings compare against a live `governa render-canon` output when
 
 ### `audit`
 
-Run `govna audit` from an adopted consumer repo root to compare it against current canon and emit a `govna/ac<N>-audit-<canon-version>.md` stub listing divergences for Director review. The generated `govna/canon-baseline.txt` lets audit distinguish untouched prior canon from consumer edits without relying on commit history. See [`govna/audit.md`](govna/audit.md) for the full classification model.
+Run `govna audit` from an adopted consumer repo root to compare it against current canon and emit a `govna/ac<N>-audit-<canon-version>.md` stub listing divergences for Director review. The generated `govna/canon-baseline.txt` distinguishes untouched prior canon from consumer edits and identifies previously canonical paths removed from current canon without relying on commit history. A bounded tombstone registry bridges removals that predate baseline adoption while unrelated consumer-owned governance docs remain quiet. See [`govna/audit.md`](govna/audit.md) for the full classification model.
 
 ### `rm`
 
