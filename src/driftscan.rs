@@ -729,7 +729,8 @@ fn run_inner(cfg: &Config) -> Result<ExitCode, String> {
         }
     }
 
-    let stub_body = build_ac_stub(&report, ac_num, &sha);
+    let validation = infer_validation_disposition(&cfg.target, &flavor);
+    let stub_body = build_ac_stub(&report, ac_num, &sha, &validation);
 
     emission::ensure_docs_dir(&cfg.target, "audit")?;
     emission::write_with_marker(&stub_path, AUDIT_MARKER_PREFIX, &sha, &stub_body)?;
@@ -1366,7 +1367,12 @@ fn name_referenced_target_only_files(
 
 // ── AC-stub emission ─────────────────────────────────────────────────────────
 
-fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
+fn build_ac_stub(
+    r: &Report,
+    ac_num: u32,
+    canon_version: &str,
+    validation: &ValidationDisposition,
+) -> String {
     let mut sync_entries: Vec<&FileResult> = Vec::new();
     let mut migration_entries: Vec<&FileResult> = Vec::new();
     let mut oos_entries: Vec<&FileResult> = Vec::new();
@@ -1400,6 +1406,8 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         .iter()
         .copied()
         .find(|f| f.relpath == governance::BASELINE_PATH);
+    let unresolved_validation = baseline_migration.is_some() && validation.is_unresolved();
+    let has_routing_decisions = !review_entries.is_empty() || unresolved_validation;
 
     let mut b = String::new();
     b.push_str(&format!(
@@ -1407,16 +1415,19 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     ));
     if migration_entries.is_empty() {
         b.push_str(&format!(
-            "Adopt {} canon-owned changes from govna {canon_version}; {} entries require routing decisions.\n\n",
+            "Adopt {} canon-owned changes from govna {canon_version}; {} {} require routing decisions.\n\n",
             sync_entries.len(),
-            review_entries.len()
+            review_entries.len(),
+            count_noun(review_entries.len(), "entry", "entries")
         ));
     } else {
         b.push_str(&format!(
-            "Adopt {} canon-owned changes from govna {canon_version}; {} migration items and {} entries require routing decisions.\n\n",
+            "Adopt {} canon-owned changes from govna {canon_version}; {} {} and {} {} require routing decisions.\n\n",
             sync_entries.len(),
             migration_entries.len(),
-            review_entries.len()
+            count_noun(migration_entries.len(), "migration item", "migration items"),
+            review_entries.len(),
+            count_noun(review_entries.len(), "entry", "entries")
         ));
     }
 
@@ -1425,7 +1436,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         "Sync this repo to govna @ {canon_version} canon as part of the recurring audit cycle. Audit surfaced {}. Use `govna render` to render canon and standard `diff -ru` to inspect per-file changes (see AGENTS.md `### Audit Adoption`).\n\n",
         tally_classifications(&r.files)
     ));
-    if !review_entries.is_empty() || baseline_migration.is_some() {
+    if has_routing_decisions {
         b.push_str(ROUTING_RESOLUTION_REMINDER);
         b.push_str("\n\n");
     }
@@ -1446,7 +1457,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         b.push('\n');
     }
     b.push_str("### Routing Decisions\n\n");
-    if review_entries.is_empty() && baseline_migration.is_none() {
+    if !has_routing_decisions {
         b.push_str("`None` — no ambiguities or target-only files surfaced.\n");
     } else {
         for (i, f) in review_entries.iter().enumerate() {
@@ -1472,7 +1483,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
                 _ => {}
             }
         }
-        if baseline_migration.is_some() {
+        if unresolved_validation {
             let item = review_entries.len() + 1;
             if r.header.flavor == "code" {
                 b.push_str(&format!(
@@ -1486,6 +1497,12 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         }
     }
     b.push('\n');
+
+    if baseline_migration.is_some() && !unresolved_validation {
+        b.push_str("### Validation disposition\n\n");
+        b.push_str(validation.evidence());
+        b.push_str("\n\n");
+    }
 
     b.push_str("## In Scope\n\n");
     if sync_entries.is_empty() && migration_entries.is_empty() {
@@ -1566,7 +1583,7 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
             at_num += 1;
         }
     }
-    if !review_entries.is_empty() || baseline_migration.is_some() {
+    if has_routing_decisions {
         b.push_str(&format!(
             "**AT{at_num}** [Manual] [Pre-release gate] — Director resolved every `### Routing Decisions` item listed above, and the resolution is reflected in the repo.\n\n"
         ));
@@ -1578,7 +1595,8 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
     }
     if baseline_migration.is_some() {
         b.push_str(&format!(
-            "**AT{at_num}** [Automated] [Pre-release gate] — The Director-confirmed validation disposition is satisfied after all selected sync, migration, and deletion work: the resolved command succeeds, or `Not applicable` cites repository evidence that no automated content-validation command is declared.\n\n"
+            "**AT{at_num}** [Automated] [Pre-release gate] — {}\n\n",
+            validation.acceptance_test()
         ));
         at_num += 1;
     }
@@ -1599,6 +1617,90 @@ fn build_ac_stub(r: &Report, ac_num: u32, canon_version: &str) -> String {
         "`PENDING` — audit emission; awaiting Director review and implementation authorization.\n",
     );
     b
+}
+
+fn count_noun<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ValidationDisposition {
+    InferredBuild,
+    InferredNotApplicable,
+    UnresolvedCode,
+    UnresolvedDoc,
+}
+
+impl ValidationDisposition {
+    fn is_unresolved(&self) -> bool {
+        matches!(self, Self::UnresolvedCode | Self::UnresolvedDoc)
+    }
+
+    fn evidence(&self) -> &'static str {
+        match self {
+            Self::InferredBuild => {
+                "`./build.sh` — inferred from target `AGENTS.md`: exactly one `Run` declaration names it as the first validation command, exactly one `Use` declaration names it for repository-wide validation, and root `build.sh` is a regular file. No Director confirmation is required."
+            }
+            Self::InferredNotApplicable => {
+                "`Not applicable` — inferred from target `govna/release.md`, which contains the exact canon declaration that DOC repositories define no automated content-validation command; target `AGENTS.md` contains no recognized positive validation declaration. No Director confirmation is required."
+            }
+            Self::UnresolvedCode | Self::UnresolvedDoc => "",
+        }
+    }
+
+    fn acceptance_test(&self) -> &'static str {
+        match self {
+            Self::InferredBuild => {
+                "The inferred `./build.sh` validation disposition is satisfied after all selected sync, migration, and deletion work: `./build.sh` succeeds before baseline installation."
+            }
+            Self::InferredNotApplicable => {
+                "The inferred `Not applicable` validation disposition remains supported after all selected sync, migration, and deletion work: `govna/release.md` declares that DOC repositories define no automated content-validation command and no recognized positive AGENTS.md declaration exists."
+            }
+            Self::UnresolvedCode | Self::UnresolvedDoc => {
+                "The Director-confirmed validation disposition is satisfied after all selected sync, migration, and deletion work: the resolved command succeeds, or `Not applicable` cites repository evidence that no automated content-validation command is declared."
+            }
+        }
+    }
+}
+
+fn infer_validation_disposition(target: &Path, flavor: &str) -> ValidationDisposition {
+    const DOC_NO_VALIDATION: &str = "DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command.";
+
+    let agents = std::fs::read_to_string(target.join("AGENTS.md")).unwrap_or_default();
+    let run_pattern =
+        Regex::new(r"(?m)^- Run `([^`\n]+)` as the first validation command(?:\s|\.|$)[^\n]*$")
+            .unwrap();
+    let use_pattern =
+        Regex::new(r"(?m)^- Use `([^`\n]+)` for repository-wide [^\n]*validation[^\n]*$").unwrap();
+    let run_commands: Vec<_> = run_pattern
+        .captures_iter(&agents)
+        .map(|captures| captures[1].to_string())
+        .collect();
+    let use_commands: Vec<_> = use_pattern
+        .captures_iter(&agents)
+        .map(|captures| captures[1].to_string())
+        .collect();
+    let release = std::fs::read_to_string(target.join("govna/release.md")).unwrap_or_default();
+    let negative_count = release.matches(DOC_NO_VALIDATION).count();
+    let build_is_regular = std::fs::symlink_metadata(target.join("build.sh"))
+        .map(|metadata| metadata.file_type().is_file())
+        .unwrap_or(false);
+
+    if flavor == "code" {
+        if run_commands == ["./build.sh"]
+            && use_commands == ["./build.sh"]
+            && negative_count == 0
+            && build_is_regular
+        {
+            ValidationDisposition::InferredBuild
+        } else {
+            ValidationDisposition::UnresolvedCode
+        }
+    } else if run_commands.is_empty() && use_commands.is_empty() && negative_count == 1 {
+        ValidationDisposition::InferredNotApplicable
+    } else {
+        ValidationDisposition::UnresolvedDoc
+    }
 }
 
 fn is_actionable_file(file: &FileResult) -> bool {

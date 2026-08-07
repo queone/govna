@@ -776,6 +776,18 @@ fn audit_requires_agents_md() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("is not a govna-adopted repo"));
 }
 
+#[test]
+fn audit_rejects_unreadable_agents_path_before_emission() {
+    let dir = new_fixture();
+    fs::create_dir(dir.join("AGENTS.md")).unwrap();
+    fs::create_dir_all(dir.join("govna")).unwrap();
+    fs::write(dir.join("govna/ac-template.md"), "template\n").unwrap();
+    let out = govna().arg("audit").current_dir(&dir).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("AGENTS.md not found"));
+    assert!(audit_stub_names(&dir).is_empty());
+}
+
 // passes require_govna_adopted (AGENTS.md + govna/ac-template.md) but
 // has no .git/ — fails on the git-worktree requirement before classification.
 #[test]
@@ -937,12 +949,25 @@ fn audit_missing_baseline_and_entry_route_without_silent_trust() {
     assert_eq!(migration.matches("`govna/canon-baseline.txt`").count(), 1);
     assert!(migration.contains("install after Director-reviewed migration"));
     assert!(stub.contains("Migration items:\n\n- `govna/canon-baseline.txt`"));
-    assert!(stub.contains("**Validation disposition**: proposed `./build.sh`"));
-    assert!(stub.contains("Director must confirm it or override it in chat"));
+    assert!(stub.contains("### Validation disposition"));
+    assert!(stub.contains("`./build.sh` — inferred from target `AGENTS.md`"));
+    assert!(stub.contains("No Director confirmation is required"));
+    assert!(!stub.contains("Director must confirm it or override it in chat"));
+    assert!(!stub.contains("[Manual]"), "{stub}");
+    assert!(stub.contains("1 migration item and 0 entries"), "{stub}");
+    assert!(!stub.contains("1 migration items"), "{stub}");
+    assert!(!stub.contains("1 entries"), "{stub}");
     assert!(stub.contains("except `govna/canon-baseline.txt`"));
     assert!(stub.contains("every other applicable automated AT"));
     assert!(stub.contains("verified as the final audit-adoption step"));
-    assert!(stub.contains("leave this emitted stub unchanged"));
+    assert!(!stub.contains("leave this emitted stub unchanged"));
+    assert!(
+        stub.find("inferred `./build.sh` validation disposition")
+            .unwrap()
+            < stub
+                .find("verified as the final audit-adoption step")
+                .unwrap()
+    );
 
     let missing_entry = rendered_code_fixture();
     let path = missing_entry.join("govna/canon-baseline.txt");
@@ -959,19 +984,150 @@ fn audit_missing_baseline_and_entry_route_without_silent_trust() {
         file_result(&report, "govna/roles.md").unwrap()["classification"],
         "ambiguity"
     );
+    let stub = read(&missing_entry.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    assert!(stub.contains("1 migration item and 1 entry"), "{stub}");
+    let manual = stub
+        .find("Director resolved every `### Routing Decisions`")
+        .unwrap();
+    let conditional = stub.find("Every resolved routing outcome").unwrap();
+    let validation = stub
+        .find("inferred `./build.sh` validation disposition")
+        .unwrap();
+    let baseline = stub
+        .find("verified as the final audit-adoption step")
+        .unwrap();
+    assert!(manual < conditional && conditional < validation && validation < baseline);
 }
 
 #[test]
-fn audit_doc_baseline_migration_proposes_evidenced_no_validation() {
+fn audit_doc_baseline_migration_infers_evidenced_no_validation() {
     let dir = rendered_doc_fixture();
     fs::remove_file(dir.join("govna/canon-baseline.txt")).unwrap();
 
     let report = audit_json(&dir);
     let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
-    assert!(stub.contains("**Validation disposition**: proposed `Not applicable`"));
-    assert!(stub.contains("standard DOC canon defines no automated content-validation command"));
-    assert!(stub.contains("confirm it with repository evidence or override it in chat"));
-    assert!(stub.contains("repository declares a validation command"));
+    assert!(stub.contains("### Validation disposition"));
+    assert!(stub.contains("`Not applicable` — inferred from target `govna/release.md`"));
+    assert!(stub.contains("No Director confirmation is required"));
+    assert!(!stub.contains("Director must confirm"));
+    assert!(!stub.contains("[Manual]"), "{stub}");
+    assert!(stub.contains("inferred `Not applicable` validation disposition"));
+}
+
+fn remove_agents_rule(dir: &Path, rule: &str) {
+    let path = dir.join("AGENTS.md");
+    let agents = read(&path);
+    assert!(agents.contains(rule), "missing fixture rule: {rule}");
+    fs::write(path, agents.replacen(rule, "", 1)).unwrap();
+}
+
+fn unresolved_validation_stub(dir: &Path) -> String {
+    fs::remove_file(dir.join("govna/canon-baseline.txt")).unwrap();
+    let report = audit_json(dir);
+    let stub = read(&dir.join(report["emitted"]["ac_stub"].as_str().unwrap()));
+    assert!(
+        stub.contains("**Validation disposition**: proposed"),
+        "{stub}"
+    );
+    assert!(stub.contains("Director must confirm"), "{stub}");
+    assert!(stub.contains("[Manual]"), "{stub}");
+    assert!(stub.contains("Every resolved routing outcome"), "{stub}");
+    assert!(
+        stub.find("Director resolved every `### Routing Decisions`")
+            .unwrap()
+            < stub.find("Every resolved routing outcome").unwrap()
+    );
+    stub
+}
+
+#[test]
+fn audit_code_validation_evidence_failures_remain_unresolved() {
+    const RUN_RULE: &str =
+        "- Run `./build.sh` as the first validation command in every validation cycle.\n";
+    const USE_RULE: &str = "- Use `./build.sh` for repository-wide formatting validation, testing, vetting, linting, static analysis, and compilation checks.\n";
+
+    for mutation in 0..6 {
+        let dir = rendered_code_fixture();
+        match mutation {
+            0 => remove_agents_rule(&dir, RUN_RULE),
+            1 => {
+                let path = dir.join("AGENTS.md");
+                let agents = read(&path);
+                fs::write(path, format!("{agents}{RUN_RULE}")).unwrap();
+            }
+            2 => {
+                let path = dir.join("AGENTS.md");
+                let agents = read(&path).replacen(USE_RULE, "- Use `make validate` for repository-wide formatting validation, testing, vetting, linting, static analysis, and compilation checks.\n", 1);
+                fs::write(path, agents).unwrap();
+            }
+            3 => {
+                let path = dir.join("AGENTS.md");
+                let agents = read(&path)
+                    .replace(RUN_RULE, "- Run `make validate` as the first validation command in every validation cycle.\n")
+                    .replace(USE_RULE, "- Use `make validate` for repository-wide formatting validation, testing, vetting, linting, static analysis, and compilation checks.\n");
+                fs::write(path, agents).unwrap();
+            }
+            4 => fs::remove_file(dir.join("build.sh")).unwrap(),
+            5 => {
+                fs::remove_file(dir.join("build.sh")).unwrap();
+                fs::create_dir(dir.join("build.sh")).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let stub = unresolved_validation_stub(&dir);
+        assert!(stub.contains("proposed `./build.sh` based on the CODE flavor"));
+    }
+}
+
+#[test]
+fn audit_doc_validation_evidence_failures_remain_unresolved() {
+    const RUN_RULE: &str =
+        "- Run `./build.sh` as the first validation command in every validation cycle.\n";
+    for mutation in 0..4 {
+        let dir = rendered_doc_fixture();
+        match mutation {
+            0 => fs::remove_file(dir.join("govna/release.md")).unwrap(),
+            1 => {
+                let path = dir.join("govna/release.md");
+                let release = read(&path).replace(
+                    "define no automated content-validation command",
+                    "define no standard content check",
+                );
+                fs::write(path, release).unwrap();
+            }
+            2 => {
+                let path = dir.join("AGENTS.md");
+                fs::write(&path, format!("{}{RUN_RULE}", read(&path))).unwrap();
+            }
+            3 => {
+                let path = dir.join("AGENTS.md");
+                fs::write(&path, format!("{}{RUN_RULE}{RUN_RULE}", read(&path))).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let stub = unresolved_validation_stub(&dir);
+        assert!(stub.contains("proposed `Not applicable`"));
+    }
+}
+
+#[test]
+fn audit_validation_ignores_unrecognized_evidence_loci() {
+    let dir = rendered_code_fixture();
+    const RUN_RULE: &str =
+        "- Run `./build.sh` as the first validation command in every validation cycle.\n";
+    remove_agents_rule(&dir, RUN_RULE);
+    fs::write(dir.join("Makefile"), "validate:\n\t@true\n").unwrap();
+    fs::create_dir_all(dir.join(".github/workflows")).unwrap();
+    fs::write(
+        dir.join(".github/workflows/test.yml"),
+        "run: make validate\n",
+    )
+    .unwrap();
+    let roles_path = dir.join("govna/roles.md");
+    fs::write(&roles_path, format!("{}{RUN_RULE}", read(&roles_path))).unwrap();
+
+    let stub = unresolved_validation_stub(&dir);
+    assert!(stub.contains("Director must confirm"));
 }
 
 #[test]
@@ -1429,7 +1585,7 @@ fn audit_mixed_content_below_boundary_matches() {
 #[test]
 fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     let dir = rendered_code_fixture();
-    let stub_path = dir.join("govna/ac1-audit-v0.9.0.md");
+    let stub_path = dir.join("govna/ac1-audit-v0.10.0.md");
     let edited = "director-owned edited audit stub\n";
     fs::write(&stub_path, edited).unwrap();
 
@@ -1441,7 +1597,7 @@ fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("no AC emitted"));
     assert_eq!(read(&stub_path), edited);
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.9.0.md"]);
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.10.0.md"]);
 }
 
 #[test]
@@ -1453,8 +1609,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.9.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.9.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.10.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.10.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -2933,7 +3089,7 @@ fn render_audit_docs_and_version_match_authority() {
             "Verify each repo-owned migration destination",
             "Verify each resolved delete target",
             "Verify each resolved preserve target",
-            "Confirm or override the emitted validation disposition in chat",
+            "Confirm or override an unresolved emitted validation disposition in chat",
             "Run the resolved validation command after all selected sync, migration, and deletion work",
             "Cite repository evidence when resolving validation as `Not applicable`",
             "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test",
@@ -2948,7 +3104,8 @@ fn render_audit_docs_and_version_match_authority() {
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.9.0\n"));
+        assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.10.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3074,7 +3231,7 @@ fn render_code_build_reuse_rationale_matches_authority() {
     ] {
         assert!(section(&authority).contains(expected), "{expected}");
     }
-    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.9.0\n"));
+    assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.10.0\n"));
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
 }
 
