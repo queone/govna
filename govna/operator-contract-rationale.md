@@ -45,6 +45,14 @@ Audit addresses three classes of slip the session-entry rule cannot cover by its
 
 The session-entry rule shapes what an agent does within a session. Audit keeps the across-session and across-repo picture honest. Both are needed.
 
+## Why Ratify Auto-Corrects Implementation-Only Findings
+
+Ratify's final review sometimes finds a defect that requires no new Director judgment — a broken cross-reference, a missed test, a stale line the Director already implicitly rejected by approving the AC's settled scope during Refine. Pausing for a second Director sign-off on exactly that class of finding adds a review round-trip without adding a decision: the Director already made the relevant call earlier in the cycle (Refine's contract, Implement's authorized scope). Requiring a fresh confirmation for work that stays inside that already-approved boundary is ceremony, not safety.
+
+The boundary that keeps this safe is Out Of Scope, not trust: automatic correction is authorized only for implementation-only findings — defects that do not touch contract, scope, product, security, destructive, publication, or release decisions. Any finding that crosses into those categories routes back to Refine and pauses, exactly as before. The correction loop is also bounded — a minimum of 3 rounds before Ratify defers to Implement — so a finding that keeps resurfacing reaches the Director instead of looping indefinitely.
+
+This mirrors Build Verification's existing diagnostic-and-rerun discipline during Implement, which already lets the Operator fix and reverify without a Director round-trip for every failure. Ratify's auto-correction extends the same principle one phase later, inside the same narrow implementation-only band.
+
 ## Canon Versus Local Flexibility
 
 govna is intentionally constrained at the canon layer. The base `AGENTS.md` contract — Operator/Director roles, AC-first workflow, approval boundaries, file-change discipline, review style, session-entry rule — is short, imperative, and not negotiable. It is not a flexible framework that consumer repos shape to taste. The fewer primitives govna ships, the less there is to drift against.

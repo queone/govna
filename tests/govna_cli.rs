@@ -1929,7 +1929,7 @@ fn audit_build_release_boundary_scopes_local_and_canon_changes() {
 #[test]
 fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     let dir = rendered_code_fixture();
-    let stub_path = dir.join("govna/ac1-audit-v0.13.0.md");
+    let stub_path = dir.join("govna/ac1-audit-v0.14.0.md");
     let edited = "director-owned edited audit stub\n";
     fs::write(&stub_path, edited).unwrap();
 
@@ -1941,7 +1941,7 @@ fn audit_clean_run_leaves_existing_edited_stub_untouched() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("no AC emitted"));
     assert_eq!(read(&stub_path), edited);
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.13.0.md"]);
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.14.0.md"]);
 }
 
 #[test]
@@ -1953,8 +1953,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.13.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.13.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.14.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.14.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3498,10 +3498,15 @@ fn render_audit_docs_and_version_match_authority() {
             "Cite repository evidence when resolving validation as `Not applicable`",
             "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test",
             "Treat standalone `Ratify` or `ratify` after successful Implement completion as the Director's acceptance action",
-            "Perform the final non-mutating review during the same Ratify turn",
+            "Perform the final review during the same Ratify turn",
             "Complete Ratify in that turn when the review finds no issue",
-            "Return Ratify feedback to Refine for contract or scope changes without completing Ratify",
-            "Return Ratify feedback to Implement for implementation-only corrections without completing Ratify",
+            "Apply the Approval Boundaries > General Gates and roles.md `What the Operator Must Defer` boundaries to classify any other Director-owned Ratify finding",
+            "Return Ratify feedback to Refine, without completing Ratify, for a contract, scope, product, security, destructive, publication, or release finding",
+            "Auto-correct an implementation-only finding inline during Ratify",
+            "Rerun applicable validation after an inline Ratify correction",
+            "Skip `./build.sh` in that revalidation only when the correction is documentation-only and not covered by this repo's own build validation",
+            "Repeat the correct-validate-review cycle automatically for at least 3 rounds before treating an implementation-only finding as unresolved",
+            "Return Ratify feedback to Implement, without completing Ratify, for an implementation-only finding still unresolved after 3 rounds",
             "Skip requests for a second acceptance signal after a clean Ratify review",
         ] {
             assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
@@ -3509,7 +3514,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.13.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.14.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3632,7 +3637,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.13.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.14.0\n"));
     }
     assert!(
         govna()
@@ -3653,7 +3658,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.13.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.14.0\n"));
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one

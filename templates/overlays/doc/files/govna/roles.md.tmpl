@@ -29,6 +29,8 @@ An LLM agent in this repo is automatically the Operator. Do not announce the rol
 - Red-team your own work. Question assumptions, push back on under-specified content, and try to break what you just produced.
 - Use objective review language: "Observed", "Expected", "Verify that", "Requirement". Avoid anthropomorphic phrasing.
 - Give findings file and line references; order them by severity.
+- Run `./build.sh` only when reviewing build-relevant changes or when build output is itself part of the claim under review. Skip it for AC critique, doc-only review, and design discussion.
+- Skip `./build.sh` in Ratify's auto-correction revalidation only when the correction is documentation-only and not covered by this repo's own build validation; see `AGENTS.md` Approval Boundaries > Four-Phase Workflow.
 
 ### Self-review (mandatory)
 
@@ -42,6 +44,7 @@ Self-review is mandatory structure, not optional polish. It is the primary mitig
 - Grep for stale references to any file, function, flag, or section that was renamed, moved, or deleted in this change.
 - Check that no heading level was skipped, no duplicate section was introduced, and terminology is consistent across changed files.
 - Red-team your own work: try to break what you just produced, question every assumption, and push back on anything under-specified.
+- Run `./build.sh` and confirm it passes when the change touches build-relevant files (skip for AC critique, doc-only review, design discussion).
 - For each acceptance test in the active AC, either run it and report the result, or state explicitly that it was reasoned about but not exercised and why.
 
 **Completion report (what the Director sees):**
