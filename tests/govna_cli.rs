@@ -1953,8 +1953,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.14.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.14.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.16.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.16.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3508,13 +3508,48 @@ fn render_audit_docs_and_version_match_authority() {
             "Repeat the correct-validate-review cycle automatically for at least 3 rounds before treating an implementation-only finding as unresolved",
             "Return Ratify feedback to Implement, without completing Ratify, for an implementation-only finding still unresolved after 3 rounds",
             "Skip requests for a second acceptance signal after a clean Ratify review",
+            "Apply these rules during Implement, closure-audit correction, and Ratify's implementation-only correction loop",
+            "Require the omitted artifact to fail compilation, execution, rendering, regeneration, settled-behavior verification, or exact-fact accuracy without the change",
+            "Require every omitted production-reference change to have no materially distinct valid outcome",
+            "Update an omitted lockfile only as deterministic output from an explicitly in-scope dependency decision",
+            "Return to Refine when lockfile resolution exposes an unexpected dependency, source, version, feature, or graph choice",
+            "Update an omitted documentation reference only for an exact settled identifier, signature, command, path, or output",
+            "Exempt only that eligible verification artifact from a second file-creation authorization",
+            "Prohibit new production behavior, production files, interfaces, dependency decisions, migrations, or architectural choices",
+            "Return to Refine when more than one materially distinct valid outcome exists",
+            "Record each effective-scope path, triggering in-scope change, and eligibility rule in the applicable Implement or Ratify completion report",
+            "Apply contract-integrity reporting when governance instructions are contradictory, circular, unexecutable, or repeatedly produce a workflow loop",
+            "Define a repeated workflow loop as the same conflict forcing at least two unnecessary phase returns, correction cycles, or Director round-trips",
+            "Report a directly demonstrated contradiction, circular dependency, or unexecutable instruction without waiting for repetition",
+            "Require repository evidence, an observed workflow consequence, or a directly demonstrable consequence for every finding",
+            "Avoid executing a broken or unsafe path solely to produce finding evidence",
+            "Exclude wording preferences, harmless redundancy, speculative conflicts, and disagreement with a settled Director decision",
+            "Cite each source path, section heading, short targeted instruction snippet, and operational effect",
+            "Classify a finding as `Consumer-local` when it depends on one repository's tools, architecture, release process, content model, or operating preference",
+            "Classify a finding as `Govna canon` when it arises from shared phase rules, approval boundaries, scope mechanics, role boundaries, referenced canon, or consumer templates",
+            "Classify a finding as `Unclear` when repository evidence supports both destinations",
+            "Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon",
+            "Mark every temporary consumer mitigation explicitly and state its removal condition",
+            "Prohibit a temporary consumer mitigation from overriding or contradicting canon",
+            "Continue unaffected authorized work when a finding is non-blocking",
+            "Report a non-blocking finding in the next substantive response",
+            "Recheck an acknowledged or deferred finding silently while its evidence, impact, classification, and recommended correction remain unchanged",
+            "Report an acknowledged or deferred finding again only when one of those elements changes",
+            "Keep an unauthorized finding in chat and the active session",
+            "Record an authorized correction in the governance document that owns the topic",
+            "Prevent the governance-record rule from bypassing authorization for a governance edit",
+            "Prevent contract-integrity reporting from authorizing a new AC phase, governance edit, delegation, commit, publication, or release action",
+            "Record every authorized correction about repo behavior as an edit to the governance doc that owns the topic",
+            "Recheck new or unresolved contract-integrity findings before completing Audit",
+            "Recheck new or unresolved contract-integrity findings before completing Implement and during the closure audit",
+            "Recheck new or unresolved contract-integrity findings during Ratify",
         ] {
             assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.14.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.16.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3553,6 +3588,10 @@ fn render_audit_docs_and_version_match_authority() {
             "completes Ratify when that review is clean",
             "request no second acceptance signal",
             "without completing Ratify",
+            "apply AGENTS.md `### Effective Implementation Scope` to eligible deterministic fallout",
+            "Recheck new or unresolved contract-integrity findings before reporting completion",
+            "Recheck new or unresolved contract-integrity findings",
+            "keep an acknowledged or deferred finding silent until its evidence, impact, classification, or recommended correction changes",
             "Perform Package only when explicitly requested",
         ] {
             assert!(workflow.contains(rule), "{rule}: {workflow}");
@@ -3565,10 +3604,32 @@ fn render_audit_docs_and_version_match_authority() {
     ] {
         assert!(roles.contains("Treat Ratify as the director's acceptance of delivered AC work"));
         assert!(roles.contains("do not begin Package without a separate explicit request"));
+        assert!(roles.contains(
+            "Apply AGENTS.md `### Effective Implementation Scope` without treating an eligible deterministic adjustment as scope expansion"
+        ));
+        assert!(roles.contains(
+            "Do not treat effective implementation scope as authority to resolve a Director-owned decision"
+        ));
+        assert!(roles.contains(
+            "Report evidence-backed contract-integrity findings without treating the report as authority to change governance or advance a phase"
+        ));
+        assert!(roles.contains("Classify each finding as consumer-local, govna canon, or unclear"));
+        assert!(
+            roles.contains("Continue unaffected authorized work when a finding is non-blocking")
+        );
+        assert!(roles.contains(
+            "Stop when a finding blocks safe compliance or requires a Director-owned decision"
+        ));
+        assert!(roles.contains(
+            "Recheck an acknowledged or deferred finding silently until its evidence, impact, classification, or recommended correction changes"
+        ));
     }
     let ac_template = read(&repo_root.join("govna/ac-template.md"));
     assert_at_axes(&ac_template);
     assert!(ac_template.contains("always write the selected label explicitly"));
+    assert!(ac_template.contains(
+        "Apply AGENTS.md `### Effective Implementation Scope` only to eligible deterministic fallout during Implement, closure-audit correction, or Ratify correction"
+    ));
     let authority_acceptance_tests = markdown_section(&ac_template, "Acceptance Tests");
     for dir in [&code_dir, &doc_dir] {
         let rendered_template = read(&dir.join("govna/ac-template.md"));
@@ -3578,6 +3639,34 @@ fn render_audit_docs_and_version_match_authority() {
         );
         assert_at_axes(&rendered_template);
         assert!(rendered_template.contains("always write the selected label explicitly"));
+        assert!(rendered_template.contains(
+            "Apply AGENTS.md `### Effective Implementation Scope` only to eligible deterministic fallout during Implement, closure-audit correction, or Ratify correction"
+        ));
+    }
+    let rationale_authority = read(&repo_root.join("govna/operator-contract-rationale.md"));
+    for rationale in [
+        &rationale_authority,
+        &read(&code_dir.join("govna/operator-contract-rationale.md")),
+        &read(&doc_dir.join("govna/operator-contract-rationale.md")),
+    ] {
+        for boundary in [
+            "## Why Effective Implementation Scope Is Bounded",
+            "The omitted artifact must be directly broken by an authorized change",
+            "The exception stops wherever judgment starts",
+            "The same boundary applies during Implement, closure-audit correction, and Ratify's implementation-only correction loop",
+        ] {
+            assert!(rationale.contains(boundary), "{boundary}: {rationale}");
+        }
+        for boundary in [
+            "## Why Contract Integrity Reporting Is Evidence-Triggered",
+            "agents need not execute a broken or unsafe path to prove it",
+            "Classification determines the recommended destination, not editing authority",
+            "temporary consumer mitigation only when it remains canon-compatible",
+            "Acknowledged or deferred findings are rechecked silently",
+            "until the Director authorizes a governance edit",
+        ] {
+            assert!(rationale.contains(boundary), "{boundary}: {rationale}");
+        }
     }
     {
         let relpath = "govna/ac-template.md";
@@ -3637,7 +3726,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.14.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.16.0\n"));
     }
     assert!(
         govna()
@@ -3658,7 +3747,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.14.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.16.0\n"));
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one

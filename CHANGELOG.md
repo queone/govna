@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.22.0 | AC32+AC33: add bounded scope and contract-integrity reporting |
 | 0.21.0 | AC31: auto-correct Ratify findings and skip build for doc-only fixes |
 | 0.20.0 | AC30: add dedicated preserve registry |
 | 0.19.1 | AC29: accept legacy build-release baseline scope |
