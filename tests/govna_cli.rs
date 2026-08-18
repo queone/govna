@@ -1953,8 +1953,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.18.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.18.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.19.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.19.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3549,7 +3549,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.18.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.19.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3726,7 +3726,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.18.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.19.0\n"));
     }
     assert!(
         govna()
@@ -3747,7 +3747,72 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.18.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.19.0\n"));
+}
+
+#[test]
+fn rendered_rust_prep_validation_token_contract_matches_source() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let rendered_dir = new_fixture();
+    let output = govna()
+        .args([
+            "render",
+            "--flavor",
+            "code",
+            "--stack",
+            "rust",
+            rendered_dir.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let source_build = read(&repo_root.join("build.sh"));
+    let rendered_build = read(&rendered_dir.join("build.sh"));
+    let source_tests = read(&repo_root.join("tests/build_cli.sh"));
+    let rendered_tests = read(&rendered_dir.join("tests/build_cli.sh"));
+    let rendered_release = read(&rendered_dir.join("govna/build-release.md"));
+    let rendered_guidelines = read(&rendered_dir.join("govna/development-guidelines.md"));
+    for expected in [
+        "-t, --validation-token <TOKEN>",
+        "selected_token=\"$cli_token\"",
+        "selected_token=\"${GOVNA_PREP_VALIDATION_TOKEN:-}\"",
+        "validation token option may be used only once",
+    ] {
+        assert!(source_build.contains(expected), "source: {expected}");
+        assert!(rendered_build.contains(expected), "rendered: {expected}");
+    }
+    for expected in [
+        "test_prep_evidence_routing",
+        "test_prep_validation_token_cli",
+        "assert_not_contains \"$output\" \"$token\"",
+    ] {
+        assert!(source_tests.contains(expected), "source tests: {expected}");
+        assert!(
+            rendered_tests.contains(expected),
+            "rendered tests: {expected}"
+        );
+    }
+    assert!(rendered_release.contains("./build.sh prep -t '<token>'"));
+    assert!(rendered_release.contains("compatibility fallback"));
+    assert!(rendered_guidelines.contains("through `-t, --validation-token`"));
+    assert!(rendered_guidelines.contains("only as a compatibility fallback"));
+
+    let shell_tests = Command::new("bash")
+        .arg("tests/build_cli.sh")
+        .current_dir(&rendered_dir)
+        .output()
+        .unwrap();
+    assert!(
+        shell_tests.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&shell_tests.stdout),
+        String::from_utf8_lossy(&shell_tests.stderr)
+    );
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one

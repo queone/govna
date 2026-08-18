@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.25.0 | AC36: add Rust prep validation token option |
 | 0.24.0 | AC35: preserve audit adoption validation evidence |
 | 0.23.0 | AC34: optimize Rust release prep |
 | 0.22.0 | AC32+AC33: add bounded scope and contract-integrity reporting |

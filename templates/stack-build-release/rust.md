@@ -13,8 +13,9 @@ Note: Cargo may compile overlapping dependency graphs separately because Clippy,
 
 ### Rust Release Prep
 
-- Run `GOVNA_PREP_VALIDATION_TOKEN='<token>' ./build.sh prep vX.Y.Z "message"` during Package.
+- Run `./build.sh prep -t '<token>' vX.Y.Z "message"` during Package.
 - Use the token printed by the successful final full build reviewed during Ratify.
+- Treat `GOVNA_PREP_VALIDATION_TOKEN` as a compatibility fallback for callers that omit the option.
 - Run `./build.sh refresh-validation-token -b <scratch-baseline> -t '<token>'` after exact baseline-only audit-adoption completion.
 - Use the refreshed token as Package evidence.
 - Omit the token to require a fallback pre-change full build.
