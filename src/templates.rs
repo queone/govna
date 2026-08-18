@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 /// Embedded canon version, independent of `PROGRAM_VERSION`. Bumped by
 /// hand during release prep until `build.sh prep` automates it.
-pub const CANON_VERSION: &str = "0.19.0";
+pub const CANON_VERSION: &str = "0.20.0";
 
 #[derive(RustEmbed)]
 #[folder = "templates/"]

@@ -1953,8 +1953,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.19.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.19.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.20.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.20.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3549,7 +3549,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.19.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.20.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3726,7 +3726,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.19.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.20.0\n"));
     }
     assert!(
         govna()
@@ -3747,7 +3747,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.19.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.20.0\n"));
 }
 
 #[test]
@@ -3813,6 +3813,42 @@ fn rendered_rust_prep_validation_token_contract_matches_source() {
         String::from_utf8_lossy(&shell_tests.stdout),
         String::from_utf8_lossy(&shell_tests.stderr)
     );
+}
+
+#[test]
+fn rendered_refine_no_change_contract_matches_authority() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let authority_agents = read(&repo_root.join("AGENTS.md"));
+    let authority_cycle = read(&repo_root.join("govna/development-cycle.md"));
+    let code_dir = rendered_code_fixture();
+    let doc_dir = rendered_doc_fixture();
+    let code_agents = read(&code_dir.join("AGENTS.md"));
+    let doc_agents = read(&doc_dir.join("AGENTS.md"));
+    let code_cycle = read(&code_dir.join("govna/development-cycle.md"));
+    let conditional_edit = "Edit the AC during Refine when an Audit finding or settled Director decision requires an AC change.";
+    let no_change = "Complete Refine without editing the AC when no Audit finding or settled Director decision requires an AC change and no Director-specific decision remains unresolved.";
+    let no_implement = "Do not begin implementation during Refine.";
+    let immutable_stub =
+        "Apply each resolved routing action while leaving the emitted AC stub unchanged.";
+    let cycle_conditional_edit =
+        "Edit the AC when an Audit finding or settled Director decision requires an AC change.";
+
+    for agents in [&authority_agents, &code_agents, &doc_agents] {
+        for rule in [conditional_edit, no_change, no_implement, immutable_stub] {
+            assert!(agents.contains(&format!("- {rule}")), "{rule}: {agents}");
+        }
+        assert!(!agents.contains("Edit the AC during Refine;"), "{agents}");
+    }
+    for cycle in [&authority_cycle, &code_cycle] {
+        for rule in [cycle_conditional_edit, no_change] {
+            assert!(cycle.contains(rule), "{rule}: {cycle}");
+        }
+        assert!(
+            cycle.contains("Pause when a Director-specific decision remains unresolved."),
+            "{cycle}"
+        );
+    }
+    assert!(!doc_dir.join("govna/development-cycle.md").exists());
 }
 
 // Fresh CODE and DOC renders both seed ## Project Rules with just the one
