@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.24.0 | AC35: preserve audit adoption validation evidence |
 | 0.23.0 | AC34: optimize Rust release prep |
 | 0.22.0 | AC32+AC33: add bounded scope and contract-integrity reporting |
 | 0.21.0 | AC31: auto-correct Ratify findings and skip build for doc-only fixes |

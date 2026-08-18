@@ -43,6 +43,8 @@ Note: Cargo may compile overlapping dependency graphs separately because Clippy,
 
 - Run `GOVNA_PREP_VALIDATION_TOKEN='<token>' ./build.sh prep vX.Y.Z "message"` during Package.
 - Use the token printed by the successful final full build reviewed during Ratify.
+- Run `./build.sh refresh-validation-token -b <scratch-baseline> -t '<token>'` after exact baseline-only audit-adoption completion.
+- Use the refreshed token as Package evidence.
 - Omit the token to require a fallback pre-change full build.
 - Require prep to recompute HEAD and the Git-visible-state fingerprint before writes.
 - Run one post-change full build after prep writes.
@@ -119,10 +121,9 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 
 ## Project Practices
 
-- Bump each declared binary's literal `PROGRAM_VERSION` before running prep.
-- Bump `Cargo.toml` to the same target version in the same pass.
+- Let prep bump Govna's literal `PROGRAM_VERSION` and `Cargo.toml` package version together after validating current evidence.
 - Preserve every independent utility version during repository release prep.
 - Bump `CANON_VERSION` in `src/templates.rs` when template changes alter rendered canon behavior.
 - Keep `CANON_VERSION` independent from `PROGRAM_VERSION` and the repository package version.
 
-Note: Prep's Cargo version bump is idempotent when `Cargo.toml` already holds the target value. Pre-bumping prevents the pre-check build from observing a transient mismatch with `PROGRAM_VERSION`. Prep never changes `PROGRAM_VERSION` or `CANON_VERSION`; audit silently reports stale canon metadata if a rendered-content change ships without its required canon-version bump.
+Note: Prep validates Govna's current package and utility versions before writes, then changes both declarations together. Prep never changes `CANON_VERSION`; audit silently reports stale canon metadata if a rendered-content change ships without its required canon-version bump.
