@@ -214,7 +214,10 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Treat `Package` as the separate post-Ratify name for release preparation, not as a fifth AC phase.
 - Start `Package` only after an explicit Director request; do not infer it from Ratify acceptance.
 - Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent names for `Package` only after Ratify acceptance.
-- Preserve the existing release-prep implementation, behavior, commands, ordering, and approval boundaries during `Package`.
+- Use the successful final full build and clean Ratify review as current pre-change Package evidence.
+- Pass the full build's validation token to Rust prep during `Package`.
+- Fall back to a pre-change full build when Rust prep evidence is missing or stale.
+- Preserve release-prep mutations, release behavior, and approval boundaries during `Package`.
 
 ### Phase-Advancement Rules
 
@@ -392,7 +395,7 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names the Claude 
 - Preserve independent utility versions during repository release prep; never overwrite them automatically.
 - End every successful build with the actionable `==> To release, run:` heading and the canonical release command when the repository has a next release tag.
 - Mirror every AGENTS.md change that applies to consumer repos across govna source `AGENTS.md`, `templates/base/AGENTS.md`, and `templates/overlays/doc/files/AGENTS.md.tmpl` (CODE consumer inherits base unchanged) before staging the commit.
-- Mirror every change to a doc referenced from AGENTS.md across govna source `govna/`, `templates/overlays/code/files/govna/`, and `templates/overlays/doc/files/govna/` before staging the commit.
+- Mirror every change to a doc referenced from AGENTS.md across each applicable consumer-flavor path in govna source `govna/`, `templates/overlays/code/files/govna/`, and `templates/overlays/doc/files/govna/` before staging the commit.
 - Keep generated repos self-contained — every dependency lives in the generated repo itself.
 - Track forward-looking work in `plan.md` only via IE entries (pre-rubric IEs or AC-pointers, per `plan.md`'s docstring).
 - Limit `plan.md` structure to its existing top-level sections (`## Product Direction`, `## Ideas To Explore`); add new content only as IE bullets.
