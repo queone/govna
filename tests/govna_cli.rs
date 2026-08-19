@@ -573,8 +573,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.22.0"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.22.0"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.22.1"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.22.1"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -2160,8 +2160,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.22.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.22.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.22.1.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.22.1.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3732,8 +3732,14 @@ fn render_audit_docs_and_version_match_authority() {
             "Avoid executing a broken or unsafe path solely to produce finding evidence",
             "Exclude wording preferences, harmless redundancy, speculative conflicts, and disagreement with a settled Director decision",
             "Cite each source path, section heading, short targeted instruction snippet, and operational effect",
-            "Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`; route corrections to `## Project Rules` or the owning repo document",
-            "Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`; route corrections to the authoritative source and every applicable consumer path",
+            "Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`",
+            "Route `Consumer-local` corrections to `## Project Rules` or the owning repo document",
+            "Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`",
+            "Route `Govna canon` corrections to the authoritative source and every applicable consumer path",
+            "Apply an unnumbered action instruction to the sole AC under `govna/`",
+            "Require the AC number when multiple ACs are present",
+            "Pause before any unnamed action",
+            "Treat ambiguous, unrelated, or implicit replies as non-advancing feedback",
             "Classify a finding as `Unclear` when repository evidence supports both destinations",
             "Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon",
             "Mark every temporary consumer mitigation explicitly and state its removal condition",
@@ -3754,9 +3760,46 @@ fn render_audit_docs_and_version_match_authority() {
             assert!(agents_authority.contains(rule), "source AGENTS.md: {rule}");
             assert!(agents.contains(rule), "{}: {rule}", dir.display());
         }
+        for rule in [
+            "Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`.",
+            "Route `Consumer-local` corrections to `## Project Rules` or the owning repo document.",
+            "Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`.",
+            "Route `Govna canon` corrections to the authoritative source and every applicable consumer path.",
+            "Apply an unnumbered action instruction to the sole AC under `govna/`.",
+            "Require the AC number when multiple ACs are present.",
+            "Pause before any unnamed action.",
+            "Treat ambiguous, unrelated, or implicit replies as non-advancing feedback.",
+        ] {
+            let bullet = format!("- {rule}");
+            assert!(
+                agents_authority.lines().any(|line| line == bullet),
+                "source AGENTS.md atomic instruction: {bullet}"
+            );
+            assert!(
+                agents.lines().any(|line| line == bullet),
+                "{} atomic instruction: {bullet}",
+                dir.display()
+            );
+        }
+        for compound in [
+            "Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`; route corrections",
+            "Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`; route corrections",
+            "Apply an unnumbered action instruction to the sole AC under `govna/`; require the AC number",
+            "Pause before any unnamed action; treat ambiguous, unrelated, or implicit replies",
+        ] {
+            assert!(
+                !agents_authority.contains(compound),
+                "source AGENTS.md compound instruction: {compound}"
+            );
+            assert!(
+                !agents.contains(compound),
+                "{} compound instruction: {compound}",
+                dir.display()
+            );
+        }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.22.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.22.1\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3927,7 +3970,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.1\n"));
     }
     assert!(
         govna()
@@ -3948,7 +3991,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.1\n"));
 }
 
 #[test]

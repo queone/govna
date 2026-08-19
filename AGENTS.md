@@ -76,8 +76,10 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - State whether the finding blocks the active authorized work.
 - Recommend one minimal correction when one viable correction exists.
 - Present the best two bounded corrections and a recommendation when multiple viable corrections exist.
-- Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`; route corrections to `## Project Rules` or the owning repo document.
-- Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`; route corrections to the authoritative source and every applicable consumer path.
+- Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`.
+- Route `Consumer-local` corrections to `## Project Rules` or the owning repo document.
+- Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`.
+- Route `Govna canon` corrections to the authoritative source and every applicable consumer path.
 - Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon.
 - Mark every temporary consumer mitigation explicitly and state its removal condition.
 - Prohibit a temporary consumer mitigation from overriding or contradicting canon.
@@ -227,9 +229,11 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Treat only explicit Director action language as authorization to enter the named next action.
 - Treat standalone `Draft` or `draft` as the pre-cycle action that creates the active AC; require the Director to authorize it before creating the AC.
 - Start an AC cycle only when the Director identifies the active AC and explicitly requests Audit.
-- Apply an unnumbered action instruction to the sole AC under `govna/`; require the AC number when multiple ACs are present.
+- Apply an unnumbered action instruction to the sole AC under `govna/`.
+- Require the AC number when multiple ACs are present.
 - Treat a compound request as authorization for only the named action.
-- Pause before any unnamed action; treat ambiguous, unrelated, or implicit replies as non-advancing feedback.
+- Pause before any unnamed action.
+- Treat ambiguous, unrelated, or implicit replies as non-advancing feedback.
 - Interpret Audit, Refine, Implement, and Ratify as workflow phases only in the context of the active AC cycle.
 - Interpret standalone `Package`, `package`, `pack`, or `prep` as post-Ratify Package only after acceptance and explicit request.
 - Do not interpret `run ./build.sh prep ...`, `pack the binary`, `prepare the build`, or non-standalone `prep` as workflow advancement.

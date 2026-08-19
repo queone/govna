@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.28.1 | Fix atomic governance instructions |
 | 0.28.0 | AC39: compress agent contract surface |
 | 0.27.0 | AC38: fix AC identifiers and Refine validation rules |
 | 0.26.0 | AC37: allow no-change Refine for clean audits |
