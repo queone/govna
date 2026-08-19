@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.27.0 | AC38: fix AC identifiers and Refine validation rules |
 | 0.26.0 | AC37: allow no-change Refine for clean audits |
 | 0.25.0 | AC36: add Rust prep validation token option |
 | 0.24.0 | AC35: preserve audit adoption validation evidence |
