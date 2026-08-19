@@ -1,16 +1,14 @@
 # First-Class CODE Stacks
 
-Use this reference for stack selection, canonical validation, artifacts, installation, release prep, and scoped-build behavior.
+Use this reference for CODE stack selection, validation, installation, release prep, and scoped builds.
 
 ## Multi-Utility Versioning
 
 - Keep the repository/package release version separate from each installable utility version.
-- Identify each installable utility by the canonical target name selected by the stack's existing build/install mechanism.
-- Require one explicit strict stable SemVer declaration per installable utility.
+- Identify each utility by its stack-selected canonical target and require one strict stable SemVer declaration.
 - Require each utility's `--version` result to be exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline on stdout with no stderr output.
 - Let each stack adapter choose declaration syntax and source layout while reporting the normalized utility contract.
-- Validate normalized declarations before compilation.
-- Validate compiled version results before installation or release-metadata writes.
+- Validate declarations before compilation and compiled versions before installation or release metadata.
 - Preserve independent utility versions during repository release prep.
 
 ## Go

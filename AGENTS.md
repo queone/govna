@@ -76,10 +76,8 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - State whether the finding blocks the active authorized work.
 - Recommend one minimal correction when one viable correction exists.
 - Present the best two bounded corrections and a recommendation when multiple viable corrections exist.
-- Classify a finding as `Consumer-local` when it depends on one repository's tools, architecture, release process, content model, or operating preference.
-- Route a `Consumer-local` correction to `## Project Rules` or the repo-owned governance document that owns the topic.
-- Classify a finding as `Govna canon` when it arises from shared phase rules, approval boundaries, scope mechanics, role boundaries, referenced canon, or consumer templates.
-- Route a `Govna canon` correction to the authoritative govna source and every applicable consumer template or rendered-consumer path.
+- Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`; route corrections to `## Project Rules` or the owning repo document.
+- Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`; route corrections to the authoritative source and every applicable consumer path.
 - Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon.
 - Mark every temporary consumer mitigation explicitly and state its removal condition.
 - Prohibit a temporary consumer mitigation from overriding or contradicting canon.
@@ -231,11 +229,9 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Start an AC cycle only when the Director identifies the active AC and explicitly requests Audit.
 - Apply an unnumbered action instruction to the sole AC under `govna/`; require the AC number when multiple ACs are present.
 - Treat a compound request as authorization for only the named action.
-- Pause before entering any action not explicitly named by the Director.
-- Treat ambiguous, unrelated, or implicit replies as non-advancing feedback.
+- Pause before any unnamed action; treat ambiguous, unrelated, or implicit replies as non-advancing feedback.
 - Interpret Audit, Refine, Implement, and Ratify as workflow phases only in the context of the active AC cycle.
-- Interpret `Package` as the post-Ratify release-preparation action only after Ratify acceptance and an explicit Director request.
-- Interpret standalone `Package`, `package`, `pack`, and `prep` as equivalent Package instructions only in that context.
+- Interpret standalone `Package`, `package`, `pack`, or `prep` as post-Ratify Package only after acceptance and explicit request.
 - Do not interpret `run ./build.sh prep ...`, `pack the binary`, `prepare the build`, or non-standalone `prep` as workflow advancement.
 - Treat ordinary coding language such as `build`, `package the binary`, or a package-manager command as unrelated to phase advancement.
 - Require explicit operational wording such as `run ./build.sh` before executing a repository command; never infer a shell command from an action name.

@@ -1,9 +1,6 @@
 # Development Guidelines
 
-Engineering guidance for any agent or contributor working in this repo.
-These are durable coding practices, not workflow or process rules.
-For AC workflow, see `AGENTS.md` and `development-cycle.md`. For validation
-and Package release preparation, see `build-release.md`.
+Use these durable coding practices; use `AGENTS.md`, `development-cycle.md`, and `build-release.md` for workflow, validation, and Package.
 Sections above ## Project Practices are govna-maintained canon and update via canon syncs; repo-specific practices in ## Project Practices.
 
 ## Identifier Strategy
@@ -43,8 +40,7 @@ Sections above ## Project Practices are govna-maintained canon and update via ca
 
 ## Testing Expectations
 
-- Tests are part of implementation, not a follow-up step
-- Every new function and error path should have a test before the work is presented as complete
+- Test every new function and error path in the implementation pass.
 - If a code path cannot be tested without mocking infrastructure that is out of scope, document the coverage gap explicitly rather than silently skipping it
 - Label tests that require live systems or manual verification as `[Manual]`
 
@@ -65,9 +61,7 @@ Sections above ## Project Practices are govna-maintained canon and update via ca
 
 ## Documentation Alignment
 
-- Docs ship with the code change that introduces the behavior
-- If a doc references a function, flag, or file path, verify it still exists before publishing
-- Architecture docs (`arch.md`) reflect what is built, not what is planned
+- Ship behavior docs with code, verify every referenced symbol or path, and keep `arch.md` limited to built architecture.
 
 ## Rust Practices
 

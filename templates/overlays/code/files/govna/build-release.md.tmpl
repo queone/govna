@@ -2,11 +2,11 @@
 
 ## Build and Test Rules
 
-- use one canonical local build command and keep this document current
-- run formatting, static checks, tests, and packaging through that command or documented sequence
-- do not trigger release work during routine implementation
+- Keep one documented canonical build command.
+- Route formatting, checks, tests, and packaging through it.
+- Keep release work out of routine implementation.
 
-This repo uses a self-contained `build.sh` for all build, release-prep, and release work. No external govna tools are required; everything runs directly from `build.sh`.
+Use self-contained `build.sh` for build, release prep, and release work without external govna tools.
 
 ### Build Presentation
 
@@ -21,10 +21,7 @@ This repo uses a self-contained `build.sh` for all build, release-prep, and rele
 
 ## Minimum Validation
 
-- formatting passes
-- static checks pass
-- automated tests pass
-- changed docs match actual behavior
+- Require formatting, static checks, automated tests, and behavior-aligned docs to pass.
 
 {{STACK_BUILD_RELEASE_GUIDANCE}}
 

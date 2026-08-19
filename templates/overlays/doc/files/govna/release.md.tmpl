@@ -1,16 +1,14 @@
 # Release
 
-Reference for this repo's release ceremony, pre-release checklist, and acceptance test conventions. The enforceable one-liners live in `AGENTS.md`; this document explains the steps and the rationale.
+Use this release, pre-release, and acceptance-test reference under the authoritative `AGENTS.md` gates.
 
 ## Release Command
 
-This repo uses `./build.sh vX.Y.Z "release message"` to cut releases. The release path shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → annotated tag → push tag → push branch`.
+Run `./build.sh vX.Y.Z "release message"` to show status and planned Git steps, then prompt before `git add → commit → annotated tag → push tag → push branch`.
 
 `build.sh` is self-contained Bash 3.2+ tooling. DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command.
 
-DOC release prep remains repository-wide and does not accept CODE target-selection arguments.
-
-Release messages must be 80 characters or fewer.
+Keep DOC release prep repository-wide, reject CODE target selection, and limit release messages to 80 characters.
 
 DOC repositories do not provide installable utilities, so the independent
 utility-version declaration and `--version` contract does not apply to this

@@ -573,8 +573,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.21.0"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.21.0"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.22.0"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.22.0"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -598,6 +598,149 @@ fn rendered_agents_define_active_ac_exceptions() {
         ),
         "{doc_agents}"
     );
+}
+
+#[test]
+fn rendered_contract_bundle_is_compact_and_preserves_authority() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (source, template) in [
+        (
+            "govna/roles.md",
+            "templates/overlays/code/files/govna/roles.md.tmpl",
+        ),
+        (
+            "govna/development-cycle.md",
+            "templates/overlays/code/files/govna/development-cycle.md.tmpl",
+        ),
+        (
+            "govna/ac-template.md",
+            "templates/overlays/code/files/govna/ac-template.md.tmpl",
+        ),
+        (
+            "govna/audit.md",
+            "templates/overlays/code/files/govna/audit.md.tmpl",
+        ),
+        (
+            "govna/audit.md",
+            "templates/overlays/doc/files/govna/audit.md.tmpl",
+        ),
+        (
+            "govna/canon-cycle.md",
+            "templates/overlays/code/files/govna/canon-cycle.md.tmpl",
+        ),
+        (
+            "govna/canon-cycle.md",
+            "templates/overlays/doc/files/govna/canon-cycle.md.tmpl",
+        ),
+        (
+            "govna/code-stacks.md",
+            "templates/overlays/code/files/govna/code-stacks.md.tmpl",
+        ),
+    ] {
+        assert_eq!(
+            read(&repo.join(source)),
+            read(&repo.join(template)),
+            "{template}"
+        );
+    }
+
+    let root_agents = read(&repo.join("AGENTS.md"));
+    let base_agents = read(&repo.join("templates/base/AGENTS.md"));
+    assert_eq!(
+        root_agents.split("## Project Rules").next(),
+        base_agents.split("## Project Rules").next()
+    );
+
+    let mut bundles = Vec::new();
+    for flavor in ["code", "doc"] {
+        let cwd = new_fixture();
+        if flavor == "code" {
+            fs::write(cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        }
+        let target = new_fixture();
+        let out = govna()
+            .args(["render", "--flavor", flavor, target.to_str().unwrap()])
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{flavor}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        bundles.push((flavor, target));
+    }
+
+    let code_paths = [
+        "AGENTS.md",
+        "govna/roles.md",
+        "govna/development-cycle.md",
+        "govna/development-guidelines.md",
+        "govna/build-release.md",
+        "govna/audit.md",
+        "govna/ac-template.md",
+        "govna/canon-cycle.md",
+        "govna/code-stacks.md",
+        "govna/operator-contract-rationale.md",
+    ];
+    let doc_paths = [
+        "AGENTS.md",
+        "govna/roles.md",
+        "govna/editing-cycle.md",
+        "govna/editing-guidelines.md",
+        "govna/release.md",
+        "govna/audit.md",
+        "govna/ac-template.md",
+        "govna/canon-cycle.md",
+        "govna/operator-contract-rationale.md",
+    ];
+    let counts: Vec<usize> = bundles
+        .iter()
+        .zip([&code_paths[..], &doc_paths[..]])
+        .map(|((_, target), paths)| {
+            paths
+                .iter()
+                .map(|path| read(&target.join(path)).split_whitespace().count())
+                .sum()
+        })
+        .collect();
+    assert!(
+        counts[0] + counts[1] <= 22_880,
+        "CODE={} DOC={} combined={}",
+        counts[0],
+        counts[1],
+        counts[0] + counts[1]
+    );
+
+    let code_agents = read(&bundles[0].1.join("AGENTS.md"));
+    for sentinel in [
+        "Leave every `git commit` for the user to execute",
+        "Pause after Audit and await explicit Director instruction to Refine.",
+        "Edit only the files listed in the AC's `## In Scope` section",
+        "Run `./build.sh` as the first validation command in every validation cycle.",
+        "Start `Package` only after an explicit Director request",
+    ] {
+        assert!(
+            code_agents.contains(sentinel),
+            "missing sentinel: {sentinel}"
+        );
+    }
+    let code_roles = read(&bundles[0].1.join("govna/roles.md"));
+    assert!(code_roles.contains("Report `Verified`, `Red-teamed`, and `Not checked`"));
+    let audit = read(&bundles[0].1.join("govna/audit.md"));
+    for sentinel in [
+        "`clear-sync`",
+        "`migration-required`",
+        "`target-has-no-canon`",
+        "Pass `--json`",
+    ] {
+        assert!(
+            audit.contains(sentinel),
+            "missing audit sentinel: {sentinel}"
+        );
+    }
+    let doc_agents = read(&bundles[1].1.join("AGENTS.md"));
+    assert!(!doc_agents.contains("Use `./build.sh` for repository-wide formatting validation"));
 }
 
 // CLAUDE.md is a symlink to AGENTS.md, for both flavors (govna's deliberate
@@ -2017,8 +2160,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.21.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.21.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.22.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.22.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3535,12 +3678,12 @@ fn render_audit_docs_and_version_match_authority() {
         );
         let canon_cycle = read(&dir.join("govna/canon-cycle.md"));
         assert!(
-            canon_cycle.contains("CODE `govna/build-release.md` (boundary `## Project Practices`)"),
+            canon_cycle.contains("above `## Project Practices` in development/editing guidelines and CODE build-release"),
             "{}: {canon_cycle}",
             dir.display()
         );
         assert!(
-            canon_cycle.contains("DOC `govna/release.md` remains full canon"),
+            canon_cycle.contains("Keep DOC release full canon"),
             "{}: {canon_cycle}",
             dir.display()
         );
@@ -3589,8 +3732,8 @@ fn render_audit_docs_and_version_match_authority() {
             "Avoid executing a broken or unsafe path solely to produce finding evidence",
             "Exclude wording preferences, harmless redundancy, speculative conflicts, and disagreement with a settled Director decision",
             "Cite each source path, section heading, short targeted instruction snippet, and operational effect",
-            "Classify a finding as `Consumer-local` when it depends on one repository's tools, architecture, release process, content model, or operating preference",
-            "Classify a finding as `Govna canon` when it arises from shared phase rules, approval boundaries, scope mechanics, role boundaries, referenced canon, or consumer templates",
+            "Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`; route corrections to `## Project Rules` or the owning repo document",
+            "Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`; route corrections to the authoritative source and every applicable consumer path",
             "Classify a finding as `Unclear` when repository evidence supports both destinations",
             "Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon",
             "Mark every temporary consumer mitigation explicitly and state its removal condition",
@@ -3613,7 +3756,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.21.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.22.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3650,49 +3793,45 @@ fn render_audit_docs_and_version_match_authority() {
         for rule in [
             "Treat standalone `Ratify` or `ratify` as the Director acceptance action",
             "completes Ratify when that review is clean",
-            "request no second acceptance signal",
-            "without completing Ratify",
-            "apply AGENTS.md `### Effective Implementation Scope` to eligible deterministic fallout",
-            "Recheck new or unresolved contract-integrity findings before reporting completion",
-            "Recheck new or unresolved contract-integrity findings",
-            "keep an acknowledged or deferred finding silent until its evidence, impact, classification, or recommended correction changes",
-            "Perform Package only when explicitly requested",
+            "Perform the Director-triggered final review and bounded correction behavior",
+            "only after separate Director authorization",
+            "Apply the complete phase, scope, correction, contract-integrity, and advancement rules in `AGENTS.md`",
         ] {
             assert!(workflow.contains(rule), "{rule}: {workflow}");
         }
+    }
+    for rule in [
+        "Skip requests for a second acceptance signal after a clean Ratify review",
+        "Return Ratify feedback to Refine, without completing Ratify",
+        "Apply `### Effective Implementation Scope` to eligible omitted artifacts during Ratify correction",
+        "Recheck new or unresolved contract-integrity findings during Ratify",
+        "Start `Package` only after an explicit Director request",
+    ] {
+        assert!(
+            agents_authority.contains(rule),
+            "{rule}: {agents_authority}"
+        );
     }
     for roles in [
         read(&repo_root.join("govna/roles.md")),
         read(&code_dir.join("govna/roles.md")),
         read(&doc_dir.join("govna/roles.md")),
     ] {
-        assert!(roles.contains("Treat Ratify as the director's acceptance of delivered AC work"));
-        assert!(roles.contains("do not begin Package without a separate explicit request"));
         assert!(roles.contains(
-            "Apply AGENTS.md `### Effective Implementation Scope` without treating an eligible deterministic adjustment as scope expansion"
+            "Follow AC, phase, scope, correction, completion, and Package rules in `AGENTS.md`"
         ));
         assert!(roles.contains(
             "Do not treat effective implementation scope as authority to resolve a Director-owned decision"
         ));
         assert!(roles.contains(
-            "Report evidence-backed contract-integrity findings without treating the report as authority to change governance or advance a phase"
-        ));
-        assert!(roles.contains("Classify each finding as consumer-local, govna canon, or unclear"));
-        assert!(
-            roles.contains("Continue unaffected authorized work when a finding is non-blocking")
-        );
-        assert!(roles.contains(
-            "Stop when a finding blocks safe compliance or requires a Director-owned decision"
-        ));
-        assert!(roles.contains(
-            "Recheck an acknowledged or deferred finding silently until its evidence, impact, classification, or recommended correction changes"
+            "Keep contract-integrity reports from authorizing governance edits or phase advancement"
         ));
     }
     let ac_template = read(&repo_root.join("govna/ac-template.md"));
     assert_at_axes(&ac_template);
-    assert!(ac_template.contains("always write the selected label explicitly"));
+    assert!(ac_template.contains("Label every AT `[Automated]` or `[Manual]` and `[Pre-release gate]` or `[Post-release verification]`"));
     assert!(ac_template.contains(
-        "Apply AGENTS.md `### Effective Implementation Scope` only to eligible deterministic fallout during Implement, closure-audit correction, or Ratify correction"
+        "apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`"
     ));
     let authority_acceptance_tests = markdown_section(&ac_template, "Acceptance Tests");
     for dir in [&code_dir, &doc_dir] {
@@ -3702,9 +3841,9 @@ fn render_audit_docs_and_version_match_authority() {
             authority_acceptance_tests
         );
         assert_at_axes(&rendered_template);
-        assert!(rendered_template.contains("always write the selected label explicitly"));
+        assert!(rendered_template.contains("Label every AT `[Automated]` or `[Manual]` and `[Pre-release gate]` or `[Post-release verification]`"));
         assert!(rendered_template.contains(
-            "Apply AGENTS.md `### Effective Implementation Scope` only to eligible deterministic fallout during Implement, closure-audit correction, or Ratify correction"
+            "apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`"
         ));
     }
     let rationale_authority = read(&repo_root.join("govna/operator-contract-rationale.md"));
@@ -3715,19 +3854,18 @@ fn render_audit_docs_and_version_match_authority() {
     ] {
         for boundary in [
             "## Why Effective Implementation Scope Is Bounded",
-            "The omitted artifact must be directly broken by an authorized change",
-            "The exception stops wherever judgment starts",
-            "The same boundary applies during Implement, closure-audit correction, and Ratify's implementation-only correction loop",
+            "directly broken, deterministic fallout",
+            "preserves behavior and intent",
+            "returns to Refine wherever product, scope, security",
         ] {
             assert!(rationale.contains(boundary), "{boundary}: {rationale}");
         }
         for boundary in [
             "## Why Contract Integrity Reporting Is Evidence-Triggered",
-            "agents need not execute a broken or unsafe path to prove it",
-            "Classification determines the recommended destination, not editing authority",
-            "temporary consumer mitigation only when it remains canon-compatible",
-            "Acknowledged or deferred findings are rechecked silently",
-            "until the Director authorizes a governance edit",
+            "distinguishes contract defects from implementation defects",
+            "Classification routes consumer-local, canon, or unclear findings but never grants editing authority",
+            "Blocking findings stop unsafe or decision-bearing work",
+            "unchanged acknowledged findings stay silent",
         ] {
             assert!(rationale.contains(boundary), "{boundary}: {rationale}");
         }
@@ -3740,7 +3878,6 @@ fn render_audit_docs_and_version_match_authority() {
             !content.contains("resolves a audit"),
             "{relpath}: {content}"
         );
-        assert!(content.contains("an audit"), "{relpath}: {content}");
     }
 }
 
@@ -3790,7 +3927,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.21.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.0\n"));
     }
     assert!(
         govna()
@@ -3811,7 +3948,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.21.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.0\n"));
 }
 
 #[test]
@@ -3894,8 +4031,6 @@ fn rendered_refine_no_change_contract_matches_authority() {
     let no_implement = "Do not begin implementation during Refine.";
     let immutable_stub =
         "Apply each resolved routing action while leaving the emitted AC stub unchanged.";
-    let cycle_conditional_edit =
-        "Edit the AC when an Audit finding or settled Director decision requires an AC change.";
 
     for agents in [&authority_agents, &code_agents, &doc_agents] {
         for rule in [conditional_edit, no_change, no_implement, immutable_stub] {
@@ -3904,11 +4039,12 @@ fn rendered_refine_no_change_contract_matches_authority() {
         assert!(!agents.contains("Edit the AC during Refine;"), "{agents}");
     }
     for cycle in [&authority_cycle, &code_cycle] {
-        for rule in [cycle_conditional_edit, no_change] {
-            assert!(cycle.contains(rule), "{rule}: {cycle}");
-        }
         assert!(
-            cycle.contains("Pause when a Director-specific decision remains unresolved."),
+            cycle.contains("3. **Refine.** Resolve findings and Director decisions in the AC."),
+            "{cycle}"
+        );
+        assert!(
+            cycle.contains("Apply the complete phase, scope, correction, contract-integrity, and advancement rules in `AGENTS.md`"),
             "{cycle}"
         );
     }
