@@ -9,12 +9,15 @@ govna initiates canon updates and ships them as overlay-tracked files; consumers
 1. **Semver.** Apply `AGENTS.md` PATCH/MINOR rules.
 2. **Registries.** Update format-defining or expected-divergence registries in the AC that adds the governed file.
 3. **Breaking changes.** Ship extension-clobbering removals or shape changes as MINOR with migration cost in the CHANGELOG.
-4. **Alerting.** Surface updates through audit and hard-fail incoherent canon for maintainer correction.
+4. **Alerting.**
+   - Surface updates through audit.
+   - Hard-fail incoherent canon for maintainer correction.
 
 ## Metadata and retired routing marker
 
 - Treat `govna/metadata.txt` as the authoritative consumer identity record.
-- Require `schema_version`, `canon_version`, and `repo_type`; require `code_stack` only for CODE consumers.
+- Require `schema_version`, `canon_version`, and `repo_type`.
+- Require `code_stack` only for CODE consumers.
 - govna has no legacy marker file to accept during a compatibility window — it never shipped one.
 - Write metadata during `render`/`apply`.
 - Write `govna/canon-baseline.txt` during `render` and `apply` from deterministic comparison-region hashes.
@@ -28,9 +31,16 @@ govna initiates canon updates and ships them as overlay-tracked files; consumers
 1. **Pure canon.** Replace tracked pure-canon files wholesale to avoid persistent third variants.
 2. **Mixed content.** Hunk-merge canon structure while preserving consumer content.
 3. **Routing.** Treat format-defining status independently from pure-versus-mixed application.
-4. **Boundaries.** Replace canon above `## Project Rules` in `AGENTS.md` and above `## Project Practices` in development/editing guidelines and CODE build-release; keep the boundary and local tail. Keep DOC release full canon.
+4. **Boundaries.**
+   - Replace canon above `## Project Rules` in `AGENTS.md`.
+   - Replace canon above `## Project Practices` in development/editing guidelines and CODE build-release.
+   - Keep each boundary and local tail.
+   - Keep DOC release full canon.
 5. **Unbounded files.** Route expected or preserved divergence through the registries in `govna/audit.md`.
-6. **Baseline.** Install and verify the baseline from the same scratch render only after other tests, routes, and validation pass; skip an immediate audit rerun.
+6. **Baseline.**
+   - Install the baseline from the same scratch render only after other tests, routes, and validation pass.
+   - Verify the baseline from that scratch render after installation.
+   - Skip an immediate audit rerun.
 7. **Rust evidence.** Refresh validation evidence only after that baseline copy and verification.
 
 ## Canon-owned vs repo-owned handling

@@ -13,15 +13,21 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 
 - Own authorized edits, mechanical repository work, tests, and reference integrity.
 - Follow validation and Package rules in `AGENTS.md` and `govna/build-release.md`.
-- Present release commands for the Director; never execute them.
+- Present release commands for the Director.
+- Never execute release commands.
 
 ### Review and verification
 
 - Verify changed behavior, content, claims, references, structure, terminology, and tests against governing contracts.
-- Red-team completed work and challenge assumptions or underspecified behavior.
-- Cite findings by file and line, order them by severity, and use objective language.
-- Run `./build.sh` only when reviewing code changes or when build output is itself part of the claim under review. Skip it for AC critique, doc-only review, and design discussion.
-- Skip `./build.sh` in Ratify's auto-correction revalidation only when the correction is documentation-only and not covered by this repo's own build validation; see `AGENTS.md` Approval Boundaries > Four-Phase Workflow.
+- Red-team completed work.
+- Challenge assumptions or underspecified behavior.
+- Cite findings by file and line.
+- Order findings by severity.
+- Use objective review language.
+- Run `./build.sh` only when reviewing code changes or build-output claims.
+- Skip `./build.sh` for AC critique, doc-only review, and design discussion.
+- Skip `./build.sh` in Ratify's auto-correction revalidation only for documentation outside this repo's build validation.
+- Apply `AGENTS.md` Approval Boundaries > Four-Phase Workflow to that exception.
 
 ### Self-review (mandatory)
 
@@ -33,7 +39,8 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 - For each acceptance test in the active AC, either run it and report the result, or state explicitly that it was reasoned about but not exercised and why.
 
 - Report `Verified`, `Red-teamed`, and `Not checked` as distinct completion sections.
-- Cite non-trivial findings and state explicitly when a section has none.
+- Cite non-trivial findings.
+- State explicitly when a section has no findings.
 - Treat implementation without self-review evidence as incomplete.
 
 ### Acceptance criteria (AC) handling
@@ -45,7 +52,8 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 ### Response style
 
 - Follow `AGENTS.md` Review Style.
-- Use one-line acknowledgments for trivial signals and structured summaries for substantive completions or Director decisions.
+- Use one-line acknowledgments for trivial signals.
+- Use structured summaries for substantive completions or Director decisions.
 
 ## What the Operator Must Defer
 
@@ -54,6 +62,7 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 - Do not make architectural bets (build vs. buy, framework choices, data model direction) or editorial direction calls (voice, audience, platform).
 - Do not negotiate or resolve scope questions without the director in the loop.
 - Do not treat effective implementation scope as authority to resolve a Director-owned decision.
+- Correct an evidenced completeness gap without a fresh phase instruction only under the bounded exception in `AGENTS.md`.
 - Do not expand or contract the definition of "done" for any work item.
 - Surface trade-offs and ambiguities to the director rather than resolving them silently.
 

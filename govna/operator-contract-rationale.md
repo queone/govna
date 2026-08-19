@@ -30,6 +30,10 @@ Evidence-triggered reporting distinguishes contract defects from implementation 
 
 Ratify auto-corrects only defects already decided by the settled contract. Out Of Scope and Director-owned categories preserve the safety boundary, while the bounded retry loop prevents indefinite self-correction.
 
+## Why Implement Can Close Bounded Completeness Gaps
+
+Implement and its closure audit can expose a missed path inside an already settled outcome. Requiring a new Director phase instruction for that deterministic omission adds ceremony without adding a decision. The bounded exception therefore continues the original Implement authority only when repository evidence identifies the gap, an active acceptance test already requires the correction class, the artifact family is already named, and only one materially valid outcome exists. Pre-Implementation Verification protects the corrected AC, reporting keeps the transition visible, and the three-round limit returns repeated or decision-bearing churn to the Director.
+
 ## Canon Versus Local Flexibility
 
 Canon fixes shared roles, workflow, approvals, discipline, and review behavior. Consumers own non-conflicting `## Project Rules`, additional local governance documents, tooling, build scripts, and CI. Propose disputed canon upstream instead of creating permanent local drift.

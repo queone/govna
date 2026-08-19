@@ -573,8 +573,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.22.1"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.22.1"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.22.2"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.22.2"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -712,6 +712,930 @@ fn rendered_contract_bundle_is_compact_and_preserves_authority() {
         counts[0] + counts[1]
     );
 
+    struct AtomicInstruction {
+        id: &'static str,
+        original: &'static str,
+        replacements: &'static [&'static str],
+        targets: &'static [&'static str],
+    }
+
+    fn is_atomic(document: &str, instruction: &AtomicInstruction) -> bool {
+        instruction
+            .replacements
+            .iter()
+            .all(|replacement| document.lines().any(|line| line == *replacement))
+            && !document.contains(instruction.original)
+    }
+
+    const ATOMIC_INSTRUCTIONS: &[AtomicInstruction] = &[
+        AtomicInstruction {
+            id: "A01",
+            original: "- Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`; route corrections to `## Project Rules` or the owning repo document.",
+            replacements: &[
+                "- Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`.",
+                "- Route `Consumer-local` corrections to `## Project Rules` or the owning repo document.",
+            ],
+            targets: &["source:AGENTS.md", "code:AGENTS.md", "doc:AGENTS.md"],
+        },
+        AtomicInstruction {
+            id: "A02",
+            original: "- Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`; route corrections to the authoritative source and every applicable consumer path.",
+            replacements: &[
+                "- Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`.",
+                "- Route `Govna canon` corrections to the authoritative source and every applicable consumer path.",
+            ],
+            targets: &["source:AGENTS.md", "code:AGENTS.md", "doc:AGENTS.md"],
+        },
+        AtomicInstruction {
+            id: "A03",
+            original: "- Pause before any unnamed action; treat ambiguous, unrelated, or implicit replies as non-advancing feedback.",
+            replacements: &[
+                "- Pause before any unnamed action.",
+                "- Treat ambiguous, unrelated, or implicit replies as non-advancing feedback.",
+            ],
+            targets: &["source:AGENTS.md", "code:AGENTS.md", "doc:AGENTS.md"],
+        },
+        AtomicInstruction {
+            id: "T01",
+            original: "Copy this file to `govna/ac<N>-<slug>.md`; use a kebab-case slug and `# AC<N> Title` heading.",
+            replacements: &[
+                "Copy this file to `govna/ac<N>-<slug>.md`.",
+                "Use a kebab-case slug and `# AC<N> Title` heading.",
+            ],
+            targets: &[
+                "source:govna/ac-template.md",
+                "code:govna/ac-template.md",
+                "doc:govna/ac-template.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "T02",
+            original: "Set `N` to one above the highest AC number in `govna/` or `git log --all --pretty=%B`; count every reference because release-prep deletions do not reset numbering.",
+            replacements: &[
+                "Set `N` to one above the highest AC number in `govna/` or `git log --all --pretty=%B`.",
+                "Count every reference because release-prep deletions do not reset numbering.",
+            ],
+            targets: &[
+                "source:govna/ac-template.md",
+                "code:govna/ac-template.md",
+                "doc:govna/ac-template.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "T04",
+            original: "List concrete changes and exact paths under useful groupings. Treat this list as authoritative; apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`.",
+            replacements: &[
+                "List concrete changes and exact paths under useful groupings.",
+                "Treat this list as authoritative.",
+                "Apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`.",
+            ],
+            targets: &[
+                "source:govna/ac-template.md",
+                "code:govna/ac-template.md",
+                "doc:govna/ac-template.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "T06",
+            original: "Label every AT `[Automated]` or `[Manual]` and `[Pre-release gate]` or `[Post-release verification]`. Prefer automated pre-release coverage; use post-release only when automated regression coverage already gates the behavior class.",
+            replacements: &[
+                "Label every AT `[Automated]` or `[Manual]` and `[Pre-release gate]` or `[Post-release verification]`.",
+                "Prefer automated pre-release coverage.",
+                "Use post-release only when automated regression coverage already gates the behavior class.",
+            ],
+            targets: &[
+                "source:govna/ac-template.md",
+                "code:govna/ac-template.md",
+                "doc:govna/ac-template.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "C04",
+            original: "4. **Alerting.** Surface updates through audit and hard-fail incoherent canon for maintainer correction.",
+            replacements: &[
+                "4. **Alerting.**",
+                "   - Surface updates through audit.",
+                "   - Hard-fail incoherent canon for maintainer correction.",
+            ],
+            targets: &[
+                "source:govna/canon-cycle.md",
+                "code:govna/canon-cycle.md",
+                "doc:govna/canon-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "C08",
+            original: "4. **Boundaries.** Replace canon above `## Project Rules` in `AGENTS.md` and above `## Project Practices` in development/editing guidelines and CODE build-release; keep the boundary and local tail. Keep DOC release full canon.",
+            replacements: &[
+                "4. **Boundaries.**",
+                "   - Replace canon above `## Project Rules` in `AGENTS.md`.",
+                "   - Replace canon above `## Project Practices` in development/editing guidelines and CODE build-release.",
+                "   - Keep each boundary and local tail.",
+                "   - Keep DOC release full canon.",
+            ],
+            targets: &[
+                "source:govna/canon-cycle.md",
+                "code:govna/canon-cycle.md",
+                "doc:govna/canon-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "C10",
+            original: "6. **Baseline.** Install and verify the baseline from the same scratch render only after other tests, routes, and validation pass; skip an immediate audit rerun.",
+            replacements: &[
+                "6. **Baseline.**",
+                "   - Install the baseline from the same scratch render only after other tests, routes, and validation pass.",
+                "   - Verify the baseline from that scratch render after installation.",
+                "   - Skip an immediate audit rerun.",
+            ],
+            targets: &[
+                "source:govna/canon-cycle.md",
+                "code:govna/canon-cycle.md",
+                "doc:govna/canon-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "S02",
+            original: "- Identify each utility by its stack-selected canonical target and require one strict stable SemVer declaration.",
+            replacements: &[
+                "- Identify each utility by its stack-selected canonical target.",
+                "- Require one strict stable SemVer declaration for each utility.",
+            ],
+            targets: &["source:govna/code-stacks.md", "code:govna/code-stacks.md"],
+        },
+        AtomicInstruction {
+            id: "S03",
+            original: "- Validate declarations before compilation and compiled versions before installation or release metadata.",
+            replacements: &[
+                "- Validate declarations before compilation.",
+                "- Validate compiled versions before installation.",
+                "- Validate compiled versions before writing release metadata.",
+            ],
+            targets: &["source:govna/code-stacks.md", "code:govna/code-stacks.md"],
+        },
+        AtomicInstruction {
+            id: "D04",
+            original: "4. **Implement.** Deliver, test, verify, correct, and closure-audit the settled scope.",
+            replacements: &[
+                "4. **Implement.**",
+                "   - Deliver the settled scope.",
+                "   - Test the settled scope.",
+                "   - Verify the settled scope.",
+                "   - Correct implementation defects.",
+                "   - Closure-audit the settled scope.",
+            ],
+            targets: &[
+                "source:govna/development-cycle.md",
+                "code:govna/development-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "D05",
+            original: "5. **Ratify.** Perform the Director-triggered final review and bounded correction behavior.",
+            replacements: &[
+                "5. **Ratify.**",
+                "   - Perform the Director-triggered final review.",
+                "   - Apply bounded correction behavior.",
+            ],
+            targets: &[
+                "source:govna/development-cycle.md",
+                "code:govna/development-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "D08",
+            original: "- Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`, architecture in `arch.md`, and repo governance in `AGENTS.md`.",
+            replacements: &[
+                "- Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.",
+                "- Keep architecture in `arch.md`.",
+                "- Keep repo governance in `AGENTS.md`.",
+            ],
+            targets: &[
+                "source:govna/development-cycle.md",
+                "code:govna/development-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "D10",
+            original: "- Keep ACs in `govna/ac<N>-<slug>.md` and summarize rather than reproduce them in chat.",
+            replacements: &[
+                "- Keep ACs in `govna/ac<N>-<slug>.md`.",
+                "- Summarize ACs rather than reproduce them in chat.",
+            ],
+            targets: &[
+                "source:govna/development-cycle.md",
+                "code:govna/development-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "D11",
+            original: "- Mark an unscoped stub in `## Summary`, keep scope and tests TBD, and leave it `PENDING` until scoped.",
+            replacements: &[
+                "- Mark an unscoped stub in `## Summary`.",
+                "- Keep an unscoped stub's scope and tests TBD.",
+                "- Leave an unscoped stub `PENDING` until scoped.",
+            ],
+            targets: &[
+                "source:govna/development-cycle.md",
+                "code:govna/development-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "G01",
+            original: "Use these durable coding practices; use `AGENTS.md`, `development-cycle.md`, and `build-release.md` for workflow, validation, and Package.",
+            replacements: &[
+                "Use these durable coding practices.",
+                "Use `AGENTS.md`, `development-cycle.md`, and `build-release.md` for workflow, validation, and Package.",
+            ],
+            targets: &[
+                "source:govna/development-guidelines.md",
+                "code:govna/development-guidelines.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "G03",
+            original: "- Ship behavior docs with code, verify every referenced symbol or path, and keep `arch.md` limited to built architecture.",
+            replacements: &[
+                "- Ship behavior docs with code.",
+                "- Verify every referenced symbol or path.",
+                "- Keep `arch.md` limited to built architecture.",
+            ],
+            targets: &[
+                "source:govna/development-guidelines.md",
+                "code:govna/development-guidelines.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "R05",
+            original: "- Present release commands for the Director; never execute them.",
+            replacements: &[
+                "- Present release commands for the Director.",
+                "- Never execute release commands.",
+            ],
+            targets: &[
+                "source:govna/roles.md",
+                "code:govna/roles.md",
+                "doc:govna/roles.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "R07",
+            original: "- Red-team completed work and challenge assumptions or underspecified behavior.",
+            replacements: &[
+                "- Red-team completed work.",
+                "- Challenge assumptions or underspecified behavior.",
+            ],
+            targets: &[
+                "source:govna/roles.md",
+                "code:govna/roles.md",
+                "doc:govna/roles.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "R08",
+            original: "- Cite findings by file and line, order them by severity, and use objective language.",
+            replacements: &[
+                "- Cite findings by file and line.",
+                "- Order findings by severity.",
+                "- Use objective review language.",
+            ],
+            targets: &[
+                "source:govna/roles.md",
+                "code:govna/roles.md",
+                "doc:govna/roles.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "R14",
+            original: "- Cite non-trivial findings and state explicitly when a section has none.",
+            replacements: &[
+                "- Cite non-trivial findings.",
+                "- State explicitly when a section has no findings.",
+            ],
+            targets: &[
+                "source:govna/roles.md",
+                "code:govna/roles.md",
+                "doc:govna/roles.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "R20",
+            original: "- Use one-line acknowledgments for trivial signals and structured summaries for substantive completions or Director decisions.",
+            replacements: &[
+                "- Use one-line acknowledgments for trivial signals.",
+                "- Use structured summaries for substantive completions or Director decisions.",
+            ],
+            targets: &[
+                "source:govna/roles.md",
+                "code:govna/roles.md",
+                "doc:govna/roles.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "E04",
+            original: "4. **Implement.** Deliver, verify, correct, and closure-audit the settled content scope.",
+            replacements: &[
+                "4. **Implement.**",
+                "   - Deliver the settled content scope.",
+                "   - Verify the settled content scope.",
+                "   - Correct content defects.",
+                "   - Closure-audit the settled content scope.",
+            ],
+            targets: &["doc:govna/editing-cycle.md"],
+        },
+        AtomicInstruction {
+            id: "E05",
+            original: "5. **Ratify.** Perform the Director-triggered final review and bounded correction behavior.",
+            replacements: &[
+                "5. **Ratify.**",
+                "   - Perform the Director-triggered final review.",
+                "   - Apply bounded correction behavior.",
+            ],
+            targets: &["doc:govna/editing-cycle.md"],
+        },
+        AtomicInstruction {
+            id: "E08",
+            original: "- Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md` and repo governance in `AGENTS.md`.",
+            replacements: &[
+                "- Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.",
+                "- Keep repo governance in `AGENTS.md`.",
+            ],
+            targets: &["doc:govna/editing-cycle.md"],
+        },
+        AtomicInstruction {
+            id: "E10",
+            original: "- Keep ACs in `govna/ac<N>-<slug>.md` and summarize rather than reproduce them in chat.",
+            replacements: &[
+                "- Keep ACs in `govna/ac<N>-<slug>.md`.",
+                "- Summarize ACs rather than reproduce them in chat.",
+            ],
+            targets: &["doc:govna/editing-cycle.md"],
+        },
+        AtomicInstruction {
+            id: "E11",
+            original: "- Mark an unscoped stub in `## Summary`, keep scope and tests TBD, and leave it `PENDING` until scoped.",
+            replacements: &[
+                "- Mark an unscoped stub in `## Summary`.",
+                "- Keep an unscoped stub's scope and tests TBD.",
+                "- Leave an unscoped stub `PENDING` until scoped.",
+            ],
+            targets: &["doc:govna/editing-cycle.md"],
+        },
+        AtomicInstruction {
+            id: "O01",
+            original: "Use these durable content practices; use `AGENTS.md`, `editing-cycle.md`, and `release.md` for workflow, validation, and Package.",
+            replacements: &[
+                "Use these durable content practices.",
+                "Use `AGENTS.md`, `editing-cycle.md`, and `release.md` for workflow, validation, and Package.",
+            ],
+            targets: &["doc:govna/editing-guidelines.md"],
+        },
+        AtomicInstruction {
+            id: "O02",
+            original: "- Ship docs with content changes, verify referenced paths and headings, and update every affected doc in one pass.",
+            replacements: &[
+                "- Ship docs with content changes.",
+                "- Verify referenced paths and headings.",
+                "- Update every affected doc in one pass.",
+            ],
+            targets: &["doc:govna/editing-guidelines.md"],
+        },
+        AtomicInstruction {
+            id: "O04",
+            original: "Run `./build.sh vX.Y.Z \"release message\"` to show status and planned Git steps, then prompt before `git add → commit → annotated tag → push tag → push branch`.",
+            replacements: &[
+                "Run `./build.sh vX.Y.Z \"release message\"` to show status and planned Git steps.",
+                "Require its confirmation prompt before `git add → commit → annotated tag → push tag → push branch`.",
+            ],
+            targets: &["doc:govna/release.md"],
+        },
+        AtomicInstruction {
+            id: "O05",
+            original: "Keep DOC release prep repository-wide, reject CODE target selection, and limit release messages to 80 characters.",
+            replacements: &[
+                "Keep DOC release prep repository-wide.",
+                "Reject CODE target selection.",
+                "Limit release messages to 80 characters.",
+            ],
+            targets: &["doc:govna/release.md"],
+        },
+        AtomicInstruction {
+            id: "S04",
+            original: "- Infer Go from `go.mod`; select it explicitly with `--stack Go`.",
+            replacements: &[
+                "- Infer Go from `go.mod`.",
+                "- Select Go explicitly with `--stack Go`.",
+            ],
+            targets: &["source:govna/code-stacks.md", "code:govna/code-stacks.md"],
+        },
+        AtomicInstruction {
+            id: "S05",
+            original: "- Infer Rust from `Cargo.toml`; select it explicitly with `--stack Rust`.",
+            replacements: &[
+                "- Infer Rust from `Cargo.toml`.",
+                "- Select Rust explicitly with `--stack Rust`.",
+            ],
+            targets: &["source:govna/code-stacks.md", "code:govna/code-stacks.md"],
+        },
+        AtomicInstruction {
+            id: "S06",
+            original: "- Infer Terraform from `.terraform.lock.hcl` or root Terraform files; select it explicitly with `--stack Terraform`.",
+            replacements: &[
+                "- Infer Terraform from `.terraform.lock.hcl` or root Terraform files.",
+                "- Select Terraform explicitly with `--stack Terraform`.",
+            ],
+            targets: &["source:govna/code-stacks.md", "code:govna/code-stacks.md"],
+        },
+        AtomicInstruction {
+            id: "S07",
+            original: "- Infer Swift from a root `Package.swift`; select it explicitly with `--stack Swift`.",
+            replacements: &[
+                "- Infer Swift from a root `Package.swift`.",
+                "- Select Swift explicitly with `--stack Swift`.",
+            ],
+            targets: &["source:govna/code-stacks.md", "code:govna/code-stacks.md"],
+        },
+        AtomicInstruction {
+            id: "D12",
+            original: "- Treat standalone `Ratify` or `ratify` as the Director acceptance action that initiates the final review and completes Ratify when that review is clean.",
+            replacements: &[
+                "- Treat standalone `Ratify` or `ratify` as the Director acceptance action.",
+                "- Initiate the final review on that action.",
+                "- Complete Ratify when that review is clean.",
+            ],
+            targets: &[
+                "source:govna/development-cycle.md",
+                "code:govna/development-cycle.md",
+                "doc:govna/editing-cycle.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "R21",
+            original: "- Run `./build.sh` only when reviewing code changes or when build output is itself part of the claim under review. Skip it for AC critique, doc-only review, and design discussion.",
+            replacements: &[
+                "- Run `./build.sh` only when reviewing code changes or build-output claims.",
+                "- Skip `./build.sh` for AC critique, doc-only review, and design discussion.",
+            ],
+            targets: &["source:govna/roles.md", "code:govna/roles.md"],
+        },
+        AtomicInstruction {
+            id: "R22",
+            original: "- Run `./build.sh` only when reviewing build-relevant changes or when build output is itself part of the claim under review. Skip it for AC critique, doc-only review, and design discussion.",
+            replacements: &[
+                "- Run `./build.sh` only when reviewing build-relevant changes or build-output claims.",
+                "- Skip `./build.sh` for AC critique, doc-only review, and design discussion.",
+            ],
+            targets: &["doc:govna/roles.md"],
+        },
+        AtomicInstruction {
+            id: "B01",
+            original: "4. **Detect and validate version targets.** Follow this repository's Project Practices and stack build implementation. Reject missing, malformed, duplicate, or unsafe targets before any write.",
+            replacements: &[
+                "4. **Process version targets.**",
+                "   - Detect every version target.",
+                "   - Validate every version target.",
+                "   - Follow this repository's Project Practices.",
+                "   - Follow the stack build implementation.",
+                "   - Reject missing, malformed, duplicate, or unsafe targets before any write.",
+            ],
+            targets: &[
+                "source:govna/build-release.md",
+                "code:govna/build-release.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "B02",
+            original: "- Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.",
+            replacements: &[
+                "- Keep summaries single-line and no longer than 500 characters.",
+                "- Lead summaries with the AC reference when one exists.",
+            ],
+            targets: &[
+                "source:govna/build-release.md",
+                "code:govna/build-release.md",
+                "doc:govna/release.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "B03",
+            original: "5. **Detect CHANGELOG targets + fail-fast idempotency guard.** Root `CHANGELOG.md`. If it already contains a row for the target version, prep exits with a fatal error before any writes.",
+            replacements: &[
+                "5. **Guard CHANGELOG idempotency.**",
+                "   - Detect the root `CHANGELOG.md` target.",
+                "   - Reject an existing row for the target version before any write.",
+            ],
+            targets: &[
+                "source:govna/build-release.md",
+                "code:govna/build-release.md",
+            ],
+        },
+        AtomicInstruction {
+            id: "O06",
+            original: "1. **Verify all in-scope AC work is complete.** Every AT in the AC has been run and passes.",
+            replacements: &[
+                "1. **Verify completion.**",
+                "   - Verify all in-scope AC work is complete.",
+                "   - Verify every AC acceptance test passes.",
+            ],
+            targets: &["doc:govna/release.md"],
+        },
+    ];
+
+    assert_eq!(ATOMIC_INSTRUCTIONS.len(), 44);
+    for (index, instruction) in ATOMIC_INSTRUCTIONS.iter().enumerate() {
+        for other in &ATOMIC_INSTRUCTIONS[index + 1..] {
+            assert_ne!(instruction.id, other.id, "duplicate atomic instruction ID");
+        }
+        assert!(instruction.replacements.len() >= 2, "{}", instruction.id);
+        for target in instruction.targets {
+            let document = if let Some(path) = target.strip_prefix("source:") {
+                read(&repo.join(path))
+            } else if let Some(path) = target.strip_prefix("code:") {
+                read(&bundles[0].1.join(path))
+            } else if let Some(path) = target.strip_prefix("doc:") {
+                read(&bundles[1].1.join(path))
+            } else {
+                panic!("{}: invalid target {target}", instruction.id);
+            };
+            assert!(
+                is_atomic(&document, instruction),
+                "{}: {target}",
+                instruction.id
+            );
+
+            let mut mutant =
+                document.replacen(instruction.replacements[0], instruction.original, 1);
+            for replacement in &instruction.replacements[1..] {
+                mutant = mutant.replacen(replacement, "", 1);
+            }
+            assert!(
+                !is_atomic(&mutant, instruction),
+                "{} mutant passed: {target}",
+                instruction.id
+            );
+        }
+    }
+
+    const LEGACY_AGENT_REWRITES: &[(&str, &str, &str)] = &[
+        (
+            "A04",
+            "- Edit sections in place; change section order or the `##` section list only when the user explicitly requests a contract amendment.",
+            "- Edit sections in place.\n- Change section order or the `##` section list only when the user explicitly requests a contract amendment.",
+        ),
+        (
+            "A05",
+            "- Use `##` for top-level sections and `###` for thematic groupings inside a section; cap header nesting at `###`.",
+            "- Use `##` for top-level sections.\n- Use `###` for thematic groupings inside a section.\n- Cap header nesting at `###`.",
+        ),
+        (
+            "A06",
+            "- Treat AGENTS.md as the authoritative source for the rules it describes; conform overlay templates and other canon files to it — `govna audit` catches violations (see `### Audit Adoption`).",
+            "- Treat AGENTS.md as the authoritative source for the rules it describes.\n- Conform overlay templates and other canon files to AGENTS.md.",
+        ),
+        (
+            "A07",
+            "- Place each structured deliverable (AC, plan, doc draft, scope card) in its target file; never paste the full body in chat.",
+            "- Place each structured deliverable (AC, plan, doc draft, scope card) in its target file.\n- Never paste a structured deliverable's full body in chat.",
+        ),
+        (
+            "A08",
+            "- Treat each authorization as scope-limited; require fresh approval for any new action, even when similar to a prior approved one.",
+            "- Treat each authorization as scope-limited.\n- Require fresh approval for every new action.",
+        ),
+        (
+            "A09",
+            "- Draft `govna/ac<N>-<slug>.md` before implementation using `govna/ac-template.md`; define scope, out-of-scope, and acceptance tests.",
+            "- Draft `govna/ac<N>-<slug>.md` before implementation using `govna/ac-template.md`.\n- Define scope, out-of-scope, and acceptance tests in the AC.",
+        ),
+        (
+            "A10",
+            "- Keep Audit non-mutating; do not edit the AC or repository during Audit.",
+            "- Keep Audit non-mutating.\n- Do not edit the AC or repository during Audit.",
+        ),
+        (
+            "A11",
+            "- Start `Package` only after an explicit Director request; do not infer it from Ratify acceptance.",
+            "- Start `Package` only after an explicit Director request.\n- Do not infer Package from Ratify acceptance.",
+        ),
+        (
+            "A12",
+            "- Treat standalone `Draft` or `draft` as the pre-cycle action that creates the active AC; require the Director to authorize it before creating the AC.",
+            "- Treat standalone `Draft` or `draft` as the pre-cycle action that creates the active AC.\n- Require the Director to authorize Draft before creating the AC.",
+        ),
+        (
+            "A13",
+            "- Require explicit operational wording such as `run ./build.sh` before executing a repository command; never infer a shell command from an action name.",
+            "- Require explicit operational wording such as `run ./build.sh` before executing a repository command.\n- Never infer a shell command from an action name.",
+        ),
+        (
+            "A14",
+            "- List ✓ for each check and flag any gaps; authorize implementation only when clean.",
+            "- List ✓ for each check.\n- Flag every gap.\n- Authorize implementation only when the checklist is clean.",
+        ),
+        (
+            "A15",
+            "- Complete every mid-implementation decision change in one pass — files, docs, and tests together; never leave a half-migrated state.",
+            "- Complete every mid-implementation decision change in one pass across files, docs, and tests.\n- Never leave a half-migrated state.",
+        ),
+        (
+            "A16",
+            "- Record follow-on improvements in `plan.md` (or note them to the user if no planning artifact exists); keep the current task strictly within its authorized scope.",
+            "- Record follow-on improvements in `plan.md`.\n- Note follow-on improvements to the user when no planning artifact exists.\n- Keep the current task strictly within its authorized scope.",
+        ),
+        (
+            "A17",
+            "- **Record every authorized correction about repo behavior as an edit to the governance doc that owns the topic; never as a memory entry, `feedback.md`, or session note.**",
+            "- **Record every authorized repository-behavior correction in its owning governance document.**\n- **Never record a repository-behavior correction as a memory entry, `feedback.md`, or session note.**",
+        ),
+        (
+            "A18",
+            "- Lead each review with findings and cite file paths and concrete behavior; skip preamble summaries.",
+            "- Lead each review with findings.\n- Cite file paths and concrete behavior.\n- Skip preamble summaries.",
+        ),
+        (
+            "A19",
+            "- Report \"no issues\" directly when none are found; note any residual risk or verification gaps.",
+            "- Report \"no issues\" directly when none are found.\n- Note every residual risk or verification gap.",
+        ),
+        (
+            "A20",
+            "- Never prescribe commit, push, or release actions in Ratify; the Director triggers those — Ratify names what's pending, not what to do.",
+            "- Never prescribe commit, push, or release actions in Ratify.",
+        ),
+        (
+            "A21",
+            "- Default to plain text and simple bullets; reach for tables or richer structure only when content clearly benefits.",
+            "- Default to plain text and simple bullets.\n- Use tables or richer structure only when content clearly benefits.",
+        ),
+        (
+            "A22",
+            "- Run required validation gates, but report successful routine gates only when they materially affect confidence; always report failures and skipped required gates.",
+            "- Run every required validation gate.\n- Report successful routine gates only when they materially affect confidence.\n- Always report failures and skipped required gates.",
+        ),
+        (
+            "A23",
+            "- Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report; state `No commit or release command executed.` and present the exact drafted release command.",
+            "- Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report.\n- State `No commit or release command executed.`.\n- Present the exact drafted release command.",
+        ),
+        (
+            "A24",
+            "- Pin dependencies to explicit versions; document any reason to stay on an older version.",
+            "- Pin dependencies to explicit versions.\n- Document every reason to stay on an older dependency version.",
+        ),
+        (
+            "A25",
+            "- Use the `Historical:` prefix on a comment only when it references a shipped AC and the context aids the reader; delete the reference if no longer relevant.",
+            "- Use the `Historical:` prefix only for a relevant shipped-AC comment.\n- Delete an irrelevant shipped-AC reference.",
+        ),
+        (
+            "A26",
+            "- Pair every new CLI flag with a one-letter short form (standard, leads help output) and a long-form alias; migrate existing flags when their code is next touched.",
+            "- Pair every new CLI flag with a leading one-letter short form and a long-form alias.\n- Migrate existing flags when their code is next touched.",
+        ),
+        (
+            "A27",
+            "- Reuse content from files already in conversation context; reach for `Read` only to fetch unseen content or check for recent changes.",
+            "- Reuse content from files already in conversation context.\n- Reach for `Read` only to fetch unseen content or check for recent changes.",
+        ),
+    ];
+
+    for (id, original, replacement_block) in LEGACY_AGENT_REWRITES {
+        let mut documents = vec![
+            read(&repo.join("AGENTS.md")),
+            read(&bundles[0].1.join("AGENTS.md")),
+        ];
+        if !matches!(*id, "A06" | "A15" | "A24" | "A26") {
+            documents.push(read(&bundles[1].1.join("AGENTS.md")));
+        }
+        for document in documents {
+            let replacements: Vec<&str> = replacement_block.lines().collect();
+            assert!(!document.contains(original), "{id}: original remains");
+            assert!(
+                replacements
+                    .iter()
+                    .all(|replacement| document.lines().any(|line| line == *replacement)),
+                "{id}: replacement missing"
+            );
+            let mut mutant = document.replacen(replacements[0], original, 1);
+            for replacement in &replacements[1..] {
+                mutant = mutant.replacen(replacement, "", 1);
+            }
+            assert!(mutant.contains(original), "{id}: mutation failed");
+        }
+    }
+
+    for (id, original, replacement_block) in [
+        (
+            "A06D",
+            "- Treat AGENTS.md as the authoritative source for the rules it describes; conform overlay templates and other canon files to it — `govna audit` catches violations.",
+            "- Treat AGENTS.md as the authoritative source for the rules it describes.\n- Conform overlay templates and other canon files to AGENTS.md.",
+        ),
+        (
+            "A15D",
+            "- Complete every mid-implementation decision change in one pass — files and docs together; never leave a half-migrated state.",
+            "- Complete every mid-implementation decision change in one pass across files and docs.\n- Never leave a half-migrated state.",
+        ),
+    ] {
+        let document = read(&bundles[1].1.join("AGENTS.md"));
+        let replacements: Vec<&str> = replacement_block.lines().collect();
+        assert!(!document.contains(original), "{id}: original remains");
+        assert!(
+            replacements
+                .iter()
+                .all(|replacement| document.lines().any(|line| line == *replacement)),
+            "{id}: replacement missing"
+        );
+        let mut mutant = document.replacen(replacements[0], original, 1);
+        for replacement in &replacements[1..] {
+            mutant = mutant.replacen(replacement, "", 1);
+        }
+        assert!(mutant.contains(original), "{id}: mutation failed");
+    }
+
+    for (id, original, replacement_block, path) in [
+        (
+            "C11",
+            "- Require `schema_version`, `canon_version`, and `repo_type`; require `code_stack` only for CODE consumers.",
+            "- Require `schema_version`, `canon_version`, and `repo_type`.\n- Require `code_stack` only for CODE consumers.",
+            "govna/canon-cycle.md",
+        ),
+        (
+            "S08",
+            "- Bump the single detected `programVersion` during release prep; validate and preserve independent utility versions in multi-utility repositories.",
+            "- Bump the single detected `programVersion` during release prep.\n- Validate independent utility versions in multi-utility repositories.\n- Preserve independent utility versions in multi-utility repositories.",
+            "govna/code-stacks.md",
+        ),
+        (
+            "S09",
+            "- Prefer Go, Terraform, and Rust manifests over Swift; prefer Swift over Node, Python, and Java manifests.",
+            "- Prefer Go, Terraform, and Rust manifests over Swift.\n- Prefer Swift over Node, Python, and Java manifests.",
+            "govna/code-stacks.md",
+        ),
+        (
+            "S10",
+            "- Keep `Package.resolved` tracked for leaf packages with dependencies; treat it as optional for dependency libraries.",
+            "- Keep `Package.resolved` tracked for leaf packages with dependencies.\n- Treat `Package.resolved` as optional for dependency libraries.",
+            "govna/code-stacks.md",
+        ),
+        (
+            "G04",
+            "- Prefer surrogate keys for internal identity; keep external IDs as indexed attributes",
+            "- Prefer surrogate keys for internal identity\n- Keep external IDs as indexed attributes",
+            "govna/development-guidelines.md",
+        ),
+        (
+            "G05",
+            "- Validate external data at the boundary; do not trust upstream shape or completeness",
+            "- Validate external data at the boundary\n- Treat upstream shape and completeness as untrusted",
+            "govna/development-guidelines.md",
+        ),
+        (
+            "G06",
+            "- Cache external data locally with explicit TTL or versioning; never silently serve stale data as fresh",
+            "- Cache external data locally with explicit TTL or versioning\n- Never silently serve stale data as fresh",
+            "govna/development-guidelines.md",
+        ),
+        (
+            "G07",
+            "- Keep `build.sh` self-contained; do not add sourced production helper modules.",
+            "- Keep `build.sh` self-contained.\n- Do not add sourced production helper modules.",
+            "govna/development-guidelines.md",
+        ),
+        (
+            "G08",
+            "- Validate at system boundaries (user input, external APIs, file I/O); trust internal code",
+            "- Validate at system boundaries (user input, external APIs, file I/O)\n- Trust internal code",
+            "govna/development-guidelines.md",
+        ),
+        (
+            "G09",
+            "- Each flag line is indented 2 spaces; descriptions align at column 38",
+            "- Indent each flag line by 2 spaces\n- Align descriptions at column 38",
+            "govna/development-guidelines.md",
+        ),
+    ] {
+        for document in [read(&repo.join(path)), read(&bundles[0].1.join(path))] {
+            let replacements: Vec<&str> = replacement_block.lines().collect();
+            assert!(!document.contains(original), "{id}: original remains");
+            assert!(
+                replacements
+                    .iter()
+                    .all(|replacement| document.lines().any(|line| line == *replacement)),
+                "{id}: replacement missing"
+            );
+            let mut mutant = document.replacen(replacements[0], original, 1);
+            for replacement in &replacements[1..] {
+                mutant = mutant.replacen(replacement, "", 1);
+            }
+            assert!(mutant.contains(original), "{id}: mutation failed");
+        }
+    }
+
+    for (id, original, replacement_block, path) in [
+        (
+            "O07",
+            "- Verify links are not stale before publishing; flag broken links as findings during review",
+            "- Verify links are not stale before publishing\n- Flag broken links as findings during review",
+            "govna/editing-guidelines.md",
+        ),
+        (
+            "O08",
+            "- Keep one topic per file; split when a file covers unrelated concerns",
+            "- Keep one topic per file\n- Split files that cover unrelated concerns",
+            "govna/editing-guidelines.md",
+        ),
+        (
+            "O09",
+            "- Use flat `##` sections with inline bullets; avoid deep nesting unless structure genuinely requires it",
+            "- Use flat `##` sections with inline bullets\n- Avoid deep nesting unless structure genuinely requires it",
+            "govna/editing-guidelines.md",
+        ),
+        (
+            "O10",
+            "- Use consistent terminology throughout the repo; define terms in one place and reference that definition",
+            "- Use consistent terminology throughout the repo\n- Define each term in one place\n- Reference the canonical definition",
+            "govna/editing-guidelines.md",
+        ),
+    ] {
+        let document = read(&bundles[1].1.join(path));
+        let replacements: Vec<&str> = replacement_block.lines().collect();
+        assert!(!document.contains(original), "{id}: original remains");
+        assert!(
+            replacements
+                .iter()
+                .all(|replacement| document.lines().any(|line| line == *replacement)),
+            "{id}: replacement missing"
+        );
+        let mut mutant = document.replacen(replacements[0], original, 1);
+        for replacement in &replacements[1..] {
+            mutant = mutant.replacen(replacement, "", 1);
+        }
+        assert!(mutant.contains(original), "{id}: mutation failed");
+    }
+
+    for (id, original, replacement_block, target) in [
+        (
+            "B04",
+            "1. **Run the stack-defined `./build.sh prep vX.Y.Z \"message\"` invocation.** Stages version bumps, inserts the CHANGELOG row, deletes completed AC files, sweeps matching AC-pointer IE lines from `plan.md`, runs stack-defined validation, and prints the canonical release command. The agent determines the version (semver classification from the AC's scope) and drafts the release message (≤ 80 characters) before invoking prep. Flags: `--validation-token`/`-t` passes current validation evidence when supported; `--dry-run`/`-n` prints intended writes without touching the working tree; `--no-build`/`-B` follows the applicable stack policy.",
+            "1. **Run prep.**\n   - Classify the AC scope under semver.\n   - Draft a release message no longer than 80 characters.\n   - Run the stack-defined `./build.sh prep vX.Y.Z \"message\"` invocation.\n   - Pass current validation evidence with `--validation-token` or `-t` when supported.\n   - Use `--dry-run` or `-n` to inspect without writes.\n   - Use `--no-build` or `-B` only under the applicable stack policy.",
+            "code",
+        ),
+        (
+            "B05",
+            "2. **Run the printed release command (`./build.sh vX.Y.Z \"message\"`).** Shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → tag → push tag → push branch`.",
+            "2. **Run the printed release command.**\n   - Run `./build.sh vX.Y.Z \"message\"`.\n   - Confirm the displayed status and Git steps.\n   - Approve the interactive prompt to execute the displayed sequence.",
+            "code",
+        ),
+        (
+            "B06",
+            "7. **Apply writes.** Version bumps (per-file idempotent no-op when the file already has the target value); CHANGELOG row insertion under `| Unreleased | |`; AC file deletions (AC files are deleted whole; there are no separate companion files); AC-pointer IE-line sweep from `plan.md` (lines matching `→ govna/ac<N>-` for each released AC). Skipped when `--dry-run`/`-n`. Idempotent re-runs leave already-swept lines alone.",
+            "7. **Apply writes.**\n   - Apply idempotent version bumps.\n   - Insert the CHANGELOG row under `| Unreleased | |`.\n   - Delete each released AC file whole.\n   - Sweep matching AC-pointer IE lines from `plan.md`.\n   - Skip writes under `--dry-run` or `-n`.\n   - Leave already-swept lines unchanged on rerun.",
+            "code",
+        ),
+        (
+            "O11",
+            "2. **Determine the version.** Classify the change set using semver: PATCH (formatting, fixes, refactors invisible to users) or MINOR (structure, navigation, schema changes visible to users). Bump from the latest tag accordingly.",
+            "2. **Determine the version.**\n   - Classify the change set using semver.\n   - Use PATCH for formatting, fixes, or user-invisible refactors.\n   - Use MINOR for user-visible structure, navigation, or schema changes.\n   - Bump from the latest tag.",
+            "doc",
+        ),
+        (
+            "O12",
+            "3. **Derive the release message.** Summarize the change set in ≤ 80 characters. Lead with the AC reference if any (e.g., `AC1: adopt govna v0.1.0 DOC overlay`).",
+            "3. **Derive the release message.**\n   - Summarize the change set in no more than 80 characters.\n   - Lead with the AC reference when one exists.",
+            "doc",
+        ),
+        (
+            "O13",
+            "4. **Run release prep.** Run `./build.sh prep vX.Y.Z \"derived message\"`. It inserts the CHANGELOG row, deletes completed AC files referenced by the release message, sweeps their `plan.md` IE entries, and prints the release command. Use `--dry-run`/`-n` to inspect without writes.",
+            "4. **Run release prep.**\n   - Run `./build.sh prep vX.Y.Z \"derived message\"`.\n   - Use `--dry-run` or `-n` to inspect without writes.",
+            "doc",
+        ),
+    ] {
+        let documents = if target == "code" {
+            vec![
+                read(&repo.join("govna/build-release.md")),
+                read(&bundles[0].1.join("govna/build-release.md")),
+            ]
+        } else {
+            vec![read(&bundles[1].1.join("govna/release.md"))]
+        };
+        for document in documents {
+            let replacements: Vec<&str> = replacement_block.lines().collect();
+            assert!(!document.contains(original), "{id}: original remains");
+            assert!(
+                replacements
+                    .iter()
+                    .all(|replacement| document.lines().any(|line| line == *replacement)),
+                "{id}: replacement missing"
+            );
+            let mut mutant = document.replacen(replacements[0], original, 1);
+            for replacement in &replacements[1..] {
+                mutant = mutant.replacen(replacement, "", 1);
+            }
+            assert!(mutant.contains(original), "{id}: mutation failed");
+        }
+    }
+
     let code_agents = read(&bundles[0].1.join("AGENTS.md"));
     for sentinel in [
         "Leave every `git commit` for the user to execute",
@@ -741,6 +1665,77 @@ fn rendered_contract_bundle_is_compact_and_preserves_authority() {
     }
     let doc_agents = read(&bundles[1].1.join("AGENTS.md"));
     assert!(!doc_agents.contains("Use `./build.sh` for repository-wide formatting validation"));
+}
+
+#[test]
+fn rendered_contract_defines_bounded_completeness_scenarios() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let code = new_fixture();
+    let doc = new_fixture();
+    for (target, flavor) in [(&code, "code"), (&doc, "doc")] {
+        let output = govna()
+            .args(["render", "--flavor", flavor, target.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let contracts = [
+        read(&repo.join("AGENTS.md")),
+        read(&code.join("AGENTS.md")),
+        read(&doc.join("AGENTS.md")),
+    ];
+    let scenarios = [
+        (
+            "qualifying gap",
+            "- Treat the original Implement authorization as continuing authority for an eligible correction round.",
+        ),
+        (
+            "repository evidence",
+            "- Require repository evidence of the missed path or instruction.",
+        ),
+        (
+            "active requirement",
+            "- Cite the active requirement that the gap violates.",
+        ),
+        (
+            "single outcome",
+            "- Explain why the correction has only one materially valid outcome.",
+        ),
+        (
+            "initial phase rejection",
+            "- Prevent the exception from authorizing initial Implement, Audit, Ratify, Package, release preparation, publication, delegation, or commits.",
+        ),
+        (
+            "failed eligibility",
+            "- Pause immediately when an eligibility condition fails.",
+        ),
+        (
+            "director decision",
+            "- Pause immediately when a Director-owned decision appears.",
+        ),
+        (
+            "counter reset",
+            "- Reset the round counter only when the Director authorizes Implement again.",
+        ),
+        (
+            "fourth round",
+            "- Pause for the Director before a fourth correction round.",
+        ),
+    ];
+
+    for contract in contracts {
+        for (scenario, required_line) in scenarios {
+            assert!(
+                contract.lines().any(|line| line == required_line),
+                "missing bounded-completeness scenario {scenario}: {required_line}"
+            );
+        }
+    }
 }
 
 // CLAUDE.md is a symlink to AGENTS.md, for both flavors (govna's deliberate
@@ -2160,8 +3155,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.22.1.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.22.1.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.22.2.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.22.2.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -3752,7 +4747,7 @@ fn render_audit_docs_and_version_match_authority() {
             "Record an authorized correction in the governance document that owns the topic",
             "Prevent the governance-record rule from bypassing authorization for a governance edit",
             "Prevent contract-integrity reporting from authorizing a new AC phase, governance edit, delegation, commit, publication, or release action",
-            "Record every authorized correction about repo behavior as an edit to the governance doc that owns the topic",
+            "Record every authorized repository-behavior correction in its owning governance document",
             "Recheck new or unresolved contract-integrity findings before completing Audit",
             "Recheck new or unresolved contract-integrity findings before completing Implement and during the closure audit",
             "Recheck new or unresolved contract-integrity findings during Ratify",
@@ -3799,7 +4794,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.22.1\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.22.2\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -3835,8 +4830,9 @@ fn render_audit_docs_and_version_match_authority() {
     for workflow in [&development_cycle, &code_cycle, &doc_cycle] {
         for rule in [
             "Treat standalone `Ratify` or `ratify` as the Director acceptance action",
-            "completes Ratify when that review is clean",
-            "Perform the Director-triggered final review and bounded correction behavior",
+            "Complete Ratify when that review is clean",
+            "Perform the Director-triggered final review",
+            "Apply bounded correction behavior",
             "only after separate Director authorization",
             "Apply the complete phase, scope, correction, contract-integrity, and advancement rules in `AGENTS.md`",
         ] {
@@ -3874,7 +4870,7 @@ fn render_audit_docs_and_version_match_authority() {
     assert_at_axes(&ac_template);
     assert!(ac_template.contains("Label every AT `[Automated]` or `[Manual]` and `[Pre-release gate]` or `[Post-release verification]`"));
     assert!(ac_template.contains(
-        "apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`"
+        "Apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`"
     ));
     let authority_acceptance_tests = markdown_section(&ac_template, "Acceptance Tests");
     for dir in [&code_dir, &doc_dir] {
@@ -3886,7 +4882,7 @@ fn render_audit_docs_and_version_match_authority() {
         assert_at_axes(&rendered_template);
         assert!(rendered_template.contains("Label every AT `[Automated]` or `[Manual]` and `[Pre-release gate]` or `[Post-release verification]`"));
         assert!(rendered_template.contains(
-            "apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`"
+            "Apply only the effective-scope and emitted-routing exceptions defined in `AGENTS.md`"
         ));
     }
     let rationale_authority = read(&repo_root.join("govna/operator-contract-rationale.md"));
@@ -3970,7 +4966,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.1\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.2\n"));
     }
     assert!(
         govna()
@@ -3991,7 +4987,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.1\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.2\n"));
 }
 
 #[test]

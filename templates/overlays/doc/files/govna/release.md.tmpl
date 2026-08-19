@@ -4,11 +4,14 @@ Use this release, pre-release, and acceptance-test reference under the authorita
 
 ## Release Command
 
-Run `./build.sh vX.Y.Z "release message"` to show status and planned Git steps, then prompt before `git add → commit → annotated tag → push tag → push branch`.
+Run `./build.sh vX.Y.Z "release message"` to show status and planned Git steps.
+Require its confirmation prompt before `git add → commit → annotated tag → push tag → push branch`.
 
 `build.sh` is self-contained Bash 3.2+ tooling. DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command.
 
-Keep DOC release prep repository-wide, reject CODE target selection, and limit release messages to 80 characters.
+Keep DOC release prep repository-wide.
+Reject CODE target selection.
+Limit release messages to 80 characters.
 
 DOC repositories do not provide installable utilities, so the independent
 utility-version declaration and `--version` contract does not apply to this
@@ -44,10 +47,20 @@ Do not start this checklist unless the director explicitly requests standalone
 Do not treat `./build.sh prep ...` or ordinary build-preparation language as a
 workflow request.
 
-1. **Verify all in-scope AC work is complete.** Every AT in the AC has been run and passes.
-2. **Determine the version.** Classify the change set using semver: PATCH (formatting, fixes, refactors invisible to users) or MINOR (structure, navigation, schema changes visible to users). Bump from the latest tag accordingly.
-3. **Derive the release message.** Summarize the change set in ≤ 80 characters. Lead with the AC reference if any (e.g., `AC1: adopt govna v0.1.0 DOC overlay`).
-4. **Run release prep.** Run `./build.sh prep vX.Y.Z "derived message"`. It inserts the CHANGELOG row, deletes completed AC files referenced by the release message, sweeps their `plan.md` IE entries, and prints the release command. Use `--dry-run`/`-n` to inspect without writes.
+1. **Verify completion.**
+   - Verify all in-scope AC work is complete.
+   - Verify every AC acceptance test passes.
+2. **Determine the version.**
+   - Classify the change set using semver.
+   - Use PATCH for formatting, fixes, or user-invisible refactors.
+   - Use MINOR for user-visible structure, navigation, or schema changes.
+   - Bump from the latest tag.
+3. **Derive the release message.**
+   - Summarize the change set in no more than 80 characters.
+   - Lead with the AC reference when one exists.
+4. **Run release prep.**
+   - Run `./build.sh prep vX.Y.Z "derived message"`.
+   - Use `--dry-run` or `-n` to inspect without writes.
 5. **Present the release command.** Print the exact command emitted by prep for the director to run:
 
 ```
@@ -58,7 +71,12 @@ The agent never runs the release command — only the director does. Do not add 
 
 ## CHANGELOG Conventions
 
-- File shape: `# Changelog` heading, then a 2-column markdown table (`| Version | Summary |` with a `|---------|---------|` separator); first data row is `| Unreleased | |`, followed by one row per release (e.g., `| <version> | <AC-ref>: <one-line summary> |`).
-- Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
+- Use a `# Changelog` heading.
+- Follow it with the two-column `| Version | Summary |` table.
+- Use `|---------|---------|` as the separator.
+- Keep `| Unreleased | |` as the first data row.
+- Add one row per release.
+- Keep summaries single-line and no longer than 500 characters.
+- Lead summaries with the AC reference when one exists.
 - Versions are unprefixed (`0.29.0`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
