@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.30.0 | AC41: allow explicit Director overrides of AC-first workflow |
 | 0.29.0 | AC40: enforce instruction atomicity and bounded correction loops |
 | 0.28.1 | Fix atomic governance instructions |
 | 0.28.0 | AC39: compress agent contract surface |

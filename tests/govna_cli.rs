@@ -538,6 +538,29 @@ fn render_doc_agents_overrides_base() {
 
 #[test]
 fn rendered_agents_define_active_ac_exceptions() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let override_instruction = "Follow an explicit Director workflow override without requiring contract-amendment language.";
+    let stop_instruction =
+        "Stop and ask when a request lacks authorization, scope, or required context.";
+    let ac_first_instruction = "Treat every non-trivial change as AC-first work unless the Director explicitly overrides it.";
+    let superseded_stop = "Stop and ask when a request bypasses a required govna gate or lacks required authorization, scope, or context.";
+
+    for path in [
+        "AGENTS.md",
+        "templates/base/AGENTS.md",
+        "templates/overlays/doc/files/AGENTS.md.tmpl",
+    ] {
+        let agents = read(&repo.join(path));
+        for expected in [override_instruction, stop_instruction, ac_first_instruction] {
+            assert_eq!(agents.matches(expected).count(), 1, "{path}: {expected}");
+        }
+        assert!(!agents.contains(superseded_stop), "{path}: {agents}");
+        assert!(
+            !agents.contains("### Director Workflow Override"),
+            "{path}: {agents}"
+        );
+    }
+
     let mut rendered = Vec::new();
 
     for flavor in ["code", "doc"] {
@@ -561,6 +584,14 @@ fn rendered_agents_define_active_ac_exceptions() {
 
     for (flavor, target) in &rendered {
         let agents = read(&target.join("AGENTS.md"));
+        for expected in [override_instruction, stop_instruction, ac_first_instruction] {
+            assert_eq!(agents.matches(expected).count(), 1, "{flavor}: {expected}");
+        }
+        assert!(!agents.contains(superseded_stop), "{flavor}: {agents}");
+        assert!(
+            !agents.contains("### Director Workflow Override"),
+            "{flavor}: {agents}"
+        );
         for expected in [
             "Treat changed-content integrity, AC-template structure, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.",
             "Validate AC-document-only Draft and Refine edits with the required document checks.",
@@ -573,8 +604,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.22.2"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.22.2"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.23.0"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.23.0"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -3155,8 +3186,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.22.2.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.22.2.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.23.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.23.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -4794,7 +4825,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.22.2\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.23.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -4966,7 +4997,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.2\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.23.0\n"));
     }
     assert!(
         govna()
@@ -4987,7 +5018,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.22.2\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.23.0\n"));
 }
 
 #[test]
