@@ -604,8 +604,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.23.0"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.23.0"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.24.0"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.24.0"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -3186,8 +3186,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.23.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.23.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.24.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.24.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -4825,7 +4825,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.23.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.24.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -4997,7 +4997,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.23.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.24.0\n"));
     }
     assert!(
         govna()
@@ -5018,7 +5018,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.23.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.24.0\n"));
 }
 
 #[test]
@@ -5084,6 +5084,58 @@ fn rendered_rust_prep_validation_token_contract_matches_source() {
         String::from_utf8_lossy(&shell_tests.stdout),
         String::from_utf8_lossy(&shell_tests.stderr)
     );
+}
+
+#[test]
+fn rendered_agents_scope_rust_validation_token_contract() {
+    let conditional_rules = [
+        "Pass the full build's validation token to Rust prep during `Package` only when the repository provides Rust validation-token support.",
+        "Fall back to a pre-change full build only when Rust validation-token support exists and its prep evidence is missing or stale.",
+        "Refresh Rust validation evidence from the same scratch baseline only when the repository provides Rust validation-token support and the installed `govna/canon-baseline.txt` is verified.",
+        "Use the refreshed Rust validation token as Package evidence only when the repository provides Rust validation-token support.",
+    ];
+    let unconditional_rules = [
+        "Pass the full build's validation token to Rust prep during `Package`.",
+        "Fall back to a pre-change full build when Rust prep evidence is missing or stale.",
+        "Refresh Rust validation evidence from the same scratch baseline only after installing and verifying `govna/canon-baseline.txt`.",
+        "Use the refreshed Rust validation token as Package evidence.",
+    ];
+
+    for stack in ["go", "rust", "swift", "terraform", "node", "python", "java"] {
+        let rendered_dir = new_fixture();
+        let mut args = vec!["render", "--flavor", "code", "--stack", stack];
+        if stack == "go" {
+            args.extend(["--module-path", "example.com/validation-token-scope"]);
+        }
+        args.push(rendered_dir.to_str().unwrap());
+        let output = govna().args(args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{stack}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let agents = read(&rendered_dir.join("AGENTS.md"));
+        for rule in conditional_rules {
+            assert!(agents.contains(rule), "{stack}: {rule}: {agents}");
+        }
+        for rule in unconditional_rules {
+            assert!(
+                !agents.lines().any(|line| line == format!("- {rule}")),
+                "{stack}: {rule}: {agents}"
+            );
+        }
+    }
+
+    let doc_dir = rendered_doc_fixture();
+    let doc_agents = read(&doc_dir.join("AGENTS.md"));
+    for excluded in [
+        "current pre-change Package evidence",
+        "Rust prep",
+        "Rust validation evidence",
+        "Rust validation token",
+    ] {
+        assert!(!doc_agents.contains(excluded), "{excluded}: {doc_agents}");
+    }
 }
 
 #[test]

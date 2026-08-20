@@ -260,9 +260,6 @@ Note: this rule does not prohibit batching independent commands.
 - Start `Package` only after an explicit Director request.
 - Do not infer Package from Ratify acceptance.
 - Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent names for `Package` only after Ratify acceptance.
-- Use the successful final full build and clean Ratify review as current pre-change Package evidence.
-- Pass the full build's validation token to Rust prep during `Package`.
-- Fall back to a pre-change full build when Rust prep evidence is missing or stale.
 - Preserve release-prep mutations, release behavior, and approval boundaries during `Package`.
 
 ### Phase-Advancement Rules
@@ -342,8 +339,6 @@ Note: the Director flags scope concerns in chat during this window.
 - Run the resolved validation command after all selected sync, migration, and deletion work.
 - Cite repository evidence when resolving validation as `Not applicable`.
 - Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test, routing outcome, and validation disposition passes.
-- Refresh Rust validation evidence from the same scratch baseline only after installing and verifying `govna/canon-baseline.txt`.
-- Use the refreshed Rust validation token as Package evidence.
 - Do not re-run `govna audit` as an implementation gate for the emitted AC.
 - Verify each resolved sync target against its applicable rendered canon region.
 - Verify each migration source is absent unless the Director explicitly preserves it.
