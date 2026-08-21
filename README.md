@@ -145,7 +145,7 @@ The top three are close enough that their ordering should not be treated as stab
 
 Reflection-heavy frameworks — heavy DI containers, declarative/metaclass-driven ORMs, runtime proxies — erode comprehension readability in any language by moving behavior away from what an agent can directly search and trace. Repository observability often matters as much as language choice: small modules, explicit boundaries, typed validation at external-data boundaries, deterministic builds, focused tests, fast checks, and searchable control flow.
 
-**Scope:** This ranking applies to conventional application and CLI repositories under repeated agentic maintenance, not universally. TypeScript tends to gain an additional advantage in web applications because of ecosystem depth and library typing. This reflects the judgment of several coding agents (Claude, OpenAI Codex, ChatGPT), not an empirical benchmark. Treat the two-axis framework as the durable claim and the ordinal ranking as a workload- and workflow-dependent heuristic.
+**Scope:** This ranking applies to conventional application and CLI repositories under repeated agentic maintenance, not universally. TypeScript tends to gain an additional advantage in web applications because of ecosystem depth and library typing. This reflects the judgment of several CLI-type coding agents, not an empirical benchmark. Treat the two-axis framework as the durable claim and the ordinal ranking as a workload- and workflow-dependent heuristic.
 
 ## Current Stage
 
