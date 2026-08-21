@@ -76,12 +76,12 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 
 ### Contract Integrity
 
-- Apply contract-integrity reporting when governance instructions are contradictory, circular, unexecutable, or repeatedly produce a workflow loop.
+- Apply contract-integrity reporting when governance instructions are contradictory, circular, unexecutable, repeatedly produce a workflow loop, or present demonstrated contract-growth evidence.
 - Define a repeated workflow loop as the same conflict forcing at least two unnecessary phase returns, correction cycles, or Director round-trips.
 - Report a directly demonstrated contradiction, circular dependency, or unexecutable instruction without waiting for repetition.
 - Require repository evidence, an observed workflow consequence, or a directly demonstrable consequence for every finding.
 - Avoid executing a broken or unsafe path solely to produce finding evidence.
-- Exclude wording preferences, harmless redundancy, speculative conflicts, and disagreement with a settled Director decision.
+- Exclude wording preferences, harmless redundancy, raw size, speculative maintainability concerns, speculative conflicts, and disagreement with a settled Director decision.
 - Cite each source path, section heading, short targeted instruction snippet, and operational effect.
 - State whether the finding blocks the active authorized work.
 - Recommend one minimal correction when one viable correction exists.
@@ -90,6 +90,9 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Route `Consumer-local` corrections to `## Project Rules` or the owning repo document.
 - Classify shared phase, approval, scope, role, canon, or template findings as `Govna canon`.
 - Route `Govna canon` corrections to the authoritative source and every applicable consumer path.
+- State `Upstream Govna canon change required.` for every Govna-canon finding observed in a consumer repository.
+- Cite the authoritative upstream section or document for every consumer-observed Govna-canon finding.
+- Prohibit permanent local governance from recording an upstream canon correction.
 - Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon.
 - Mark every temporary consumer mitigation explicitly and state its removal condition.
 - Prohibit a temporary consumer mitigation from overriding or contradicting canon.
@@ -110,6 +113,26 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Continue prohibiting memory entries, `feedback.md`, and session-note artifacts for repository-behavior corrections.
 - Require explicit Director authorization before changing consumer-local governance or govna canon.
 - Prevent contract-integrity reporting from authorizing a new AC phase, governance edit, delegation, commit, publication, or release action.
+
+### Contract Growth
+
+- Run a prospective contract-growth review during Audit or Refine when an active AC proposes governance instructions.
+- Run a measurable contract-growth review after authorized governance edits and before Implement completion.
+- Measure authorized AGENTS.md hunks against the phase-entry baseline while excluding unrelated working-tree changes.
+- Report added, removed, and net AGENTS.md line and rule-shaped-bullet counts.
+- Prevent contract-growth measurements alone from becoming findings.
+- Check every new or rewritten AGENTS.md rule for overlap and placement.
+- Keep shared triggers, authorization boundaries, safety constraints, and required outcomes in AGENTS.md.
+- Place rationale, examples, and domain-specific procedure in an explicitly referenced owning governance document.
+- Preserve short atomic imperative instructions as the default.
+- Prohibit general compression through compound instructions.
+- Prefer thematic `###` groupings and shared invariants over an unbounded flat instruction list.
+- Merge or retire an overlapping instruction only within authorized scope and settled semantics.
+- Report an out-of-scope or decision-bearing overlap without editing it.
+- Return to Refine for an out-of-scope or decision-bearing overlap.
+- Test representative triggers, authorization boundaries, allowed actions, exceptions, and exit conditions after governance restructuring.
+- Record each governance-restructuring scenario input and expected outcome in the closure-audit record.
+- Treat material duplication, misplaced procedural detail, excessive flat density with operational effect, or demonstrated retrieval or execution impairment as contract-growth evidence.
 
 ## Approval Boundaries
 

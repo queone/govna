@@ -26,6 +26,10 @@ Effective implementation scope avoids repeating settled Director decisions for d
 
 Evidence-triggered reporting distinguishes contract defects from implementation defects without inviting ambient opinion. Classification routes consumer-local, canon, or unclear findings but never grants editing authority. Blocking findings stop unsafe or decision-bearing work; unchanged acknowledged findings stay silent; authorized corrections land only in their owning governance document.
 
+## Why Contract Growth Is Reviewed
+
+Contract-growth review applies only to proposed or authorized governance changes. Measurements trigger inspection, not findings. Atomicity reduces dropped qualifiers; hierarchy and shared invariants reduce whole-contract dilution. Consumer evidence routes shared defects upstream without granting editing authority.
+
 ## Why Ratify Auto-Corrects Implementation-Only Findings
 
 Ratify auto-corrects only defects already decided by the settled contract. Out Of Scope and Director-owned categories preserve the safety boundary, while the bounded retry loop prevents indefinite self-correction.

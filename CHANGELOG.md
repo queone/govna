@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.33.0 | AC44: add contract-growth integrity checks |
 | 0.32.0 | AC43: streamline operator reporting and ceremony guidance |
 | 0.31.0 | AC42: scope Rust validation-token rules |
 | 0.30.0 | AC41: allow explicit Director overrides of AC-first workflow |

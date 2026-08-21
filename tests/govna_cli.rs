@@ -604,8 +604,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.25.0"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.25.0"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.26.0"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.26.0"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -720,6 +720,98 @@ fn rendered_contracts_define_concise_reporting_and_ceremony_triage() {
 }
 
 #[test]
+fn rendered_contracts_define_contract_growth_integrity() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let rules = [
+        "Apply contract-integrity reporting when governance instructions are contradictory, circular, unexecutable, repeatedly produce a workflow loop, or present demonstrated contract-growth evidence.",
+        "Run a prospective contract-growth review during Audit or Refine when an active AC proposes governance instructions.",
+        "Run a measurable contract-growth review after authorized governance edits and before Implement completion.",
+        "Measure authorized AGENTS.md hunks against the phase-entry baseline while excluding unrelated working-tree changes.",
+        "Report added, removed, and net AGENTS.md line and rule-shaped-bullet counts.",
+        "Prevent contract-growth measurements alone from becoming findings.",
+        "Keep shared triggers, authorization boundaries, safety constraints, and required outcomes in AGENTS.md.",
+        "Place rationale, examples, and domain-specific procedure in an explicitly referenced owning governance document.",
+        "Preserve short atomic imperative instructions as the default.",
+        "Prohibit general compression through compound instructions.",
+        "Prefer thematic `###` groupings and shared invariants over an unbounded flat instruction list.",
+        "Merge or retire an overlapping instruction only within authorized scope and settled semantics.",
+        "Report an out-of-scope or decision-bearing overlap without editing it.",
+        "Return to Refine for an out-of-scope or decision-bearing overlap.",
+        "Test representative triggers, authorization boundaries, allowed actions, exceptions, and exit conditions after governance restructuring.",
+        "Record each governance-restructuring scenario input and expected outcome in the closure-audit record.",
+        "Treat material duplication, misplaced procedural detail, excessive flat density with operational effect, or demonstrated retrieval or execution impairment as contract-growth evidence.",
+        "State `Upstream Govna canon change required.` for every Govna-canon finding observed in a consumer repository.",
+        "Cite the authoritative upstream section or document for every consumer-observed Govna-canon finding.",
+        "Prohibit permanent local governance from recording an upstream canon correction.",
+    ];
+
+    for path in [
+        "AGENTS.md",
+        "templates/base/AGENTS.md",
+        "templates/overlays/doc/files/AGENTS.md.tmpl",
+    ] {
+        let agents = read(&repo.join(path));
+        assert!(agents.contains("### Contract Growth"), "{path}");
+        assert!(agents.contains("Exclude wording preferences, harmless redundancy, raw size, speculative maintainability concerns, speculative conflicts, and disagreement with a settled Director decision."), "{path}");
+        for rule in rules {
+            assert!(
+                agents.lines().any(|line| line == format!("- {rule}")),
+                "{path}: {rule}"
+            );
+        }
+    }
+
+    let rationale_markers = [
+        "## Why Contract Growth Is Reviewed",
+        "applies only to proposed or authorized governance changes",
+        "Measurements trigger inspection, not findings",
+        "Atomicity reduces dropped qualifiers",
+        "hierarchy and shared invariants reduce whole-contract dilution",
+        "Consumer evidence routes shared defects upstream",
+    ];
+    for path in [
+        "govna/operator-contract-rationale.md",
+        "templates/overlays/code/files/govna/operator-contract-rationale.md.tmpl",
+        "templates/overlays/doc/files/govna/operator-contract-rationale.md.tmpl",
+    ] {
+        let rationale = read(&repo.join(path));
+        for marker in rationale_markers {
+            assert!(rationale.contains(marker), "{path}: {marker}");
+        }
+    }
+
+    let arch = read(&repo.join("arch.md"));
+    for marker in [
+        "## LLM Coding Agent Challenges",
+        "Compound clauses",
+        "Short atomic imperative instructions",
+        "long flat list",
+        "thematic hierarchy, shared invariants, and owning-document placement",
+        "validate representative triggers, boundaries, allowed actions, exceptions, and exit conditions",
+        "ongoing architecture constraint rather than a settled empirical result",
+    ] {
+        assert!(arch.contains(marker), "arch.md: {marker}");
+    }
+
+    for flavor in ["code", "doc"] {
+        let target = new_fixture();
+        let out = govna()
+            .args(["render", "--flavor", flavor, target.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{flavor}");
+        let agents = read(&target.join("AGENTS.md"));
+        for rule in rules {
+            assert!(agents.contains(rule), "{flavor}: {rule}");
+        }
+        let rationale = read(&target.join("govna/operator-contract-rationale.md"));
+        for marker in rationale_markers {
+            assert!(rationale.contains(marker), "{flavor}: {marker}");
+        }
+    }
+}
+
+#[test]
 fn documentation_avoids_unnecessary_coding_agent_names() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
     let prohibited = [
@@ -751,7 +843,7 @@ fn documentation_avoids_unnecessary_coding_agent_names() {
 }
 
 #[test]
-fn rendered_contract_bundle_is_compact_and_preserves_authority() {
+fn rendered_contract_bundle_preserves_authority() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
     for (source, template) in [
         (
@@ -820,47 +912,6 @@ fn rendered_contract_bundle_is_compact_and_preserves_authority() {
         );
         bundles.push((flavor, target));
     }
-
-    let code_paths = [
-        "AGENTS.md",
-        "govna/roles.md",
-        "govna/development-cycle.md",
-        "govna/development-guidelines.md",
-        "govna/build-release.md",
-        "govna/audit.md",
-        "govna/ac-template.md",
-        "govna/canon-cycle.md",
-        "govna/code-stacks.md",
-        "govna/operator-contract-rationale.md",
-    ];
-    let doc_paths = [
-        "AGENTS.md",
-        "govna/roles.md",
-        "govna/editing-cycle.md",
-        "govna/editing-guidelines.md",
-        "govna/release.md",
-        "govna/audit.md",
-        "govna/ac-template.md",
-        "govna/canon-cycle.md",
-        "govna/operator-contract-rationale.md",
-    ];
-    let counts: Vec<usize> = bundles
-        .iter()
-        .zip([&code_paths[..], &doc_paths[..]])
-        .map(|((_, target), paths)| {
-            paths
-                .iter()
-                .map(|path| read(&target.join(path)).split_whitespace().count())
-                .sum()
-        })
-        .collect();
-    assert!(
-        counts[0] + counts[1] <= 22_880,
-        "CODE={} DOC={} combined={}",
-        counts[0],
-        counts[1],
-        counts[0] + counts[1]
-    );
 
     struct AtomicInstruction {
         id: &'static str,
@@ -3305,8 +3356,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.25.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.25.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.26.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.26.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -4870,12 +4921,12 @@ fn render_audit_docs_and_version_match_authority() {
             "Prohibit new production behavior, production files, interfaces, dependency decisions, migrations, or architectural choices",
             "Return to Refine when more than one materially distinct valid outcome exists",
             "Record each effective-scope path, triggering in-scope change, and eligibility rule in the applicable Implement or Ratify completion report",
-            "Apply contract-integrity reporting when governance instructions are contradictory, circular, unexecutable, or repeatedly produce a workflow loop",
+            "Apply contract-integrity reporting when governance instructions are contradictory, circular, unexecutable, repeatedly produce a workflow loop, or present demonstrated contract-growth evidence",
             "Define a repeated workflow loop as the same conflict forcing at least two unnecessary phase returns, correction cycles, or Director round-trips",
             "Report a directly demonstrated contradiction, circular dependency, or unexecutable instruction without waiting for repetition",
             "Require repository evidence, an observed workflow consequence, or a directly demonstrable consequence for every finding",
             "Avoid executing a broken or unsafe path solely to produce finding evidence",
-            "Exclude wording preferences, harmless redundancy, speculative conflicts, and disagreement with a settled Director decision",
+            "Exclude wording preferences, harmless redundancy, raw size, speculative maintainability concerns, speculative conflicts, and disagreement with a settled Director decision",
             "Cite each source path, section heading, short targeted instruction snippet, and operational effect",
             "Classify repository-specific tools, architecture, release, content, or operating-preference findings as `Consumer-local`",
             "Route `Consumer-local` corrections to `## Project Rules` or the owning repo document",
@@ -4944,7 +4995,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.25.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.26.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -5116,7 +5167,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.25.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.26.0\n"));
     }
     assert!(
         govna()
@@ -5137,7 +5188,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.25.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.26.0\n"));
 }
 
 #[test]

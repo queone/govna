@@ -36,6 +36,14 @@ The governed change path is `Draft → Audit → Refine → Implement → Ratify
 
 Acceptance Criteria are non-runtime control artifacts for non-trivial changes. An AC carries Director intent through bounded Operator implementation and verification, then is deleted during release prep after durable decisions land elsewhere. `AGENTS.md` is authoritative for the AC threshold and gates.
 
+## LLM Coding Agent Challenges
+
+Govna treats instruction design as an ongoing architecture constraint rather than a settled empirical result. Compound clauses can cause a coding agent to follow the salient command while dropping a qualifier, exception, or authorization boundary. Short atomic imperative instructions reduce that local failure mode.
+
+Atomicity creates a different risk when the contract becomes a long flat list: relationships lose prominence, repeated rules compete for attention, and the agent must reconstruct workflow structure from many independent bullets. Govna therefore pairs atomic instructions with thematic hierarchy, shared invariants, and owning-document placement for rationale, examples, and domain-specific procedure.
+
+Governance restructuring must preserve executable rules and validate representative triggers, boundaries, allowed actions, exceptions, and exit conditions. Contract size is inspection evidence, not proof of a defect; scenario behavior and demonstrated retrieval or execution effects decide whether structure needs correction.
+
 ## Architecture Notes
 
 - generated repos must remain self-contained and must not depend on this repo at runtime
