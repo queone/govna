@@ -125,7 +125,7 @@ Releases, commits, and pushes remain Director-controlled; `build.sh` provides va
 
 Scope is deliberately narrow: govna aims to be a small, stable collaboration contract — not a full-stack generator or an opinionated starter kit. The fewer primitives it ships, the less there is to drift against.
 
-The primary validation surface so far has been CLI-type coding agents, principally [Claude Code](https://github.com/anthropics/claude-code). The contract is file-based and agent-agnostic in principle — desktop clients and IDE-integrated agents can read the same files — but expect rougher edges there until those patterns are exercised.
+The primary validation surface so far has been CLI-type coding agents. The contract is file-based and agent-agnostic in principle — desktop clients and IDE-integrated agents can read the same files — but expect rougher edges there until those patterns are exercised.
 
 ## Self-Hosting Status
 

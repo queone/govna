@@ -604,8 +604,8 @@ fn rendered_agents_define_active_ac_exceptions() {
 
         let metadata = read(&target.join("govna/metadata.txt"));
         let baseline = read(&target.join("govna/canon-baseline.txt"));
-        assert!(metadata.contains("canon_version = v0.24.0"), "{metadata}");
-        assert!(baseline.contains("canon_version = v0.24.0"), "{baseline}");
+        assert!(metadata.contains("canon_version = v0.25.0"), "{metadata}");
+        assert!(baseline.contains("canon_version = v0.25.0"), "{baseline}");
     }
 
     let code_agents = read(&rendered[0].1.join("AGENTS.md"));
@@ -628,6 +628,125 @@ fn rendered_agents_define_active_ac_exceptions() {
             "Run `./build.sh` as the first validation command in every validation cycle."
         ),
         "{doc_agents}"
+    );
+}
+
+#[test]
+fn rendered_contracts_define_concise_reporting_and_ceremony_triage() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let agent_rules = [
+        "Evaluate AC ceremony during initial request triage when the Director has not selected Draft.",
+        "Treat changes exceeding eight counted files as presumptively AC-worthy.",
+        "Track the primary repository and current phase internally.",
+        "Report the primary repository or current phase only for ancillary work, repository or phase ambiguity, a phase correction, or a repository switch.",
+        "Assign Audit findings sequential identifiers in the form `F<#> [High|Medium|Low|Nit]`.",
+        "Keep one finding sequence for the active AC lifecycle.",
+        "Start a separate finding sequence for each standalone contract-integrity report.",
+        "Open every substantive phase completion with one short outcome sentence.",
+        "Suppress routine repository labels, phase labels, phase mechanics, expected skips, duplicated status, and expected no-action confirmations.",
+        "Keep independently useful results, corrections, findings, and risks in separate bullets.",
+        "Color `Verified:`, `Red-teamed:`, and `Not checked:` cyan only when the response channel explicitly supports native color or ANSI color.",
+        "Place a section's sole item on the heading line without a bullet.",
+    ];
+    let role_rules = [
+        "Assign stable severity-qualified finding identifiers under `AGENTS.md` Review Style.",
+        "Keep each independently useful self-review item distinct.",
+        "Place a sole self-review item on its heading line.",
+        "Use terse flat bullets for multiple self-review items.",
+        "Keep substantive summaries focused on task results and actionable exceptions.",
+    ];
+
+    for path in [
+        "AGENTS.md",
+        "templates/base/AGENTS.md",
+        "templates/overlays/doc/files/AGENTS.md.tmpl",
+    ] {
+        let contents = read(&repo.join(path));
+        for expected in agent_rules {
+            assert!(contents.contains(expected), "{path}: {expected}");
+        }
+    }
+
+    for path in [
+        "govna/roles.md",
+        "templates/overlays/code/files/govna/roles.md.tmpl",
+        "templates/overlays/doc/files/govna/roles.md.tmpl",
+    ] {
+        let contents = read(&repo.join(path));
+        for expected in role_rules {
+            assert!(contents.contains(expected), "{path}: {expected}");
+        }
+    }
+
+    for flavor in ["code", "doc"] {
+        let cwd = new_fixture();
+        if flavor == "code" {
+            fs::write(cwd.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        }
+        let target = new_fixture();
+        let out = govna()
+            .args(["render", "--flavor", flavor, target.to_str().unwrap()])
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{flavor}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let agents = read(&target.join("AGENTS.md"));
+        for expected in agent_rules {
+            assert!(agents.contains(expected), "{flavor}: {expected}");
+        }
+        let roles = read(&target.join("govna/roles.md"));
+        for expected in role_rules {
+            assert!(roles.contains(expected), "{flavor}: {expected}");
+        }
+        let readme = read(&target.join("README.md"));
+        for contents in [&agents, &roles, &readme] {
+            for name in [
+                "Claude Code",
+                "Anthropic",
+                "OpenAI Codex",
+                "ChatGPT",
+                "GitHub Copilot",
+                "Google Gemini",
+            ] {
+                assert!(!contents.contains(name), "{flavor}: {name}");
+            }
+        }
+    }
+}
+
+#[test]
+fn documentation_avoids_unnecessary_coding_agent_names() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let prohibited = [
+        "Claude Code",
+        "Anthropic",
+        "OpenAI Codex",
+        "ChatGPT",
+        "GitHub Copilot",
+        "Google Gemini",
+    ];
+
+    for path in [
+        "README.md",
+        "AGENTS.md",
+        "templates/base/AGENTS.md",
+        "templates/overlays/doc/files/AGENTS.md.tmpl",
+    ] {
+        let contents = read(&repo.join(path));
+        for name in prohibited {
+            assert!(!contents.contains(name), "{path}: {name}");
+        }
+    }
+
+    assert!(read(&repo.join("AGENTS.md")).contains("`CLAUDE.md`"));
+    assert!(
+        read(&repo.join("README.md"))
+            .contains("The primary validation surface so far has been CLI-type coding agents.")
     );
 }
 
@@ -3186,8 +3305,8 @@ fn audit_clean_run_does_not_consume_next_ac_number() {
 
     fs::remove_file(dir.join("govna/roles.md")).unwrap();
     let report = audit_json(&dir);
-    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.24.0.md");
-    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.24.0.md"]);
+    assert_eq!(report["emitted"]["ac_stub"], "govna/ac1-audit-v0.25.0.md");
+    assert_eq!(audit_stub_names(&dir), ["ac1-audit-v0.25.0.md"]);
 }
 
 // re-running immediately (unedited stub) reuses the same AC number;
@@ -4825,7 +4944,7 @@ fn render_audit_docs_and_version_match_authority() {
         }
         assert!(!agents.contains("Keep Ratify complete only after the Director accepts"));
         assert!(!agents.contains("Confirm or override the emitted validation disposition in chat"));
-        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.24.0\n"));
+        assert!(read(&dir.join("govna/metadata.txt")).contains("canon_version = v0.25.0\n"));
         let audit_doc = read(&dir.join("govna/audit.md"));
         for contract in [
             "only when the completed report contains actionable work",
@@ -4997,7 +5116,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
         }
         let baseline = read(&code_dir.join("govna/canon-baseline.txt"));
         assert!(baseline.contains("govna/build-release.md\tbefore:## Project Practices\t"));
-        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.24.0\n"));
+        assert!(read(&code_dir.join("govna/metadata.txt")).contains("canon_version = v0.25.0\n"));
     }
     assert!(
         govna()
@@ -5018,7 +5137,7 @@ fn render_code_build_release_is_stack_aware_and_bounded() {
     }
     assert!(!read(&doc_dir.join("govna/release.md")).contains("## Rust Compilation Reuse"));
     assert!(!doc_dir.join("govna/build-release.md").exists());
-    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.24.0\n"));
+    assert!(read(&doc_dir.join("govna/metadata.txt")).contains("canon_version = v0.25.0\n"));
 }
 
 #[test]
