@@ -6,7 +6,7 @@ Planned Go successor to [`govna-rust`](https://github.com/queone/govna-rust), th
 
 Govna changes frequently. Go's faster edit-build-test cycle is expected to improve iteration speed while the Rust repository supplies a stable reference for externally observable behavior.
 
-The dependency-free Go implementation provides top-level dispatch, usage, version output, Rust-compatible terminal color gating, and deterministic `render` behavior for CODE and DOC consumers. Render supports cwd-based flavor and stack inference, explicit overrides, embedded canon overlays, deterministic baselines, file modes, and the `CLAUDE.md` symlink. Apply, audit, and removal behavior remain staged work. [`govna/parity.md`](govna/parity.md) defines the contract against the frozen Rust reference, including approved successor-owned identity substitutions. S3 apply and adoption are next.
+The dependency-free Go implementation provides top-level dispatch, deterministic rendering, and `apply` for fresh or existing CODE and DOC repositories. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Legacy `governa/` content is intentionally ignored. Audit and removal remain staged work. [`govna/parity.md`](govna/parity.md) defines the frozen-reference contract and approved differences. S4 audit is next.
 
 ## Governance
 

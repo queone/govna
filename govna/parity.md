@@ -44,7 +44,7 @@ For S1 byte-exact output, substitute the Go successor's current `programVersion`
 - Preserve target assessment, flavor and stack inference, new and existing modes, overwrite labels, preserved repo-owned files, mixed-content hunk merging, and deterministic adoption-AC emission.
 - Preserve idempotent AC reuse and edited-stub refusal.
 - Preserve source-checkout refusal before target traversal.
-- Preserve governa migration detection, precise and fallback classification, merged migration emission, and self-termination.
+- Intentionally ignore legacy governa content and provide no predecessor-migration behavior.
 - Intentionally require `apply -g` to initialize `main` and prohibit creation or publication of `master`.
 
 ### Audit
@@ -90,7 +90,7 @@ For S1 byte-exact output, substitute the Go successor's current `programVersion`
 | BND-002 | Emitted Rust consumer tooling | Preserve the rendered Rust build and validation-token contracts semantically because they remain externally observable consumer output. | Exclude the Go product repository's own build mechanics from this surface. |
 | BND-003 | Frozen Rust product mechanics | Retain source traceability for Cargo manifest parsing, shared Cargo target ownership, and Cargo target cleanup. | Classify those mechanics as `implementation-specific`; require Go-native replacements only for the outcomes in BND-001. |
 | BND-004 | Implementation architecture | Preserve only behavior and single-stage ownership. | Defer packages, dependencies, CLI libraries, embedding strategy, data structures, concurrency, and internal control flow to owning implementation ACs. |
-| BND-005 | Intentional difference | Initialize `apply -g` repositories on `main` and prohibit creation or publication of `master`. | Permit no other intentional difference without Director approval and a new reasoned requirement. |
+| BND-005 | Intentional difference | Initialize `apply -g` repositories on `main`, prohibit creation or publication of `master`, and omit predecessor governa migration. | Permit no other intentional difference without Director approval and a new reasoned requirement. |
 
 ## Future Stages
 
@@ -204,13 +204,13 @@ Keep stage boundaries behavioral. Defer package layout, dependencies, libraries,
 | REM-009 | Removal | integration:rm_requires_adoption_and_git_worktree | Rm requires adoption and git worktree. | semantic | S5 | tests/govna_cli.rs::rm_requires_adoption_and_git_worktree |
 | REM-010 | Removal | integration:rm_flavor_override_changes_canon_set | Rm flavor override changes canon set. | semantic | S5 | tests/govna_cli.rs::rm_flavor_override_changes_canon_set |
 | REM-011 | Removal | integration:rm_rejects_positional_args | Rm rejects positional args. | semantic | S5 | tests/govna_cli.rs::rm_rejects_positional_args |
-| APL-012 | Apply | integration:apply_migration_carries_over_legacy_metadata | Apply migration carries over legacy metadata. | semantic | S3 | tests/govna_cli.rs::apply_migration_carries_over_legacy_metadata |
-| APL-013 | Apply | integration:apply_migration_emits_single_merged_ac | Apply migration emits single merged ac. | semantic | S3 | tests/govna_cli.rs::apply_migration_emits_single_merged_ac |
-| APL-014 | Apply | integration:apply_migration_precise_tier_classifies_via_fake_governa | Apply migration precise tier classifies via fake governa. | semantic | S3 | tests/govna_cli.rs::apply_migration_precise_tier_classifies_via_fake_governa |
-| APL-015 | Apply | integration:apply_migration_crude_tier_fallback_no_governa_binary | Apply migration crude tier fallback no governa binary. | semantic | S3 | tests/govna_cli.rs::apply_migration_crude_tier_fallback_no_governa_binary |
-| APL-016 | Apply | integration:apply_migration_falls_back_when_render_fails | Apply migration falls back when render fails. | semantic | S3 | tests/govna_cli.rs::apply_migration_falls_back_when_render_fails |
-| APL-017 | Apply | integration:apply_migration_idempotent_reuse_and_edit_detection_guard | Apply migration idempotent reuse and edit detection guard. | semantic | S3 | tests/govna_cli.rs::apply_migration_idempotent_reuse_and_edit_detection_guard |
-| APL-018 | Apply | integration:apply_migration_noop_without_governa_dir_and_self_terminates | Apply migration noop without governa dir and self terminates. | semantic | S3 | tests/govna_cli.rs::apply_migration_noop_without_governa_dir_and_self_terminates |
+| APL-012 | Apply | integration:apply_migration_carries_over_legacy_metadata | Ignore legacy governa metadata and use only explicit inputs, govna metadata, or repository signals. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
+| APL-013 | Apply | integration:apply_migration_emits_single_merged_ac | Emit only the ordinary adoption AC and no migration content. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
+| APL-014 | Apply | integration:apply_migration_precise_tier_classifies_via_fake_governa | Execute no external governa command or precise classification. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
+| APL-015 | Apply | integration:apply_migration_crude_tier_fallback_no_governa_binary | Perform no fallback migration classification. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
+| APL-016 | Apply | integration:apply_migration_falls_back_when_render_fails | Perform no governa render or fallback behavior. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
+| APL-017 | Apply | integration:apply_migration_idempotent_reuse_and_edit_detection_guard | Create no marked migration stub or migration edit guard. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
+| APL-018 | Apply | integration:apply_migration_noop_without_governa_dir_and_self_terminates | Ignore every governa path without reading or mutating it. | intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor. |
 | APL-019 | Apply | integration:apply_hunk_merges_agents_md_preserving_extra_bullets | Apply hunk merges agents md preserving extra bullets. | semantic | S3 | tests/govna_cli.rs::apply_hunk_merges_agents_md_preserving_extra_bullets |
 | APL-020 | Apply | integration:apply_hunk_merge_idempotent_when_unmodified | Apply hunk merge idempotent when unmodified. | semantic | S3 | tests/govna_cli.rs::apply_hunk_merge_idempotent_when_unmodified |
 | APL-021 | Apply | integration:apply_skips_readme_and_changelog_when_existing | Apply skips readme and changelog when existing. | semantic | S3 | tests/govna_cli.rs::apply_skips_readme_and_changelog_when_existing |

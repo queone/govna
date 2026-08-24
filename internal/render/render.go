@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/queone/govna/internal/canon"
+	"github.com/queone/govna/internal/repository"
 )
 
 func Run(args []string, stdout, stderr io.Writer, cwd string) int {
@@ -16,7 +17,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	if code != 0 {
 		return code
 	}
-	resolvedFlavor, err := resolveFlavor(cwd, flavor)
+	resolvedFlavor, err := repository.Flavor(cwd, flavor)
 	if err != nil {
 		fmt.Fprintf(stderr, "infer flavor from cwd: %v (use --flavor to override)\n", err)
 		return 1
@@ -31,7 +32,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	}
 	if resolvedFlavor == canon.Code {
 		if stack == "" {
-			stack = inferStack(cwd)
+			stack = repository.Stack(cwd)
 			if stack == "" {
 				fmt.Fprintf(stderr, "could not infer CODE stack from cwd=%s; pass --stack to override\n", cwd)
 				return 1
@@ -45,7 +46,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 		stack = canonical
 		if stack == "Go" {
 			if modulePath == "" {
-				modulePath = readModulePath(cwd)
+				modulePath = repository.ModulePath(cwd)
 				if modulePath == "" {
 					fmt.Fprintf(stderr, "could not read module path from cwd's go.mod (cwd=%s); pass --module-path to override\n", cwd)
 					return 1
@@ -212,20 +213,6 @@ func inferStack(cwd string) string {
 	}
 	if matches, _ := filepath.Glob(filepath.Join(cwd, "*.tf")); len(matches) > 0 {
 		return "Terraform"
-	}
-	return ""
-}
-
-func readModulePath(cwd string) string {
-	data, err := os.ReadFile(filepath.Join(cwd, "go.mod"))
-	if err != nil {
-		return ""
-	}
-	for line := range strings.SplitSeq(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(line, "module "); ok {
-			return strings.TrimSpace(after)
-		}
 	}
 	return ""
 }

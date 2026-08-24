@@ -104,6 +104,14 @@ func TestReservedCommandHelp(t *testing.T) {
 	}
 }
 
+func TestApplyHelpAliases(t *testing.T) {
+	want := applyHelp()
+	for _, alias := range []string{"-h", "--help", "-?"} {
+		stdout, stderr, code := execute("apply", alias)
+		assertResult(t, stdout, stderr, code, "", want, 0)
+	}
+}
+
 func TestRenderAliasesOperational(t *testing.T) {
 	cwd := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cwd, "Cargo.toml"), []byte("[package]\nname = \"widget\"\n"), 0o644); err != nil {
@@ -121,7 +129,7 @@ func TestRenderAliasesOperational(t *testing.T) {
 
 func TestReservedCommandsUnavailable(t *testing.T) {
 	for _, tc := range []struct{ input, canonical string }{
-		{"apply", "apply"}, {"audit", "audit"}, {"drift-scan", "audit"}, {"rm", "rm"},
+		{"audit", "audit"}, {"drift-scan", "audit"}, {"rm", "rm"},
 	} {
 		for _, args := range [][]string{{tc.input}, {tc.input, "extra"}, {tc.input, "-h", "extra"}} {
 			name := strings.Join(args, " ")

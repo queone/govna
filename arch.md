@@ -17,6 +17,9 @@ The S1 command foundation and S2 embedded renderer are implemented as a dependen
 - `cmd/govna`: command dispatch, version and usage output, terminal-color gating, frozen render and audit help, and deferred operational handlers.
 - `internal/canon`: embedded canon assets, substitutions, overlay composition, and deterministic baseline generation.
 - `internal/render`: render argument handling, cwd inference, validation, and filesystem emission.
+- `internal/repository`: shared repository identity and source-checkout resolution.
+- `internal/apply`: fresh/existing adoption, protected writes, boundary merging, symlink handling, and optional Git initialization.
+- `internal/emission`: monotonic adoption-AC numbering across files and Git history.
 - Governance, release scaffolding, and the behavioral-parity contract.
 
 ## Core Files
@@ -34,7 +37,9 @@ The S1 command foundation and S2 embedded renderer are implemented as a dependen
 
 ## Data And Control Flow
 
-`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner routes render requests into `internal/render`, which resolves cwd identity and asks `internal/canon` for a path-sorted in-memory file set. The renderer writes that set without pre-cleaning, applies deterministic modes, installs the baseline, and recreates the `CLAUDE.md` symlink. Other reserved commands remain temporary handlers until S3 through S5 replace them.
+`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner routes render requests into `internal/render`, which resolves cwd identity and asks `internal/canon` for a path-sorted in-memory file set. The renderer writes that set without pre-cleaning, applies deterministic modes, installs the baseline, and recreates the `CLAUDE.md` symlink. Audit and removal remain temporary handlers until S4 and S5 replace them.
+
+Apply resolves the cwd through `internal/repository`, renders the same canon set, then writes all files in new mode or preserves and boundary-merges settled paths in existing mode. `internal/emission` writes one ordinary adoption AC. Apply never reads or changes legacy `governa/` content. Git initialization is an optional final step and uses `main` only.
 
 ## AC Lifecycle Control Flow
 

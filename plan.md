@@ -6,7 +6,7 @@ Build a Go successor that reaches validated behavioral parity with the frozen `g
 
 ## Next Action
 
-- Draft the S3 implementation AC for apply, adoption, mixed-content behavior, Git initialization, and governa migration.
+- Draft the S4 implementation AC for audit, baseline, preserve-registry, classification, and emitted audit AC behavior.
 
 ## Behavioral Stages
 

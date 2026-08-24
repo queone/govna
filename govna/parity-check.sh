@@ -7,6 +7,7 @@ index_path="$repo_root/govna/parity-index.txt"
 contract_path="$repo_root/govna/parity.md"
 traceability_path="$repo_root/internal/canon/testdata/rnd-traceability.txt"
 growth_path="$repo_root/internal/canon/testdata/governance-growth-baseline.txt"
+apply_traceability_path="$repo_root/internal/apply/testdata/apl-traceability.txt"
 
 die() {
   printf '%s\n' "parity-check: $*" >&2
@@ -71,6 +72,23 @@ if [ "${1:-}" = --generate ]; then
   [ "$#" -eq 2 ] || die 'usage: govna/parity-check.sh --generate <rust-checkout>'
   generate_index "$2"
   exit 0
+fi
+
+if [ -f "$apply_traceability_path" ]; then
+  for number in $(awk 'BEGIN { for (i = 1; i <= 31; i++) printf "%03d\n", i }'); do
+    [ "$(grep -Ec "^APL-$number( |$)" "$apply_traceability_path")" -eq 1 ] ||
+      die "S3 traceability must contain exactly one APL-$number record"
+  done
+  while read -r _ tests; do
+    for test_name in $tests; do
+      grep -Rqs "func $test_name(" "$repo_root/cmd" "$repo_root/internal" ||
+        die "S3 traceability names missing Go test $test_name"
+    done
+  done < "$apply_traceability_path"
+  for golden in fresh-code-golden.md fresh-doc-golden.md existing-golden.md; do
+    [ -s "$repo_root/internal/apply/testdata/$golden" ] || die "missing S3 golden $golden"
+  done
+  printf '%s\n' 'S3 Go traceability and adoption goldens: pass'
 fi
 [ "$#" -eq 0 ] || die 'usage: govna/parity-check.sh [--generate <rust-checkout>]'
 
@@ -250,6 +268,7 @@ require_record_text BND-003 'Cargo manifest parsing, shared Cargo target ownersh
 require_record_text BND-003 'Classify those mechanics as `implementation-specific`'
 require_record_text BND-004 'Defer packages, dependencies, CLI libraries, embedding strategy, data structures, concurrency, and internal control flow'
 require_record_text BND-005 'Initialize `apply -g` repositories on `main`'
+require_record_text BND-005 'omit predecessor governa migration'
 require_record_text BND-005 'Permit no other intentional difference'
 for implementation_id in BLD-006 BLD-013 BLD-021; do
   require_record_text "$implementation_id" '| implementation-specific | S6 | Reason:'
@@ -258,8 +277,11 @@ implementation_count=$(grep -c '| implementation-specific |' "$contract_path")
 [ "$implementation_count" -eq 3 ] ||
   die "expected 3 implementation-specific requirements, found $implementation_count"
 intentional_count=$(grep -c '| intentional-difference |' "$contract_path")
-[ "$intentional_count" -eq 1 ] ||
-  die "expected 1 intentional difference, found $intentional_count"
+[ "$intentional_count" -eq 8 ] ||
+  die "expected 8 intentional differences, found $intentional_count"
+for migration_id in APL-012 APL-013 APL-014 APL-015 APL-016 APL-017 APL-018; do
+  require_record_text "$migration_id" '| intentional-difference | S3 | Reason: the Director excluded predecessor migration from the Go successor.'
+done
 if awk '/^- \*\*S[1-6]:/{print}' "$contract_path" |
   grep -Eiq 'package layout|dependenc|CLI librar|embedding strategy|data structure|concurrency|Cargo|Rust'; then
   die 'future stage definitions contain an implementation-architecture choice'
