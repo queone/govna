@@ -1,0 +1,36 @@
+{
+  "header": {
+    "invocation": "govna audit --repo-name widget",
+    "canon_sha": "v0.29.0",
+    "target": "<TARGET>",
+    "flavor": "code",
+    "flavor_source": "explicit",
+    "repo_name": "widget",
+    "canon_version": "v0.28.0",
+    "code_stack": "Go"
+  },
+  "files": [
+    {
+      "relpath": "README.md",
+      "classification": "clear-sync",
+      "canon_reference": "govna @ v0.29.0: README.md"
+    },
+    {
+      "relpath": "govna/canon-baseline.txt",
+      "classification": "migration-required",
+      "canon_reference": "generated baseline manifest"
+    },
+    {
+      "relpath": "local.md",
+      "classification": "target-has-no-canon",
+      "canon_reference": "name-referenced from divergent governed file"
+    },
+    {
+      "relpath": "plan.md",
+      "classification": "expected-divergence"
+    }
+  ],
+  "emitted": {
+    "ac_stub": "govna/ac7-audit-v0.29.0.md"
+  }
+}

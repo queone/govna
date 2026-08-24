@@ -118,6 +118,21 @@ func TestCanonicalStack(t *testing.T) {
 	}
 }
 
+func TestComparisonRegions(t *testing.T) {
+	content := []byte("canon\n\n## Project Rules\r\nlocal\n")
+	region, ok := ComparisonRegion("AGENTS.md", content)
+	if !ok || string(region) != "canon\n\n" {
+		t.Fatalf("region=%q ok=%v", region, ok)
+	}
+	protected, ok := ProtectedRegion("AGENTS.md", content)
+	if !ok || string(protected) != "## Project Rules\r\nlocal\n" {
+		t.Fatalf("protected=%q ok=%v", protected, ok)
+	}
+	if got := Stacks(); len(got) != 7 || got[0] != "Go" || got[6] != "Terraform" {
+		t.Fatalf("stacks=%v", got)
+	}
+}
+
 func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	root := filepath.Join("..", "..")
 	for _, tc := range []struct {

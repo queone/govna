@@ -41,6 +41,65 @@ var boundaries = map[string]string{
 	"govna/editing-guidelines.md":     "## Project Practices",
 }
 
+// Boundary returns the registered mixed-content boundary for path.
+func Boundary(path string) (string, bool) {
+	boundary, ok := boundaries[path]
+	return boundary, ok
+}
+
+// ComparisonRegion returns the canon-owned comparison region for path.
+func ComparisonRegion(path string, content []byte) ([]byte, bool) {
+	boundary, mixed := boundaries[path]
+	if !mixed {
+		return content, true
+	}
+	for offset := 0; offset <= len(content); {
+		end := strings.IndexByte(string(content[offset:]), '\n')
+		if end < 0 {
+			end = len(content) - offset
+		}
+		line := strings.TrimSuffix(string(content[offset:offset+end]), "\r")
+		if line == boundary {
+			return content[:offset], true
+		}
+		if offset+end == len(content) {
+			break
+		}
+		offset += end + 1
+	}
+	return nil, false
+}
+
+// ProtectedRegion returns the boundary heading through EOF for a mixed file.
+func ProtectedRegion(path string, content []byte) ([]byte, bool) {
+	boundary, mixed := boundaries[path]
+	if !mixed {
+		return nil, false
+	}
+	needle := []byte(boundary)
+	for offset := 0; offset <= len(content); {
+		end := strings.IndexByte(string(content[offset:]), '\n')
+		if end < 0 {
+			end = len(content) - offset
+		}
+		line := content[offset : offset+end]
+		line = []byte(strings.TrimSuffix(string(line), "\r"))
+		if string(line) == string(needle) {
+			return content[offset:], true
+		}
+		if offset+end == len(content) {
+			break
+		}
+		offset += end + 1
+	}
+	return nil, false
+}
+
+// Stacks returns every registered CODE stack in stable order.
+func Stacks() []string {
+	return []string{"Go", "Java", "Node", "Python", "Rust", "Swift", "Terraform"}
+}
+
 func Render(cfg Config) ([]File, error) {
 	stack := ""
 	if cfg.Flavor == Code {
@@ -194,13 +253,12 @@ func baseline(files map[string][]byte) (string, error) {
 		scope := "full"
 		region := content
 		if boundary, ok := boundaries[path]; ok {
-			marker := []byte("\n" + boundary + "\n")
-			index := strings.Index(string(content), string(marker))
-			if index < 0 {
+			var found bool
+			region, found = ComparisonRegion(path, content)
+			if !found {
 				return "", fmt.Errorf("render baseline: %s is missing registered boundary %q", path, boundary)
 			}
 			scope = "before:" + boundary
-			region = content[:index+1]
 		}
 		hash := sha256.Sum256(region)
 		fmt.Fprintf(&result, "%s\t%s\t%x\n", path, scope, hash)

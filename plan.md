@@ -6,7 +6,7 @@ Build a Go successor that reaches validated behavioral parity with the frozen `g
 
 ## Next Action
 
-- Draft the S4 implementation AC for audit, baseline, preserve-registry, classification, and emitted audit AC behavior.
+- Draft the S5 implementation AC for removal classification and emitted removal AC behavior.
 
 ## Behavioral Stages
 

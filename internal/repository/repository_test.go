@@ -31,3 +31,19 @@ func TestSourceSignature(t *testing.T) {
 		t.Fatal("full signature rejected")
 	}
 }
+
+func TestAuditPreconditions(t *testing.T) {
+	d := t.TempDir()
+	if err := RequireAdopted(d); err == nil {
+		t.Fatal("missing AGENTS accepted")
+	}
+	os.WriteFile(filepath.Join(d, "AGENTS.md"), []byte("ok\n"), 0644)
+	os.MkdirAll(filepath.Join(d, "govna"), 0755)
+	os.WriteFile(filepath.Join(d, "govna", "ac-template.md"), []byte("ok\n"), 0644)
+	if err := RequireAdopted(d); err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireGitWorktree(d); err == nil {
+		t.Fatal("non-worktree accepted")
+	}
+}

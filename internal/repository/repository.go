@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -107,5 +108,41 @@ func IsSource(root string) bool {
 		}
 	}
 	return module && exists(filepath.Join(root, "internal/canon/assets/base/AGENTS.md.tmpl")) && exists(filepath.Join(root, "cmd/govna/main.go"))
+}
+
+// RequireAdopted verifies the stable audit adoption signals.
+func RequireAdopted(root string) error {
+	agents := filepath.Join(root, "AGENTS.md")
+	info, err := os.Stat(agents)
+	if err != nil || !info.Mode().IsRegular() {
+		return fmt.Errorf("AGENTS.md must be a readable regular file")
+	}
+	if _, err := os.ReadFile(agents); err != nil {
+		return fmt.Errorf("read AGENTS.md: %w", err)
+	}
+	for _, name := range []string{"govna/ac-template.md", "govna/release.md", "govna/build-release.md"} {
+		if exists(filepath.Join(root, filepath.FromSlash(name))) {
+			return nil
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(root, "CHANGELOG.md"))
+	text := string(data)
+	if strings.Contains(text, "govna apply") || strings.Contains(text, "govna render") || strings.Contains(text, "govna render-canon") {
+		return nil
+	}
+	return fmt.Errorf("repository has no govna adoption signal")
+}
+
+// RequireGitWorktree verifies Git availability and worktree membership.
+func RequireGitWorktree(root string) error {
+	if _, err := exec.LookPath("git"); err != nil {
+		return fmt.Errorf("git binary not found on PATH")
+	}
+	cmd := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree")
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "true" {
+		return fmt.Errorf("target %s is not a git worktree", root)
+	}
+	return nil
 }
 func exists(name string) bool { _, err := os.Lstat(name); return err == nil }

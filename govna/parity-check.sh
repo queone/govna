@@ -8,6 +8,7 @@ contract_path="$repo_root/govna/parity.md"
 traceability_path="$repo_root/internal/canon/testdata/rnd-traceability.txt"
 growth_path="$repo_root/internal/canon/testdata/governance-growth-baseline.txt"
 apply_traceability_path="$repo_root/internal/apply/testdata/apl-traceability.txt"
+audit_traceability_path="$repo_root/internal/audit/testdata/aud-traceability.txt"
 
 die() {
   printf '%s\n' "parity-check: $*" >&2
@@ -72,6 +73,22 @@ if [ "${1:-}" = --generate ]; then
   [ "$#" -eq 2 ] || die 'usage: govna/parity-check.sh --generate <rust-checkout>'
   generate_index "$2"
   exit 0
+fi
+if [ -f "$audit_traceability_path" ]; then
+  for number in $(awk 'BEGIN { for (i = 1; i <= 44; i++) printf "%03d\n", i }'); do
+    [ "$(grep -Ec "^AUD-$number( |$)" "$audit_traceability_path")" -eq 1 ] ||
+      die "S4 traceability must contain exactly one AUD-$number record"
+  done
+  while read -r _ tests; do
+    for test_name in $tests; do
+      grep -Rqs "func $test_name(" "$repo_root/cmd" "$repo_root/internal" ||
+        die "S4 traceability names missing Go test $test_name"
+    done
+  done < "$audit_traceability_path"
+  for golden in actionable-golden.md actionable-golden.json clean-golden.txt; do
+    [ -s "$repo_root/internal/audit/testdata/$golden" ] || die "missing S4 golden $golden"
+  done
+  printf '%s\n' 'S4 Go traceability and audit goldens: pass'
 fi
 
 if [ -f "$apply_traceability_path" ]; then

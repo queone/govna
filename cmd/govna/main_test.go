@@ -129,7 +129,7 @@ func TestRenderAliasesOperational(t *testing.T) {
 
 func TestReservedCommandsUnavailable(t *testing.T) {
 	for _, tc := range []struct{ input, canonical string }{
-		{"audit", "audit"}, {"drift-scan", "audit"}, {"rm", "rm"},
+		{"rm", "rm"},
 	} {
 		for _, args := range [][]string{{tc.input}, {tc.input, "extra"}, {tc.input, "-h", "extra"}} {
 			name := strings.Join(args, " ")
