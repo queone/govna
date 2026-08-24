@@ -30,7 +30,7 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 - Skip `./build.sh` in Ratify's auto-correction revalidation only for documentation outside this repo's build validation.
 - Apply `AGENTS.md` Approval Boundaries > Four-Phase Workflow to that exception.
 
-### Self-review (mandatory)
+### Required Self-review
 
 - Re-read `AGENTS.md` and the active AC before reporting completion.
 - Confirm scope, claims, citations, reference integrity, structure, terminology, and tests for every code change.

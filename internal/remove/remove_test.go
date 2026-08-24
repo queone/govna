@@ -57,10 +57,10 @@ func TestRemovalFreshAndIdempotent(t *testing.T) {
 	if code := Run(nil, &stdout, &stderr, root); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if stdout.String() != "wrote govna/ac1-govna-rm-v0.32.0.md\n" {
+	if stdout.String() != "wrote govna/ac1-govna-rm-v0.33.0.md\n" {
 		t.Fatalf("stdout=%q", stdout.String())
 	}
-	path := filepath.Join(root, "govna", "ac1-govna-rm-v0.32.0.md")
+	path := filepath.Join(root, "govna", "ac1-govna-rm-v0.33.0.md")
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestRemovalFreshAndIdempotent(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(nil, &stdout, &stderr, root); code != 1 || stderr.String() != "rm: govna/ac1-govna-rm-v0.32.0.md has been edited since last emission — delete or rename the emitted file before re-running\n" {
+	if code := Run(nil, &stdout, &stderr, root); code != 1 || stderr.String() != "rm: govna/ac1-govna-rm-v0.33.0.md has been edited since last emission — delete or rename the emitted file before re-running\n" {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }
@@ -113,7 +113,7 @@ func TestRemovalClassificationAndTraversal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := classify(root, files, map[string]bool{"build.sh": true}, "govna/ac1-govna-rm-v0.32.0.md")
+	a, err := classify(root, files, map[string]bool{"build.sh": true}, "govna/ac1-govna-rm-v0.33.0.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestRemovalGolden(t *testing.T) {
 	a := Assessment{InScope: []Route{{"CLAUDE.md", "delete symlink", "govna compatibility link"}, {"govna/roles.md", "delete file", "byte-equal govna canon"}}, OutOfScope: []Route{{"custom.md", "keep", "target-only repo-owned file"}, {"plan.md", "keep", "repo-owned govna-adjacent content"}}, Review: []Route{{"README.md", "hybrid", "mixed canon-shape and consumer content"}, {"govna/metadata.txt", "ambiguity", "consumer-edited canon file"}}}
 	control := Route{"govna/preserve.txt", "delete control state last", "preserve decisions applied before registry removal"}
 	a.ControlState = &control
-	got := buildAC("govna/ac7-govna-rm-v0.32.0.md", "v0.32.0", canon.Code, "Go", a)
+	got := buildAC("govna/ac7-govna-rm-v0.33.0.md", "v0.33.0", canon.Code, "Go", a)
 	want, err := os.ReadFile("testdata/removal-golden.md")
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestRemovalGolden(t *testing.T) {
 	if got != string(want) {
 		t.Fatalf("golden mismatch\n%s", got)
 	}
-	wrapped := emission.GuardedBody(emission.RemovalMarkerPrefix, "v0.32.0", []byte(got))
+	wrapped := emission.GuardedBody(emission.RemovalMarkerPrefix, "v0.33.0", []byte(got))
 	if !emission.VerifyGuardedBody(wrapped, emission.RemovalMarkerPrefix) {
 		t.Fatal("golden marker invalid")
 	}
@@ -172,7 +172,7 @@ func TestRemovalFlavorOverride(t *testing.T) {
 	if code := Run([]string{"--flavor", "doc", "--repo-name", "widget"}, &out, &err, root); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, err.String())
 	}
-	data, _ := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-rm-v0.32.0.md"))
+	data, _ := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-rm-v0.33.0.md"))
 	if !strings.Contains(string(data), "govna render --flavor doc <scratch>") {
 		t.Fatalf("stub=%s", data)
 	}

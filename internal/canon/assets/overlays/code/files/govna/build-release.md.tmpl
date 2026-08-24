@@ -55,14 +55,12 @@ Run `./build.sh` without targets for repository-wide validation. Follow the appl
 - Reject missing, empty, malformed, duplicate, orphaned, and mis-mapped records with a non-zero error that names the utility and recovery action.
 - Preserve all independent utility declarations and outputs during repository release prep.
 
-## Pre-Release Checklist (`Package`, `package`, `pack`, or `prep`)
+## Pre-Release Checklist
 
-Do not start this checklist unless the director explicitly requests standalone
-`Package`, `package`, `pack`, or `prep` in the active Ratified AC context.
-Do not treat `./build.sh prep ...` or ordinary build-preparation language as a
-workflow request.
+- Start this checklist only when the director explicitly requests standalone `Package`, `package`, `pack`, or `prep` in the active Ratified AC context.
+- Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.
 
-The operator flow is two steps:
+Note: the operator flow has two steps.
 
 1. **Run prep.**
    - Classify the AC scope under semver.

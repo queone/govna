@@ -1,7 +1,7 @@
 {
   "header": {
     "invocation": "govna audit --repo-name widget",
-    "canon_sha": "v0.32.0",
+    "canon_sha": "v0.33.0",
     "target": "<TARGET>",
     "flavor": "code",
     "flavor_source": "explicit",
@@ -16,7 +16,7 @@
       "commits": [
         "abc123"
       ],
-      "canon_ref": "govna @ v0.32.0: README.md",
+      "canon_ref": "govna @ v0.33.0: README.md",
       "compare_command": "compare embedded canon with target: README.md"
     },
     {
@@ -37,6 +37,6 @@
     }
   ],
   "emitted": {
-    "ac_stub": "govna/ac7-audit-v0.32.0.md"
+    "ac_stub": "govna/ac7-audit-v0.33.0.md"
   }
 }
