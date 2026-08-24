@@ -10,11 +10,29 @@ growth_path="$repo_root/internal/canon/testdata/governance-growth-baseline.txt"
 apply_traceability_path="$repo_root/internal/apply/testdata/apl-traceability.txt"
 audit_traceability_path="$repo_root/internal/audit/testdata/aud-traceability.txt"
 remove_traceability_path="$repo_root/internal/remove/testdata/rem-traceability.txt"
+build_traceability_path="$repo_root/internal/buildtest/testdata/bld-traceability.txt"
 
 die() {
   printf '%s\n' "parity-check: $*" >&2
   exit 1
 }
+
+if [ -f "$build_traceability_path" ]; then
+  for number in $(awk 'BEGIN { for (i = 1; i <= 21; i++) printf "%03d\n", i }'); do
+    [ "$(grep -Ec "^BLD-$number( |$)" "$build_traceability_path")" -eq 1 ] ||
+      die "S6 traceability must contain exactly one BLD-$number record"
+  done
+  while read -r _ tests; do
+    for test_name in $tests; do
+      grep -Rqs "func $test_name(" "$repo_root/internal/buildtest" ||
+        die "S6 traceability names missing Go test $test_name"
+    done
+  done < "$build_traceability_path"
+  for golden in build-output-golden.txt prep-output-golden.txt; do
+    [ -s "$repo_root/internal/buildtest/testdata/$golden" ] || die "missing S6 golden $golden"
+  done
+  printf '%s\n' 'S6 Go traceability and product-tooling goldens: pass'
+fi
 
 integration_names() {
   awk '

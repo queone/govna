@@ -197,6 +197,48 @@ func TestGovernanceScenarios(t *testing.T) {
 	}
 }
 
+func TestProductToolingStackBoundaries(t *testing.T) {
+	goFiles, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	goBuild := fileText(t, goFiles, "build.sh")
+	for _, marker := range []string{"refresh-validation-token", "v2:%s:%s:%s", "Validation token:"} {
+		if strings.Contains(goBuild, marker) {
+			t.Errorf("rendered Go build unexpectedly contains %q", marker)
+		}
+	}
+	if !strings.Contains(goBuild, "validation-token options are unsupported for Go") {
+		t.Fatal("rendered Go build does not reject validation-token input")
+	}
+	if strings.Contains(goBuild, "internal/canon.Version") || strings.Contains(goBuild, "cmd/govna canonVersion") {
+		t.Fatal("rendered Go consumer contains root-only canon-version coupling")
+	}
+
+	rustFiles, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Rust"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rustBuild := fileText(t, rustFiles, "build.sh")
+	if !strings.Contains(rustBuild, "refresh-validation-token") || strings.Contains(rustBuild, "cmd/govna canonVersion") {
+		t.Fatal("rendered Rust token behavior or canon-version boundary changed")
+	}
+
+	goAgents := fileText(t, goFiles, "AGENTS.md")
+	if !strings.Contains(goAgents, "Rust prep") || strings.Contains(goAgents, "CODE stack provides no validation-token support") {
+		t.Fatal("rendered CODE governance is not Rust-token-specific")
+	}
+
+	docFiles, err := Render(Config{Flavor: Doc, RepoName: "handbook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	docBuild := fileText(t, docFiles, "build.sh")
+	if strings.Contains(docBuild, "validation-token") || strings.Contains(docBuild, "Validation token:") {
+		t.Fatal("DOC build unexpectedly gained validation-token behavior")
+	}
+}
+
 func fileText(t *testing.T, files []File, path string) string {
 	t.Helper()
 	for _, file := range files {

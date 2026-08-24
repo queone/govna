@@ -16,6 +16,12 @@ Use this reference for CODE stack selection, validation, installation, release p
 
 ## Go
 
+- Discover utilities from regular `cmd/<target>/main.go` files in byte order.
+- Compile utilities in an invocation-owned external temporary directory.
+- Validate declared versions and compiled `--version` output before installation.
+- Run ordinary canonical pre- and post-change validation during Go release prep.
+- Emit no validation token from Go builds.
+- Remove invocation-owned build and coverage outputs on every handled exit.
 - Infer Go from `go.mod`.
 - Select Go explicitly with `--stack Go`.
 - Require the Go toolchain and the pinned staticcheck version installed by `build.sh`.

@@ -67,6 +67,8 @@ The operator flow is two steps:
    - Draft a release message no longer than 80 characters.
    - Run the stack-defined `./build.sh prep vX.Y.Z "message"` invocation.
    - Pass current validation evidence with `--validation-token` or `-t` when supported.
+   - Run ordinary canonical pre- and post-change validation for Go prep.
+   - Reserve validation-token evidence and refresh for Rust prep.
    - Use `--dry-run` or `-n` to inspect without writes.
    - Use `--no-build` or `-B` only under the applicable stack policy.
 

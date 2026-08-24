@@ -1,0 +1,6 @@
+==> Building and validating <utility>
+    installed: <gopath>/bin/<utility>
+==> Validate embedded canon version
+    <canon-version>
+==> To release, run:
+    ./build.sh <next-version> "<release message>"

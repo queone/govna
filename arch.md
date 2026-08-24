@@ -6,7 +6,7 @@ Provide the Go implementation of govna while preserving the externally observabl
 
 ## System Summary
 
-The S1 command foundation, S2 embedded renderer, S3 apply flow, S4 audit engine, and S5 removal assessment are implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines behavioral boundaries and stages S1 through S6.
+The S1 command foundation, S2 embedded renderer, S3 apply flow, S4 audit engine, S5 removal assessment, and S6 product tooling are implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines the completed behavioral boundary.
 
 ## Current Platform
 
@@ -21,6 +21,7 @@ The S1 command foundation, S2 embedded renderer, S3 apply flow, S4 audit engine,
 - `internal/apply`: fresh/existing adoption, protected writes, boundary merging, symlink handling, and optional Git initialization.
 - `internal/audit`: strict durable-state parsing, ordered canon classification, bounded target-only evidence, deterministic reports, and non-mutating audit orchestration.
 - `internal/remove`: deterministic delete, keep, and review classification with no-follow target traversal and non-destructive removal-AC emission.
+- `internal/buildtest`: isolated product-tooling fixtures, traceability, and normalized output contracts.
 - `internal/emission`: monotonic AC numbering and guarded stem/version-keyed stub reuse with body-hash edit detection.
 - Governance, release scaffolding, and the behavioral-parity contract.
 
@@ -47,13 +48,15 @@ Audit resolves and validates an adopted Git worktree, parses metadata plus basel
 
 Removal resolves the same repository identity and strict preserve state, then compares existing current-canon files and traverses target-only entries without following symlinks. It sorts ordinary deletion, keep, and review routes; places preserve control-state removal last; and writes or byte-identically reuses one guarded removal AC. It executes no route and excludes only its eligible emitted stub from target-only classification.
 
+The canonical Go build discovers regular command entry points, validates their literal versions, compiles into invocation-owned external storage, validates compiled output, and only then replaces safe install destinations. Go release prep runs ordinary canonical validation before and after mutation and prints rather than executes the release command. Validation-token and baseline-refresh behavior remains specific to Rust tooling.
+
 ## AC Lifecycle Control Flow
 
 The governed change path is `Draft → Audit → Refine → Implement → Ratify → Package`. Draft creates the AC; Audit, Refine, Implement, and Ratify are the four AC phases; Package is post-Ratify release preparation and is not a fifth phase.
 
 ## Architecture Notes
 
-- Treat `govna-rust` as the behavioral reference until validated Go parity.
+- Preserve `govna-rust` as the frozen behavioral reference for regression comparison.
 - Record approved intentional differences in the owning AC, documentation, and tests.
 - Keep S1 on the standard library; defer later package layout, dependencies, and implementation strategy to each stage's owning implementation AC.
 

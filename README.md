@@ -6,7 +6,11 @@ Planned Go successor to [`govna-rust`](https://github.com/queone/govna-rust), th
 
 Govna changes frequently. Go's faster edit-build-test cycle is expected to improve iteration speed while the Rust repository supplies a stable reference for externally observable behavior.
 
-The dependency-free Go implementation provides top-level dispatch, deterministic rendering, `apply`, non-mutating audit, and non-destructive removal assessment for CODE and DOC repositories. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Audit validates durable state, classifies drift, and emits a guarded routing AC only for actionable results. Removal classifies delete, keep, and review routes into a guarded AC without executing them. Legacy `governa/` content is intentionally ignored. [`govna/parity.md`](govna/parity.md) defines the frozen-reference contract and approved differences. S6 product tooling is next.
+The dependency-free Go implementation provides top-level dispatch, deterministic rendering, `apply`, non-mutating audit, non-destructive removal assessment, and complete product tooling for CODE and DOC repositories. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Audit validates durable state, classifies drift, and emits a guarded routing AC only for actionable results. Removal classifies delete, keep, and review routes into a guarded AC without executing them. The canonical build discovers and validates utilities before installation and runs ordinary pre- and post-change validation during Go release prep. Legacy `governa/` content is intentionally ignored. [`govna/parity.md`](govna/parity.md) defines the frozen-reference contract and approved differences.
+
+## Product Tooling
+
+Run `./build.sh` for the canonical full validation and installation path. Go builds emit no validation token. `./build.sh prep vX.Y.Z "message"` runs canonical validation before and after its mutations, then prints the release command without executing it. Validation-token and baseline-refresh behavior remains specific to rendered Rust tooling.
 
 ## Audit
 
