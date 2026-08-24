@@ -6,7 +6,7 @@ Build a Go successor that reaches validated behavioral parity with the frozen `g
 
 ## Next Action
 
-- Draft the S2 implementation AC for embedded canon, rendering, consumer build-script emission, and deterministic output.
+- Draft the S3 implementation AC for apply, adoption, mixed-content behavior, Git initialization, and governa migration.
 
 ## Behavioral Stages
 

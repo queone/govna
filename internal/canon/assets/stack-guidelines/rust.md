@@ -1,0 +1,42 @@
+## Rust Practices
+
+- Run all repository validation through `./build.sh`.
+- Declare every installable Cargo binary with an explicit literal `[[bin]]` name and path.
+- Declare exactly one literal `PROGRAM_VERSION: &str` strict stable SemVer value in each declared binary path.
+- Print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline for `--version` with no stderr output.
+- Validate every utility declaration before compilation.
+- Validate each compiled utility before installing it.
+- Validate every compiled utility before writing release metadata.
+- Use space-separated binary names for scoped builds.
+- Keep selected target order deterministic under the byte locale.
+- Keep Cargo compilation artifacts in the build-managed temporary target.
+- Reject a bare `cargo build`, `cargo check`, `cargo test`, or `cargo clippy` invocation outside `./build.sh`.
+- Pass an explicit `--target-dir` outside the repository for any diagnostic or corrective `cargo` exception.
+- Validate formatting and shared library code package-wide during scoped builds.
+- Limit binary checks, matching integration tests, release artifacts, and installation to selected targets.
+- Install all Cargo binary targets with tracked installation during a full build.
+- Install selected Cargo binaries with `--no-track --force` during a scoped build.
+- Preserve unselected installed binaries and Cargo tracking metadata during scoped installation.
+- Install binaries only during successful full builds and post-change release validation.
+- Skip binary installation during fallback pre-change validation.
+- Reject `--no-build` release prep when independent utility validation is required.
+- Emit a Git-visible-state validation token after each successful full build.
+- Pass current validation evidence to release prep through `-t, --validation-token`.
+- Retain `GOVNA_PREP_VALIDATION_TOKEN` only as a compatibility fallback.
+- Refresh validation evidence only after an exact baseline-only audit-adoption transition.
+- Run fallback pre-change validation only when evidence is missing or stale.
+- Run post-change validation package-wide.
+- Reuse one prep-owned Cargo target throughout Rust release prep.
+- Set `CARGO_HOME` to an external path when isolating binary installation.
+- Resolve installed-binary name conflicts before rerunning the build.
+- Format Rust code with rustfmt.
+- Treat Clippy warnings as build failures.
+- Test all targets and all features before handoff.
+- Document public Rust items with rustdoc comments.
+- Return contextual errors instead of discarding error sources.
+- Confine `unsafe` code to the smallest practical scope.
+- Document the safety invariant for every `unsafe` block.
+- Prefer the standard library when it provides equivalent capability.
+- Justify every added crate in the governing AC.
+- Pin direct dependencies to explicit compatible versions in `Cargo.toml`.
+- Keep `Cargo.lock` tracked for application repositories.

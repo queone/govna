@@ -5,6 +5,8 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 index_path="$repo_root/govna/parity-index.txt"
 contract_path="$repo_root/govna/parity.md"
+traceability_path="$repo_root/internal/canon/testdata/rnd-traceability.txt"
+growth_path="$repo_root/internal/canon/testdata/governance-growth-baseline.txt"
 
 die() {
   printf '%s\n' "parity-check: $*" >&2
@@ -157,6 +159,25 @@ require_record_text IF-009 'emitted-AC path to stdout and exit 0'
 require_record_text IF-009 'Emit or reuse one deterministic removal AC'
 require_record_text IF-009 'mutate no pre-existing governed consumer artifact other than an eligible emitted-AC stub'
 printf '%s\n' 'AT4 command-surface automation: pass'
+
+if [ -f "$traceability_path" ]; then
+  for number in $(awk 'BEGIN { for (i = 1; i <= 32; i++) printf "%03d\n", i }'); do
+    [ "$(grep -Ec "^RND-$number( |$)" "$traceability_path")" -eq 1 ] ||
+      die "S2 traceability must contain exactly one RND-$number record"
+  done
+  unknown=$(awk '$1 !~ /^RND-[0-9][0-9][0-9]$/ || NF < 2 { print NR; exit }' "$traceability_path")
+  [ -z "$unknown" ] || die "invalid S2 traceability record at line $unknown"
+  while read -r _ tests; do
+    for test_name in $tests; do
+      grep -Rqs "func $test_name(" "$repo_root/cmd" "$repo_root/internal" ||
+        die "S2 traceability names missing Go test $test_name"
+    done
+  done < "$traceability_path"
+  [ -f "$growth_path" ] || die 'missing governance-growth baseline'
+  [ "$(awk 'NF == 3 { count++ } END { print count + 0 }' "$growth_path")" -eq 48 ] ||
+    die 'governance-growth baseline must contain 48 asset records'
+  printf '%s\n' 'S2 Go traceability and governance-growth inventory: pass'
+fi
 
 ids_path=$(mktemp "${TMPDIR:-/tmp}/govna-parity-ids.XXXXXX") ||
   die 'create temporary requirement-ID file failed'

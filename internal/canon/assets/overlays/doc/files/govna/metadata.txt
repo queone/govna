@@ -1,0 +1,3 @@
+schema_version = 1
+canon_version = {{CANON_VERSION}}
+repo_type = DOC

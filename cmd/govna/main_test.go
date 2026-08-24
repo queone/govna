@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -102,10 +104,24 @@ func TestReservedCommandHelp(t *testing.T) {
 	}
 }
 
+func TestRenderAliasesOperational(t *testing.T) {
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cwd, "Cargo.toml"), []byte("[package]\nname = \"widget\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(cwd)
+	for _, command := range []string{"render", "render-canon"} {
+		target := command + "-out"
+		stdout, stderr, code := execute(command, target)
+		if code != 0 || stderr != "" || stdout != filepath.Join(cwd, target)+"\n" {
+			t.Fatalf("%s: stdout=%q stderr=%q code=%d", command, stdout, stderr, code)
+		}
+	}
+}
+
 func TestReservedCommandsUnavailable(t *testing.T) {
 	for _, tc := range []struct{ input, canonical string }{
-		{"render", "render"}, {"render-canon", "render"}, {"apply", "apply"},
-		{"audit", "audit"}, {"drift-scan", "audit"}, {"rm", "rm"},
+		{"apply", "apply"}, {"audit", "audit"}, {"drift-scan", "audit"}, {"rm", "rm"},
 	} {
 		for _, args := range [][]string{{tc.input}, {tc.input, "extra"}, {tc.input, "-h", "extra"}} {
 			name := strings.Join(args, " ")

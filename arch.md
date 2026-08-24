@@ -6,7 +6,7 @@ Provide the Go implementation of govna while preserving the externally observabl
 
 ## System Summary
 
-The S1 command foundation is implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines behavioral boundaries and stages S1 through S6.
+The S1 command foundation and S2 embedded renderer are implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines behavioral boundaries and stages S1 through S6.
 
 ## Current Platform
 
@@ -15,6 +15,8 @@ The S1 command foundation is implemented as a dependency-free Go module. [`govna
 ## Major Components
 
 - `cmd/govna`: command dispatch, version and usage output, terminal-color gating, frozen render and audit help, and deferred operational handlers.
+- `internal/canon`: embedded canon assets, substitutions, overlay composition, and deterministic baseline generation.
+- `internal/render`: render argument handling, cwd inference, validation, and filesystem emission.
 - Governance, release scaffolding, and the behavioral-parity contract.
 
 ## Core Files
@@ -32,7 +34,7 @@ The S1 command foundation is implemented as a dependency-free Go module. [`govna
 
 ## Data And Control Flow
 
-`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner owns dispatch and returns an exit code; `main` alone terminates the process. Reserved commands route to frozen help or temporary unavailable handlers until S2 through S5 replace them.
+`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner routes render requests into `internal/render`, which resolves cwd identity and asks `internal/canon` for a path-sorted in-memory file set. The renderer writes that set without pre-cleaning, applies deterministic modes, installs the baseline, and recreates the `CLAUDE.md` symlink. Other reserved commands remain temporary handlers until S3 through S5 replace them.
 
 ## AC Lifecycle Control Flow
 

@@ -5,9 +5,11 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/queone/govna/internal/render"
 )
 
-const programVersion = "0.1.0"
+const programVersion = "0.2.0"
 const canonVersion = "0.29.0"
 const sourceRepo = "github.com/queone/govna"
 
@@ -50,7 +52,12 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 			fmt.Fprint(stderr, renderHelp(env))
 			return 0
 		}
-		return unavailable("render", stderr)
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(stderr, "get cwd: %v\n", err)
+			return 1
+		}
+		return render.Run(args[1:], stdout, stderr, cwd)
 	case "audit", "drift-scan":
 		if len(args) == 2 && isHelp(args[1]) {
 			fmt.Fprint(stderr, auditHelp())

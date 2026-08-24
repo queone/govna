@@ -1,0 +1,4 @@
+schema_version = 1
+canon_version = {{CANON_VERSION}}
+repo_type = CODE
+code_stack = {{CODE_STACK}}
