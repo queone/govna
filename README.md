@@ -6,7 +6,7 @@ Planned Go successor to [`govna-rust`](https://github.com/queone/govna-rust), th
 
 Govna changes frequently. Go's faster edit-build-test cycle is expected to improve iteration speed while the Rust repository supplies a stable reference for externally observable behavior.
 
-This repository is currently governance-bootstrapped and contains no product implementation. Its next action is a repository-local parity AC covering the Rust command surface, output, errors, rendering, migration behavior, and release workflow. Intentional differences require Director approval and explicit documentation and tests.
+The dependency-free Go command foundation implements top-level dispatch, usage, version output, Rust-compatible terminal color gating, and frozen help for the reserved render and audit routes. Operational command behavior remains staged work. [`govna/parity.md`](govna/parity.md) defines the contract against the frozen Rust reference, including approved successor-owned identity substitutions. S2 embedded canon and rendering are next.
 
 ## Governance
 

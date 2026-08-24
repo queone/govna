@@ -6,7 +6,16 @@ Build a Go successor that reaches validated behavioral parity with the frozen `g
 
 ## Next Action
 
-- Draft the repository-local parity AC before choosing architecture or creating product code.
+- Draft the S2 implementation AC for embedded canon, rendering, consumer build-script emission, and deterministic output.
+
+## Behavioral Stages
+
+- Implement S1 for the Go module, command dispatch, usage, help, and version surfaces.
+- Implement S2 for embedded canon, rendering, consumer build-script emission, and deterministic output.
+- Implement S3 for apply, adoption, mixed-content behavior, Git initialization, and governa migration.
+- Implement S4 for audit, baseline, preserve-registry, classification, and emitted audit AC behavior.
+- Implement S5 for removal classification and emitted removal AC behavior.
+- Implement S6 for product validation, installation, release preparation, release orchestration, and final parity verification.
 
 ## Ideas To Explore
 

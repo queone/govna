@@ -6,7 +6,7 @@ Provide the Go implementation of govna while preserving the externally observabl
 
 ## System Summary
 
-The repository is in its pre-implementation state. Product components, package boundaries, runtime flow, storage, and integrations remain unset until the parity AC defines the required behavior and the Director settles any architectural choices.
+The S1 command foundation is implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines behavioral boundaries and stages S1 through S6.
 
 ## Current Platform
 
@@ -14,12 +14,16 @@ The repository is in its pre-implementation state. Product components, package b
 
 ## Major Components
 
-- Governance and release scaffolding only.
-- Product components not yet selected.
+- `cmd/govna`: command dispatch, version and usage output, terminal-color gating, frozen render and audit help, and deferred operational handlers.
+- Governance, release scaffolding, and the behavioral-parity contract.
 
 ## Core Files
 
 - `AGENTS.md`: base governance contract
+- `cmd/govna/main.go`: executable entry point and S1 command runner
+- `govna/parity.md`: frozen-reference behavioral contract and traceability matrix
+- `govna/parity-index.txt`: deterministic frozen-reference test index
+- `govna/parity-check.sh`: parity-contract generator and mechanical verifier
 - `plan.md`: prioritized roadmap and approved direction
 - `build.sh`: self-contained build / release-prep / release script (Bash 3.2+, no external tools)
 - `govna/development-cycle.md`: workflow from roadmap through release
@@ -28,7 +32,7 @@ The repository is in its pre-implementation state. Product components, package b
 
 ## Data And Control Flow
 
-No product control flow exists yet.
+`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner owns dispatch and returns an exit code; `main` alone terminates the process. Reserved commands route to frozen help or temporary unavailable handlers until S2 through S5 replace them.
 
 ## AC Lifecycle Control Flow
 
@@ -38,7 +42,7 @@ The governed change path is `Draft → Audit → Refine → Implement → Ratify
 
 - Treat `govna-rust` as the behavioral reference until validated Go parity.
 - Record approved intentional differences in the owning AC, documentation, and tests.
-- Defer package layout, dependencies, and implementation strategy to the parity AC.
+- Keep S1 on the standard library; defer later package layout, dependencies, and implementation strategy to each stage's owning implementation AC.
 
 ## Conventions
 

@@ -523,3 +523,6 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names a product-s
 - Preserve externally observable behavior unless the Director approves an intentional difference.
 - Record each intentional difference in the active AC and its affected documentation and tests.
 - Require the Director to execute every GitHub write operation.
+- Keep Go tests beside the packages they exercise.
+- Keep repository-specific governance verification under `govna/`.
+- Prohibit a top-level `tests/` directory.
