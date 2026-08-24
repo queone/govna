@@ -26,18 +26,21 @@ type Config struct {
 	Flavor, Stack, RepoName string
 	JSON                    bool
 	DiffLines               int
+	invocation              string
 }
 
 type FileResult struct {
 	Path                  string   `json:"relpath"`
 	Classification        string   `json:"classification"`
 	Diff                  string   `json:"diff,omitempty"`
-	PriorCommits          []string `json:"prior_commits,omitempty"`
+	PriorCommits          []string `json:"commits,omitempty"`
 	PreserveEntries       []string `json:"preserve_entries,omitempty"`
 	LegacyPreserveMarkers []string `json:"legacy_preserve_markers,omitempty"`
-	CanonReference        string   `json:"canon_reference,omitempty"`
+	CanonReference        string   `json:"canon_ref,omitempty"`
+	CompareCommand        string   `json:"compare_command,omitempty"`
 	Boundary              string   `json:"boundary,omitempty"`
 	protectedHash         string
+	forceSync             bool
 }
 
 type Header struct {
@@ -128,7 +131,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 }
 
 func parse(args []string) (Config, error) {
-	c := Config{DiffLines: 200}
+	c := Config{DiffLines: 200, invocation: strings.Join(append([]string{"govna", "audit"}, args...), " ")}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-f", "--flavor":
@@ -249,8 +252,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		}
 		prior = &p
 	}
-	invocation := invocation(cfg)
-	report.Header = Header{Invocation: invocation, CanonSHA: "v" + canon.Version, Target: root, Flavor: strings.ToLower(string(flavor)), FlavorSource: flavorSource, RepoName: name, CanonVersion: metadata["canon_version"], CodeStack: metadata["code_stack"]}
+	report.Header = Header{Invocation: cfg.invocation, CanonSHA: "v" + canon.Version, Target: root, Flavor: strings.ToLower(string(flavor)), FlavorSource: flavorSource, RepoName: name, CanonVersion: metadata["canon_version"], CodeStack: metadata["code_stack"]}
 	legacy := legacyMarkers(root)
 	paths := make([]string, 0, len(canonMap))
 	for path := range canonMap {
@@ -282,16 +284,17 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 			delete(legacy, path)
 		}
 		if (path == "AGENTS.md" || path == "govna/ac-template.md") && fr.Classification != "match" && fr.Classification != "expected-divergence" {
-			fr.Classification = "clear-sync"
 			fr.PreserveEntries = nil
+			fr.forceSync = true
 		}
+		fr.CompareCommand = comparisonDescription(fr, path)
 		report.Files = append(report.Files, fr)
 	}
 	if !basePresent || !bytes.Equal(baseBytes, canonMap[baselinePath]) {
-		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "migration-required", CanonReference: "generated baseline manifest"})
+		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "migration-required", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
 	}
 	for path, evidence := range targetOnly(root, canonMap, prior, flavor, name) {
-		fr := FileResult{Path: path, Classification: "target-has-no-canon", CanonReference: evidence}
+		fr := FileResult{Path: path, Classification: "target-has-no-canon", CanonReference: evidence, CompareCommand: "inspect target-only file " + path}
 		data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		fr.Diff = diffText(nil, data, path, cfg.DiffLines)
 		if markers := legacy[path]; len(markers) > 0 {
@@ -306,7 +309,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	sort.Slice(report.Files, func(i, j int) bool { return report.Files[i].Path < report.Files[j].Path })
 	clean := true
 	for _, file := range report.Files {
-		if actionable(file.Classification) {
+		if actionable(file.Classification) || file.forceSync {
 			clean = false
 		}
 	}
@@ -660,24 +663,17 @@ func readOptional(path string) ([]byte, bool, error) {
 	}
 	return data, err == nil, err
 }
-func invocation(c Config) string {
-	parts := []string{"govna", "audit"}
-	if c.Flavor != "" {
-		parts = append(parts, "--flavor", c.Flavor)
+func comparisonDescription(f FileResult, path string) string {
+	switch f.Classification {
+	case "match":
+		return "byte-equal with embedded canon: " + path
+	case "missing-in-target":
+		return "target missing; compare embedded canon with " + path
+	case "target-has-no-canon":
+		return "inspect target-only file " + path
+	default:
+		return "compare embedded canon with target: " + path
 	}
-	if c.Stack != "" {
-		parts = append(parts, "--stack", c.Stack)
-	}
-	if c.JSON {
-		parts = append(parts, "--json")
-	}
-	if c.DiffLines != 200 {
-		parts = append(parts, "--diff-lines", strconv.Itoa(c.DiffLines))
-	}
-	if c.RepoName != "" {
-		parts = append(parts, "--repo-name", c.RepoName)
-	}
-	return strings.Join(parts, " ")
 }
 func actionable(c string) bool {
 	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon"
@@ -708,6 +704,10 @@ func buildAC(report Report, path, validation string) string {
 	}
 	var sync, migrate, preserve, review []FileResult
 	for _, f := range report.Files {
+		if f.forceSync {
+			sync = append(sync, f)
+			continue
+		}
 		switch f.Classification {
 		case "clear-sync", "missing-in-target":
 			sync = append(sync, f)

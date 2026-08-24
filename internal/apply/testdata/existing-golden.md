@@ -1,10 +1,10 @@
 # AC2 Govna Apply
 
-Applied govna v0.29.0 governance template (CODE overlay) to widget.
+Applied govna v0.30.0 governance template (CODE overlay) to widget.
 
 ## Summary
 
-Applied govna v0.29.0 governance template (CODE overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.
+Applied govna v0.30.0 governance template (CODE overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.
 
 ## In Scope
 

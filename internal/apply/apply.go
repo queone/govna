@@ -19,6 +19,11 @@ type Config struct {
 }
 type Outcome struct{ Path, Label string }
 type Command func(string, ...string) ([]byte, error)
+type assessment struct {
+	shape, risk       string
+	code, doc         int
+	existingArtifacts []string
+}
 
 func Run(args []string, stdout, stderr io.Writer, cwd string, command Command) int {
 	cfg, err := parse(args)
@@ -30,6 +35,21 @@ func Run(args []string, stdout, stderr io.Writer, cwd string, command Command) i
 		fmt.Fprintf(stderr, "apply: target %s looks like a govna checkout — apply is for adopted repos, not the govna source\n", cwd)
 		return 1
 	}
+	a, err := assess(cwd)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: scan target repo: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "mode: apply")
+	fmt.Fprintf(stdout, "target: %s\n", cwd)
+	fmt.Fprintf(stdout, "repo-shape: %s\n", a.shape)
+	fmt.Fprintf(stdout, "signals: code=%d doc=%d\n", a.code, a.doc)
+	existing := "none"
+	if len(a.existingArtifacts) > 0 {
+		existing = strings.Join(a.existingArtifacts, ", ")
+	}
+	fmt.Fprintf(stdout, "existing-artifacts: %s\n", existing)
+	fmt.Fprintf(stdout, "overwrite-risk: %s\n", a.risk)
 	flavor, err := repository.Flavor(cwd, cfg.Flavor)
 	if err != nil {
 		fmt.Fprintf(stderr, "apply: infer flavor from cwd: %v (use --flavor to override)\n", err)
@@ -158,6 +178,96 @@ func Run(args []string, stdout, stderr io.Writer, cwd string, command Command) i
 		}
 	}
 	return 0
+}
+
+func assess(root string) (assessment, error) {
+	a := assessment{shape: "empty", risk: "low"}
+	hasSource, hasManifest, hasLayout, hasDocMarker := false, false, false, false
+	files := []string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != root && entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		files = append(files, rel)
+		ext := strings.ToLower(filepath.Ext(rel))
+		base := filepath.Base(rel)
+		switch ext {
+		case ".go", ".py", ".js", ".ts", ".tsx", ".jsx", ".rs", ".java", ".kt", ".swift", ".c", ".cc", ".cpp", ".cs":
+			a.code++
+			hasSource = true
+		case ".md", ".mdx":
+			a.doc++
+		}
+		switch base {
+		case "go.mod", "package.json", "pyproject.toml", "Cargo.toml", "pom.xml", "build.gradle", "Makefile", "Dockerfile":
+			a.code += 3
+			hasManifest = true
+		case "mkdocs.yml", "mkdocs.yaml":
+			a.doc += 3
+			hasDocMarker = true
+		case "README.md", "AGENTS.md", "CLAUDE.md", "arch.md", "plan.md":
+			a.doc++
+		}
+		top, _, _ := strings.Cut(rel, "/")
+		if top == "cmd" || top == "internal" || top == "pkg" || top == "src" {
+			hasLayout = true
+		}
+		return nil
+	})
+	if err != nil {
+		return a, err
+	}
+	if len(files) > 0 {
+		switch {
+		case (hasManifest || hasLayout) && hasSource:
+			a.shape = "likely CODE"
+		case hasDocMarker && !hasSource && !hasManifest:
+			a.shape = "likely DOC"
+		case a.code > a.doc && a.code > 0:
+			a.shape = "likely CODE"
+		case a.doc > a.code && a.doc > 0:
+			a.shape = "likely DOC"
+		case a.code > 0 && a.doc > 0:
+			a.shape = "mixed"
+		default:
+			a.shape = "unclear"
+		}
+	}
+	expected := []string{"AGENTS.md", "CLAUDE.md"}
+	if a.shape == "likely CODE" {
+		expected = append(expected, "README.md", "arch.md", "plan.md", "CHANGELOG.md", "govna/README.md", "govna/development-cycle.md", "govna/ac-template.md", "govna/build-release.md", "govna/metadata.txt")
+	}
+	if a.shape == "likely DOC" {
+		expected = append(expected, "plan.md", "govna/metadata.txt")
+	}
+	nonempty := 0
+	for _, rel := range expected {
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		a.existingArtifacts = append(a.existingArtifacts, rel)
+		if info.Mode().IsRegular() && info.Size() > 0 {
+			nonempty++
+		}
+	}
+	if nonempty >= 3 {
+		a.risk = "high"
+	} else if nonempty > 0 {
+		a.risk = "medium"
+	}
+	return a, nil
 }
 
 func parse(args []string) (Config, error) {

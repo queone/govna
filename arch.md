@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Provide the Go implementation of govna while preserving the externally observable behavior of the frozen `govna-rust` reference unless an intentional difference is approved.
+Provide deterministic governance canon and repository lifecycle tooling for CODE and DOC repositories.
 
 ## System Summary
 
-The S1 command foundation, S2 embedded renderer, S3 apply flow, S4 audit engine, S5 removal assessment, and S6 product tooling are implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines the completed behavioral boundary.
+Command dispatch, embedded rendering, apply, audit, removal assessment, and product tooling are implemented as a dependency-free Go module.
 
 ## Current Platform
 
@@ -21,17 +21,14 @@ The S1 command foundation, S2 embedded renderer, S3 apply flow, S4 audit engine,
 - `internal/apply`: fresh/existing adoption, protected writes, boundary merging, symlink handling, and optional Git initialization.
 - `internal/audit`: strict durable-state parsing, ordered canon classification, bounded target-only evidence, deterministic reports, and non-mutating audit orchestration.
 - `internal/remove`: deterministic delete, keep, and review classification with no-follow target traversal and non-destructive removal-AC emission.
-- `internal/buildtest`: isolated product-tooling fixtures, traceability, and normalized output contracts.
+- `internal/buildtest`: isolated product-tooling fixtures and normalized output contracts.
 - `internal/emission`: monotonic AC numbering and guarded stem/version-keyed stub reuse with body-hash edit detection.
-- Governance, release scaffolding, and the behavioral-parity contract.
+- Governance and release scaffolding.
 
 ## Core Files
 
 - `AGENTS.md`: base governance contract
 - `cmd/govna/main.go`: executable entry point and S1 command runner
-- `govna/parity.md`: frozen-reference behavioral contract and traceability matrix
-- `govna/parity-index.txt`: deterministic frozen-reference test index
-- `govna/parity-check.sh`: parity-contract generator and mechanical verifier
 - `plan.md`: prioritized roadmap and approved direction
 - `build.sh`: self-contained build / release-prep / release script (Bash 3.2+, no external tools)
 - `govna/development-cycle.md`: workflow from roadmap through release
@@ -56,7 +53,6 @@ The governed change path is `Draft → Audit → Refine → Implement → Ratify
 
 ## Architecture Notes
 
-- Preserve `govna-rust` as the frozen behavioral reference for regression comparison.
 - Record approved intentional differences in the owning AC, documentation, and tests.
 - Keep S1 on the standard library; defer later package layout, dependencies, and implementation strategy to each stage's owning implementation AC.
 

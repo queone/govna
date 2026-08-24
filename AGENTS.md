@@ -519,7 +519,6 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names a product-s
 
 ## Project Rules
 
-- Treat `govna-rust` as the behavioral reference until the Go successor reaches validated parity.
 - Preserve externally observable behavior unless the Director approves an intentional difference.
 - Record each intentional difference in the active AC and its affected documentation and tests.
 - Require the Director to execute every GitHub write operation.

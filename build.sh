@@ -236,9 +236,6 @@ build_run() {
   fi
   printf '    %s\n' 'No nested-fence issues found.'
 
-  printf '\n%s\n' "$(yel7 '==> Verify frozen-reference parity traceability')"
-  run_streaming grn3 sh govna/parity-check.sh
-
   # Test-naming lint — silent on pass; see _lint_test_naming and _collect_test_files.
   local _lint_files=() _lint_path
   [ -f tests/run.sh ] && _lint_files+=('tests/run.sh')
@@ -374,19 +371,15 @@ EOF
 
   local target
   for target in "${install_targets[@]}"; do
-    local output_path="$bin_dir/$target$ext" compiled_path="$_build_owned_dir/$target$ext" install_tmp="$bin_dir/.govna-install-$target-$$$ext"
+    local output_path="$bin_dir/$target$ext" compiled_path="$_build_owned_dir/$target$ext"
     if [ -L "$output_path" ] || { [ -e "$output_path" ] && [ ! -f "$output_path" ]; }; then
       printf 'utility %s: installed destination must be absent or a regular file: %s\n' "$target" "$output_path" >&2
       return 1
     fi
     printf '\n%s %s\n' "$(yel7 '==> Building and validating')" "$(grn3 "$target")"
     run_streaming grn3 go build -o "$compiled_path" -ldflags '-s -w' "./cmd/$target"
-    _validate_utility_version_output "$compiled_path" "$target" \
+    _install_compiled_utility "$compiled_path" "$output_path" "$target" \
       "$(_extract_program_version "cmd/$target/main.go")" || return 1
-    cp "$compiled_path" "$install_tmp" || { rm -f "$install_tmp"; return 1; }
-    chmod +x "$install_tmp" || { rm -f "$install_tmp"; return 1; }
-    mv -f "$install_tmp" "$output_path" || { rm -f "$install_tmp"; return 1; }
-    printf '    installed: %s\n' "$(cya4 "$output_path")"
   done
 
   if [ "${#targets[@]}" -eq 0 ]; then
@@ -418,6 +411,21 @@ _validate_root_canon_version() {
   authority=$(_literal_const_value internal/canon/canon.go Version) || { _failure 'build: internal/canon.Version must be exactly one non-empty string literal'; return 1; }
   embedded=$(_literal_const_value cmd/govna/main.go canonVersion) || { _failure 'build: cmd/govna canonVersion must be exactly one non-empty string literal'; return 1; }
   [ "$authority" = "$embedded" ] || { _failure "build: cmd/govna canonVersion $embedded does not match internal/canon.Version $authority"; return 1; }
+  local latest prior changed
+  latest=$(git describe --tags --abbrev=0 2>/dev/null || true)
+  if [ -n "$latest" ]; then
+    changed=$(git status --porcelain -- internal/canon/assets 2>/dev/null || true)
+    if [ -n "$changed" ] || ! git diff --quiet "$latest" -- internal/canon/assets; then
+      prior=$(git show "$latest:internal/canon/canon.go" 2>/dev/null | LC_ALL=C awk '
+        $0 ~ /^[[:space:]]*const[[:space:]]+Version[[:space:]]*=[[:space:]]*"[^"]+"[[:space:]]*$/ {
+          sub(/^.*=[[:space:]]*"/, ""); sub(/"[[:space:]]*$/, ""); print; exit
+        }')
+      [ -z "$prior" ] || [ "$authority" != "$prior" ] || {
+        _failure "build: embedded canon assets changed since $latest; increase internal/canon.Version"
+        return 1
+      }
+    fi
+  fi
   printf '\n%s\n    %s\n' "$(yel7 '==> Validate embedded canon version')" "$authority"
 }
 
@@ -509,6 +517,20 @@ _validate_utility_version_output() { # $1=binary $2=utility ID $3=declared versi
     return 1
   fi
   rm -rf "$probe_dir"
+}
+
+_install_compiled_utility() { # $1=compiled $2=destination $3=utility ID $4=declared version
+  local compiled="$1" output="$2" utility_id="$3" declared="$4" install_tmp
+  if [ -L "$output" ] || { [ -e "$output" ] && [ ! -f "$output" ]; }; then
+    printf 'utility %s: installed destination must be absent or a regular file: %s\n' "$utility_id" "$output" >&2
+    return 1
+  fi
+  _validate_utility_version_output "$compiled" "$utility_id" "$declared" || return 1
+  install_tmp="$(dirname "$output")/.govna-install-$utility_id-$$"
+  cp "$compiled" "$install_tmp" || { rm -f "$install_tmp"; return 1; }
+  chmod +x "$install_tmp" || { rm -f "$install_tmp"; return 1; }
+  mv -f "$install_tmp" "$output" || { rm -f "$install_tmp"; return 1; }
+  printf '    installed: %s\n' "$(cya4 "$output")"
 }
 
 _ensure_staticcheck() { # $1=bin_dir $2=ext -> sets _staticcheck_path; stdout msgs
@@ -717,6 +739,7 @@ rel_run() {
   printf '%s\n' '- git add .'
   printf -- '- git commit -m %s\n' "$(_go_quote "$message")"
   printf '%s\n' "- git tag $tag"
+  printf '%s\n' '- rebuild and verify tagged binary provenance'
   printf '%s\n' "- git push origin $tag"
   printf '%s\n' '- git push origin'
 
@@ -740,9 +763,26 @@ rel_run() {
   completed='git add, git commit'
   _rel_step 'git tag' "$completed" tag "$tag" || return 1
   completed='git add, git commit, git tag'
+  _release_rebuild_and_verify "$tag" || return 1
+  completed='git add, git commit, git tag, release provenance'
   _rel_step 'git push tag' "$completed" push origin "$tag" || return 1
   completed='git add, git commit, git tag, git push tag'
   _rel_step 'git push branch' "$completed" push origin || return 1
+}
+
+_release_rebuild_and_verify() { # $1=tag
+  local tag="$1" binary expected actual info revision
+  ./build.sh || { _failure 'release: tagged-commit rebuild failed; nothing was pushed'; return 1; }
+  binary="$(go env GOPATH)/bin/govna"
+  [ -x "$binary" ] || { _failure "release: installed binary missing after rebuild: $binary"; return 1; }
+  expected="govna $tag"
+  actual=$("$binary" --version 2>/dev/null) || { _failure 'release: installed binary version check failed'; return 1; }
+  [ "$actual" = "$expected" ] || { _failure "release: installed binary version $(_go_quote "$actual") does not match $(_go_quote "$expected")"; return 1; }
+  revision=$(git rev-parse HEAD 2>/dev/null) || { _failure 'release: resolve tagged HEAD failed'; return 1; }
+  info=$(go version -m "$binary" 2>/dev/null) || { _failure 'release: read installed Go build information failed'; return 1; }
+  printf '%s\n' "$info" | grep -Fq "vcs.revision=$revision" || { _failure 'release: installed binary does not identify tagged HEAD'; return 1; }
+  printf '%s\n' "$info" | grep -Fq 'vcs.modified=false' || { _failure 'release: installed binary build information is dirty'; return 1; }
+  printf '    verified tagged binary: %s\n' "$binary"
 }
 
 # _rel_step NAME COMPLETED gitargs... — run one git step; on failure emit the

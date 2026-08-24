@@ -69,8 +69,11 @@ func TestAuditCleanAndJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Header.CanonSHA != "v0.29.0" || report.Emitted != nil || strings.Contains(stdout.String(), "no AC emitted") {
+	if report.Header.CanonSHA != "v0.30.0" || report.Emitted != nil || strings.Contains(stdout.String(), "no AC emitted") {
 		t.Fatalf("bad JSON: %s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "canon_reference") || strings.Contains(stdout.String(), "prior_commits") || !strings.Contains(stdout.String(), `"canon_ref"`) || !strings.Contains(stdout.String(), `"compare_command"`) {
+		t.Fatalf("incorrect JSON schema: %s", stdout.String())
 	}
 }
 
@@ -84,10 +87,10 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 	if code := Run([]string{"--repo-name", "widget"}, &stdout, &stderr, root); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
-	if !strings.HasPrefix(stdout.String(), "wrote govna/ac1-audit-v0.29.0.md") {
+	if !strings.HasPrefix(stdout.String(), "wrote govna/ac1-audit-v0.30.0.md") {
 		t.Fatalf("stdout=%q", stdout.String())
 	}
-	stub := filepath.Join(root, "govna", "ac1-audit-v0.29.0.md")
+	stub := filepath.Join(root, "govna", "ac1-audit-v0.30.0.md")
 	body, err := os.ReadFile(stub)
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +155,7 @@ func TestAuditFormatForcingAndCoherence(t *testing.T) {
 		t.Fatalf("clean=%v err=%v", clean, err)
 	}
 	for _, file := range report.Files {
-		if file.Path == "AGENTS.md" && file.Classification != "clear-sync" {
+		if file.Path == "AGENTS.md" && (file.Classification != "preserve" || !file.forceSync) {
 			t.Fatalf("format classification=%s", file.Classification)
 		}
 	}
@@ -162,6 +165,30 @@ func TestAuditFormatForcingAndCoherence(t *testing.T) {
 	if _, _, err := inspect(Config{DiffLines: 200}, root); err == nil || !strings.Contains(err.Error(), "canon-coherence") {
 		t.Fatalf("coherence err=%v", err)
 	}
+}
+
+func TestMissingFormatFileKeepsClassificationAndForcesSync(t *testing.T) {
+	root := fixture(t)
+	if err := os.Remove(filepath.Join(root, "govna", "ac-template.md")); err != nil {
+		t.Fatal(err)
+	}
+	report, clean, err := inspect(Config{DiffLines: 200, invocation: "govna audit"}, root)
+	if err != nil || clean {
+		t.Fatalf("clean=%v err=%v", clean, err)
+	}
+	for _, file := range report.Files {
+		if file.Path == "govna/ac-template.md" {
+			if file.Classification != "missing-in-target" || !file.forceSync {
+				t.Fatalf("file=%+v", file)
+			}
+			body := buildAC(report, "govna/ac1-audit-v0.30.0.md", "`./build.sh`")
+			if !strings.Contains(body, "### Direct sync\n\n- `govna/ac-template.md` — `missing-in-target`.") {
+				t.Fatalf("routing=%s", body)
+			}
+			return
+		}
+	}
+	t.Fatal("missing format file absent from report")
 }
 
 func TestAuditArgumentsAndPreconditions(t *testing.T) {
@@ -200,14 +227,14 @@ func TestAuditDiffTruncationAndCrossFlavor(t *testing.T) {
 
 func TestAuditGoldens(t *testing.T) {
 	report := Report{
-		Header: Header{Invocation: "govna audit --repo-name widget", CanonSHA: "v0.29.0", Target: "<TARGET>", Flavor: "code", FlavorSource: "explicit", RepoName: "widget", CanonVersion: "v0.28.0", CodeStack: "Go"},
+		Header: Header{Invocation: "govna audit --repo-name widget", CanonSHA: "v0.30.0", Target: "<TARGET>", Flavor: "code", FlavorSource: "explicit", RepoName: "widget", CanonVersion: "v0.28.0", CodeStack: "Go"},
 		Files: []FileResult{
-			{Path: "README.md", Classification: "clear-sync", CanonReference: "govna @ v0.29.0: README.md"},
-			{Path: "govna/canon-baseline.txt", Classification: "migration-required", CanonReference: "generated baseline manifest"},
-			{Path: "local.md", Classification: "target-has-no-canon", CanonReference: "name-referenced from divergent governed file"},
+			{Path: "README.md", Classification: "clear-sync", PriorCommits: []string{"abc123"}, CanonReference: "govna @ v0.30.0: README.md", CompareCommand: "compare embedded canon with target: README.md"},
+			{Path: "govna/canon-baseline.txt", Classification: "migration-required", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"},
+			{Path: "local.md", Classification: "target-has-no-canon", CanonReference: "name-referenced from divergent governed file", CompareCommand: "inspect target-only file local.md"},
 			{Path: "plan.md", Classification: "expected-divergence"},
 		},
-		Emitted: &Emitted{ACStub: "govna/ac7-audit-v0.29.0.md"},
+		Emitted: &Emitted{ACStub: "govna/ac7-audit-v0.30.0.md"},
 	}
 	markdown, err := os.ReadFile("testdata/actionable-golden.md")
 	if err != nil {
@@ -229,5 +256,16 @@ func TestAuditGoldens(t *testing.T) {
 	}
 	if encoded.String() != string(jsonGolden) {
 		t.Fatalf("JSON golden mismatch\n%s", encoded.String())
+	}
+}
+
+func TestAuditInvocationPreservesOptionOrder(t *testing.T) {
+	cfg, err := parse([]string{"--repo-name", "widget", "--json", "--diff-lines", "12", "--flavor", "code"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "govna audit --repo-name widget --json --diff-lines 12 --flavor code"
+	if cfg.invocation != want {
+		t.Fatalf("invocation=%q want=%q", cfg.invocation, want)
 	}
 }

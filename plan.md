@@ -2,11 +2,11 @@
 
 ## Product Direction
 
-Build a Go successor that reaches validated behavioral parity with the frozen `govna-rust` reference while preserving approved intentional differences and useful enhancements.
+Maintain govna as deterministic, dependency-free governance tooling with package-owned behavior tests and self-contained product tooling.
 
 ## Next Action
 
-- Ratify and package the completed six-stage Go migration.
+- Complete AC9 corrective behavior, migration-artifact retirement, and release-provenance hardening.
 
 ## Behavioral Stages
 
@@ -15,7 +15,7 @@ Build a Go successor that reaches validated behavioral parity with the frozen `g
 - Complete S3 for apply, adoption, mixed-content behavior, Git initialization, and governa migration.
 - Complete S4 for audit, baseline, preserve-registry, classification, and emitted audit AC behavior.
 - Complete S5 for removal classification and emitted removal AC behavior.
-- Complete S6 for product validation, installation, release preparation, release orchestration, and final parity verification.
+- Complete S6 for product validation, installation, release preparation, release orchestration, and final verification.
 
 ## Ideas To Explore
 

@@ -121,3 +121,9 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
 
 ## Project Practices
+
+- Require a canon-version increase when embedded canon assets differ from the latest release.
+- Rebuild and install a release from its clean tagged commit before publication.
+- Require the installed binary version to match the release tag.
+- Require installed Go build information to identify tagged HEAD with `vcs.modified=false`.
+- Stop release publication when the rebuild or provenance check fails.

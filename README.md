@@ -1,12 +1,12 @@
 # govna
 
-Planned Go successor to [`govna-rust`](https://github.com/queone/govna-rust), the frozen Rust implementation preserved as the behavioral reference.
+Dependency-free governance tooling for CODE and DOC repositories.
 
 ## Why
 
-Govna changes frequently. Go's faster edit-build-test cycle is expected to improve iteration speed while the Rust repository supplies a stable reference for externally observable behavior.
+Govna provides deterministic embedded governance canon with a fast edit-build-test cycle and a self-contained release path.
 
-The dependency-free Go implementation provides top-level dispatch, deterministic rendering, `apply`, non-mutating audit, non-destructive removal assessment, and complete product tooling for CODE and DOC repositories. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Audit validates durable state, classifies drift, and emits a guarded routing AC only for actionable results. Removal classifies delete, keep, and review routes into a guarded AC without executing them. The canonical build discovers and validates utilities before installation and runs ordinary pre- and post-change validation during Go release prep. Legacy `governa/` content is intentionally ignored. [`govna/parity.md`](govna/parity.md) defines the frozen-reference contract and approved differences.
+Govna provides top-level dispatch, deterministic rendering, `apply`, non-mutating audit, non-destructive removal assessment, and complete product tooling. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Audit validates durable state, classifies drift, and emits a guarded routing AC only for actionable results. Removal classifies delete, keep, and review routes into a guarded AC without executing them. The canonical build discovers and validates utilities before installation and runs ordinary pre- and post-change validation during Go release prep. Legacy `governa/` content is intentionally ignored.
 
 ## Product Tooling
 

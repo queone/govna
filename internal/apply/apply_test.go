@@ -29,6 +29,11 @@ func TestFreshAndReapply(t *testing.T) {
 	if !strings.Contains(out, "write govna/ac1-govna-apply.md") {
 		t.Fatal(out)
 	}
+	for _, line := range []string{"mode: apply\n", "repo-shape: empty\n", "signals: code=0 doc=0\n", "existing-artifacts: none\n", "overwrite-risk: low\n"} {
+		if !strings.Contains(out, line) {
+			t.Fatalf("assessment missing %q in %q", line, out)
+		}
+	}
 	assertGolden(t, filepath.Join(d, "govna/ac1-govna-apply.md"), "fresh-code-golden.md")
 	_, err, code = runAt(t, d, "-f", "code", "-s", "rust")
 	if code != 0 || !strings.Contains(err, "existing governance") {
@@ -77,6 +82,31 @@ func TestExistingGolden(t *testing.T) {
 		t.Fatal(stderr)
 	}
 	assertGolden(t, filepath.Join(d, "govna/ac2-govna-apply.md"), "existing-golden.md")
+}
+
+func TestAssessmentForExistingCodeRepository(t *testing.T) {
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "go.mod"), []byte("module example.com/widget\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(d, "cmd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d, "cmd", "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d, "README.md"), []byte("# Widget\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, code := runAt(t, d, "--flavor", "code", "--stack", "go")
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	for _, line := range []string{"repo-shape: likely CODE\n", "signals: code=4 doc=2\n", "existing-artifacts: README.md\n", "overwrite-risk: medium\n"} {
+		if !strings.Contains(out, line) {
+			t.Fatalf("assessment missing %q in %q", line, out)
+		}
+	}
 }
 
 func assertGolden(t *testing.T, actual, golden string) {

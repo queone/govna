@@ -60,9 +60,6 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	if !strings.Contains(string(a), "_validate_root_canon_version") || strings.Contains(string(b), "_validate_root_canon_version") {
 		t.Fatal("root-only canon-version boundary is incorrect")
 	}
-	if !strings.Contains(string(a), "govna/parity-check.sh") || strings.Contains(string(b), "govna/parity-check.sh") {
-		t.Fatal("root-only parity-check boundary is incorrect")
-	}
 }
 
 func TestReleaseCancellationIsNonMutating(t *testing.T) {
@@ -98,6 +95,7 @@ func TestReleaseApprovalAndFailureOrdering(t *testing.T) {
 	}
 	approved := `source ./build.sh
 _run_git() { shift; printf '%s\n' "$*" >> operations; return 0; }
+_release_rebuild_and_verify() { printf '%s\n' provenance >> operations; return 0; }
 printf 'y\n' | rel_run v1.2.3 release
 `
 	out, err := run(t, dir, "", "-c", approved)
@@ -108,7 +106,7 @@ printf 'y\n' | rel_run v1.2.3 release
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "status --short\nadd .\ncommit -m release\ntag v1.2.3\npush origin v1.2.3\npush origin\n"
+	want := "status --short\nadd .\ncommit -m release\ntag v1.2.3\nprovenance\npush origin v1.2.3\npush origin\n"
 	if string(operations) != want {
 		t.Fatalf("operations:\n%s\nwant:\n%s", operations, want)
 	}
@@ -127,5 +125,178 @@ printf 'y\n' | rel_run v1.2.3 release
 	}
 	if strings.Contains(string(failed), "push origin") {
 		t.Fatalf("release continued after failure: %s", failed)
+	}
+
+	provenanceFailure := `source ./build.sh
+_run_git() { shift; printf '%s\n' "$*" >> provenance-failed-operations; return 0; }
+_release_rebuild_and_verify() { return 1; }
+printf 'y\n' | rel_run v1.2.3 release
+`
+	if out, err = run(t, dir, "", "-c", provenanceFailure); err == nil {
+		t.Fatalf("provenance failure accepted: %s", out)
+	}
+	provenanceFailed, err := os.ReadFile(filepath.Join(dir, "provenance-failed-operations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(provenanceFailed), "push origin") {
+		t.Fatalf("release pushed after provenance failure: %s", provenanceFailed)
+	}
+}
+
+func TestCanonAssetChangesRequireVersionIncrease(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	for path, content := range map[string]string{
+		"build.sh":                    string(mustRead(t, filepath.Join(root, "build.sh"))),
+		"internal/canon/canon.go":     "package canon\nconst Version = \"1.0.0\"\n",
+		"cmd/govna/main.go":           "package main\nconst canonVersion = \"1.0.0\"\n",
+		"internal/canon/assets/a.txt": "one\n",
+	} {
+		full := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+	gitFixture(t, dir, "tag", "v1.0.0")
+	if err := os.WriteFile(filepath.Join(dir, "internal/canon/assets/a.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(t, dir, "", "-c", "source ./build.sh; _color_init; _validate_root_canon_version")
+	if err == nil || !strings.Contains(out, "increase internal/canon.Version") {
+		t.Fatalf("unchanged version accepted: %v: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "internal/canon/canon.go"), []byte("package canon\nconst Version = \"1.1.0\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cmd/govna/main.go"), []byte("package main\nconst canonVersion = \"1.1.0\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(t, dir, "", "-c", "source ./build.sh; _color_init; _validate_root_canon_version"); err != nil {
+		t.Fatalf("increased version rejected: %v: %s", err, out)
+	}
+}
+
+func TestTaggedBinaryProvenanceVerification(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	tooling := mustRead(t, filepath.Join(root, "build.sh"))
+	if err := os.WriteFile(filepath.Join(dir, "tooling.sh"), tooling, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gopath := filepath.Join(dir, "gopath")
+	fakebin := filepath.Join(dir, "fakebin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	build := "#!/bin/bash\nmkdir -p \"$FAKE_GOPATH/bin\"\nprintf '#!/bin/bash\\nprintf \\\"govna v1.2.3\\\\n\\\"\\n' > \"$FAKE_GOPATH/bin/govna\"\nchmod +x \"$FAKE_GOPATH/bin/govna\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "build.sh"), []byte(build), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	goTool := "#!/bin/bash\nif [ \"$1\" = env ]; then printf '%s\\n' \"$FAKE_GOPATH\"; exit; fi\nif [ \"$1\" = version ]; then printf 'path\\tgovna\\nbuild\\tvcs.revision=%s\\nbuild\\tvcs.modified=false\\n' \"$(git rev-parse HEAD)\"; exit; fi\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(fakebin, "go"), []byte(goTool), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "release")
+	cmd := exec.Command("/bin/bash", "-c", "source ./tooling.sh; _color_init; _release_rebuild_and_verify v1.2.3")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "FAKE_GOPATH="+gopath, "PATH="+fakebin+":"+os.Getenv("PATH"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("provenance rejected: %v: %s", err, out)
+	}
+}
+
+func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tooling.sh"), mustRead(t, filepath.Join(root, "build.sh")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nconst programVersion = \"1.2.3\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	compiled := filepath.Join(dir, "compiled")
+	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 1.2.3\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(dir, "bin", "widget")
+	if err := os.Mkdir(filepath.Dir(destination), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := "source ./tooling.sh; _color_init; [ \"$(_extract_program_version main.go)\" = 1.2.3 ]; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"
+	if out, err := run(t, dir, "", "-c", script); err != nil {
+		t.Fatalf("install failed: %v: %s", err, out)
+	}
+	if out, err := exec.Command(destination, "--version").CombinedOutput(); err != nil || string(out) != "widget 1.2.3\n" {
+		t.Fatalf("installed output: %v: %s", err, out)
+	}
+	if err := os.Remove(destination); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("compiled", destination); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"); err == nil || !strings.Contains(out, "must be absent or a regular file") {
+		t.Fatalf("unsafe destination accepted: %v: %s", err, out)
+	}
+}
+
+func TestPreparationMutationFailureAndCleanup(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tooling.sh"), mustRead(t, filepath.Join(root, "build.sh")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	versionFile := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(versionFile, []byte("package main\nconst programVersion = \"1.0.0\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	owned := filepath.Join(dir, "owned")
+	if err := os.Mkdir(owned, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := "source ./tooling.sh; _color_init; _prep_apply_version_bump main.go programVersion 1.1.0; _build_owned_dir=owned; _cleanup_build_owned; ! _prep_apply_version_bump main.go unknown 2.0.0"
+	if out, err := run(t, dir, "", "-c", script); err != nil {
+		t.Fatalf("prep fixture failed: %v: %s", err, out)
+	}
+	content := string(mustRead(t, versionFile))
+	if !strings.Contains(content, `programVersion = "1.1.0"`) || strings.Contains(content, "2.0.0") {
+		t.Fatalf("version mutation=%s", content)
+	}
+	if _, err := os.Stat(owned); !os.IsNotExist(err) {
+		t.Fatalf("owned scratch remains: %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, ".govna-install-*"))
+	if err != nil || len(matches) != 0 {
+		t.Fatalf("install temporaries=%v err=%v", matches, err)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func gitFixture(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
 }
