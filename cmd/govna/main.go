@@ -8,10 +8,11 @@ import (
 
 	"github.com/queone/govna/internal/apply"
 	"github.com/queone/govna/internal/audit"
+	"github.com/queone/govna/internal/remove"
 	"github.com/queone/govna/internal/render"
 )
 
-const programVersion = "0.4.0"
+const programVersion = "0.5.0"
 const canonVersion = "0.29.0"
 const sourceRepo = "github.com/queone/govna"
 
@@ -83,7 +84,16 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 		}
 		return apply.Run(args[1:], stdout, stderr, cwd, nil)
 	case "rm":
-		return unavailable(args[0], stderr)
+		if len(args) == 2 && isHelp(args[1]) {
+			fmt.Fprint(stderr, remove.Help())
+			return 0
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(stderr, "rm: get cwd: %v\n", err)
+			return 1
+		}
+		return remove.Run(args[1:], stdout, stderr, cwd)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n", args[0])
 		fmt.Fprint(stderr, usageText(env))
@@ -93,11 +103,6 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 
 func isHelp(arg string) bool {
 	return arg == "-h" || arg == "--help" || arg == "-?"
-}
-
-func unavailable(command string, stderr io.Writer) int {
-	fmt.Fprintf(stderr, "govna %s is not implemented in this build\n", command)
-	return 1
 }
 
 func colorEnabled(env environment) bool {

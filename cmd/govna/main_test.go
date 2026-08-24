@@ -87,6 +87,14 @@ func TestReservedCommandHelp(t *testing.T) {
 		"  -l, --diff-lines <N>       diff truncation limit (default: 200)\n" +
 		"  -n, --repo-name <name>     override repo name (default: basename of cwd)\n" +
 		"  -h, --help                 show this help\n"
+	rm := "Usage: govna rm [flags]\n\n" +
+		"Emit a Director-reviewed cleanup AC for removing govna canon from an\n" +
+		"adopted repo. Run from the consumer repo root (no positional arguments).\n" +
+		"Deletes nothing itself.\n\nFlags:\n" +
+		"  -f, --flavor code|doc      overlay flavor (default: auto-detect)\n" +
+		"  -s, --stack <name>         CODE stack (default: inferred from manifests)\n" +
+		"  -n, --repo-name <name>     override repo name (default: basename of cwd)\n" +
+		"  -h, --help                 show this help\n"
 	for _, tc := range []struct {
 		name string
 		args []string
@@ -96,6 +104,7 @@ func TestReservedCommandHelp(t *testing.T) {
 		{"render alias", []string{"render-canon", "--help"}, render},
 		{"audit", []string{"audit", "--help"}, audit},
 		{"audit alias", []string{"drift-scan", "--help"}, audit},
+		{"rm", []string{"rm", "--help"}, rm},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stdout, stderr, code := execute(tc.args...)
@@ -123,20 +132,6 @@ func TestRenderAliasesOperational(t *testing.T) {
 		stdout, stderr, code := execute(command, target)
 		if code != 0 || stderr != "" || stdout != filepath.Join(cwd, target)+"\n" {
 			t.Fatalf("%s: stdout=%q stderr=%q code=%d", command, stdout, stderr, code)
-		}
-	}
-}
-
-func TestReservedCommandsUnavailable(t *testing.T) {
-	for _, tc := range []struct{ input, canonical string }{
-		{"rm", "rm"},
-	} {
-		for _, args := range [][]string{{tc.input}, {tc.input, "extra"}, {tc.input, "-h", "extra"}} {
-			name := strings.Join(args, " ")
-			t.Run(name, func(t *testing.T) {
-				stdout, stderr, code := execute(args...)
-				assertResult(t, stdout, stderr, code, "", fmt.Sprintf("govna %s is not implemented in this build\n", tc.canonical), 1)
-			})
 		}
 	}
 }

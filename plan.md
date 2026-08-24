@@ -6,7 +6,7 @@ Build a Go successor that reaches validated behavioral parity with the frozen `g
 
 ## Next Action
 
-- Draft the S5 implementation AC for removal classification and emitted removal AC behavior.
+- Draft the S6 implementation AC for product validation, installation, release preparation, release orchestration, and final parity verification.
 
 ## Behavioral Stages
 

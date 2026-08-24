@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -15,42 +16,53 @@ var acPattern = regexp.MustCompile(`(?i)AC([0-9]+)`)
 var filePattern = regexp.MustCompile(`^ac([0-9]+)-`)
 
 const AuditMarkerPrefix = "<!-- audit: emitted-by govna "
+const RemovalMarkerPrefix = "<!-- govna-rm: emitted-by govna "
 
-// AuditPath allocates or reuses the sole canon-version-keyed audit stub.
-func AuditPath(root, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
+// GuardedPath allocates or reuses the sole stem-and-version-keyed AC stub.
+func GuardedPath(root, stem, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
 	dir := filepath.Join(root, "govna")
-	pattern := regexp.MustCompile(`^ac[0-9]+-audit-` + regexp.QuoteMeta(version) + `\.md$`)
+	pattern := regexp.MustCompile(`^ac[0-9]+-` + regexp.QuoteMeta(stem) + `-` + regexp.QuoteMeta(version) + `\.md$`)
 	var matches []string
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
 		if !entry.IsDir() && pattern.MatchString(entry.Name()) {
-			matches = append(matches, entry.Name())
+			matches = append(matches, filepath.ToSlash(filepath.Join("govna", entry.Name())))
 		}
 	}
+	sort.Strings(matches)
 	if len(matches) > 1 {
-		return "", false, fmt.Errorf("audit: multiple matching audit stubs for %s", version)
+		return "", false, fmt.Errorf("multiple emitted AC stubs for %s %s: %v", stem, version, matches)
 	}
 	if len(matches) == 1 {
-		return filepath.ToSlash(filepath.Join("govna", matches[0])), true, nil
+		return matches[0], true, nil
 	}
 	n, err := Next(root, command)
 	if err != nil {
 		return "", false, err
 	}
-	return fmt.Sprintf("govna/ac%d-audit-%s.md", n, version), false, nil
+	return fmt.Sprintf("govna/ac%d-%s-%s.md", n, stem, version), false, nil
 }
 
-// AuditBody wraps body with a deterministic edit-detection marker.
-func AuditBody(version string, body []byte) []byte {
+// AuditPath allocates or reuses the sole canon-version-keyed audit stub.
+func AuditPath(root, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
+	path, reused, err := GuardedPath(root, "audit", version, command)
+	if err != nil && strings.HasPrefix(err.Error(), "multiple emitted AC stubs") {
+		return "", false, fmt.Errorf("audit: multiple matching audit stubs for %s", version)
+	}
+	return path, reused, err
+}
+
+// GuardedBody wraps body with a deterministic marker and body hash.
+func GuardedBody(prefix, version string, body []byte) []byte {
 	hash := sha256.Sum256(body)
-	marker := fmt.Sprintf("%sv%s sha256:%x -->\n", AuditMarkerPrefix, strings.TrimPrefix(version, "v"), hash)
+	marker := fmt.Sprintf("%s%s sha256:%x -->\n", prefix, version, hash)
 	return append([]byte(marker), body...)
 }
 
-// VerifyAuditBody reports whether a generated audit stub remains unedited.
-func VerifyAuditBody(content []byte) bool {
+// VerifyGuardedBody verifies a marker prefix and its body hash.
+func VerifyGuardedBody(content []byte, prefix string) bool {
 	line, body, ok := strings.Cut(string(content), "\n")
-	if !ok || !strings.HasPrefix(line, AuditMarkerPrefix) {
+	if !ok || !strings.HasPrefix(line, prefix) {
 		return false
 	}
 	index := strings.LastIndex(line, " sha256:")
@@ -60,6 +72,16 @@ func VerifyAuditBody(content []byte) bool {
 	want := line[index+8 : len(line)-4]
 	hash := sha256.Sum256([]byte(body))
 	return want == fmt.Sprintf("%x", hash)
+}
+
+// AuditBody wraps body with a deterministic edit-detection marker.
+func AuditBody(version string, body []byte) []byte {
+	return GuardedBody(AuditMarkerPrefix, "v"+strings.TrimPrefix(version, "v"), body)
+}
+
+// VerifyAuditBody reports whether a generated audit stub remains unedited.
+func VerifyAuditBody(content []byte) bool {
+	return VerifyGuardedBody(content, AuditMarkerPrefix)
 }
 
 func Next(root string, command func(string, ...string) ([]byte, error)) (int, error) {

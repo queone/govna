@@ -6,11 +6,15 @@ Planned Go successor to [`govna-rust`](https://github.com/queone/govna-rust), th
 
 Govna changes frequently. Go's faster edit-build-test cycle is expected to improve iteration speed while the Rust repository supplies a stable reference for externally observable behavior.
 
-The dependency-free Go implementation provides top-level dispatch, deterministic rendering, `apply`, and non-mutating audit for CODE and DOC repositories. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Audit validates durable state, classifies drift, and emits a guarded routing AC only for actionable results. Legacy `governa/` content is intentionally ignored. Removal remains staged work. [`govna/parity.md`](govna/parity.md) defines the frozen-reference contract and approved differences. S5 removal is next.
+The dependency-free Go implementation provides top-level dispatch, deterministic rendering, `apply`, non-mutating audit, and non-destructive removal assessment for CODE and DOC repositories. Apply preserves settled consumer-owned files, merges registered governance boundaries, emits an adoption AC, and optionally initializes Git on `main`. Audit validates durable state, classifies drift, and emits a guarded routing AC only for actionable results. Removal classifies delete, keep, and review routes into a guarded AC without executing them. Legacy `governa/` content is intentionally ignored. [`govna/parity.md`](govna/parity.md) defines the frozen-reference contract and approved differences. S6 product tooling is next.
 
 ## Audit
 
 Run `govna audit` from an adopted CODE or DOC Git worktree to compare its governed files with embedded canon. Audit validates metadata, baseline, and optional `govna/preserve.txt` state; classifies current-canon and evidenced target-only paths; and emits one guarded audit AC only when work is actionable. Use `--json` for the deterministic machine report. Audit does not apply routing decisions or mutate existing governed content.
+
+## Removal
+
+Run `govna rm` from an adopted CODE or DOC Git worktree to emit a Director-reviewed removal AC. Byte-equal pure canon is proposed for deletion, mixed or edited canon requires routing, and expected-divergence, preserved, and target-only paths stay out of scope. The command never performs a routed deletion and removes no control state itself.
 
 ## Governance
 

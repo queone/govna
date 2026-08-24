@@ -43,3 +43,24 @@ func TestAuditGuard(t *testing.T) {
 		t.Fatalf("path=%q reused=%v err=%v", got, reused, err)
 	}
 }
+
+func TestRemovalGuardAndAmbiguity(t *testing.T) {
+	d := t.TempDir()
+	os.Mkdir(filepath.Join(d, "govna"), 0755)
+	cmd := func(string, ...string) ([]byte, error) { return nil, nil }
+	path, reused, err := GuardedPath(d, "govna-rm", "v0.29.0", cmd)
+	if err != nil || reused || path != "govna/ac1-govna-rm-v0.29.0.md" {
+		t.Fatalf("path=%q reused=%v err=%v", path, reused, err)
+	}
+	body := GuardedBody(RemovalMarkerPrefix, "v0.29.0", []byte("body\n"))
+	if !VerifyGuardedBody(body, RemovalMarkerPrefix) || VerifyGuardedBody(append(body, 'x'), RemovalMarkerPrefix) {
+		t.Fatal("removal marker verification failed")
+	}
+	os.WriteFile(filepath.Join(d, "govna", "ac1-govna-rm-v0.29.0.md"), body, 0644)
+	os.WriteFile(filepath.Join(d, "govna", "ac2-govna-rm-v0.29.0.md"), body, 0644)
+	_, _, err = GuardedPath(d, "govna-rm", "v0.29.0", cmd)
+	want := "multiple emitted AC stubs for govna-rm v0.29.0: [govna/ac1-govna-rm-v0.29.0.md govna/ac2-govna-rm-v0.29.0.md]"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err=%v", err)
+	}
+}

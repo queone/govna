@@ -6,7 +6,7 @@ Provide the Go implementation of govna while preserving the externally observabl
 
 ## System Summary
 
-The S1 command foundation, S2 embedded renderer, S3 apply flow, and S4 audit engine are implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines behavioral boundaries and stages S1 through S6.
+The S1 command foundation, S2 embedded renderer, S3 apply flow, S4 audit engine, and S5 removal assessment are implemented as a dependency-free Go module. [`govna/parity.md`](govna/parity.md) defines behavioral boundaries and stages S1 through S6.
 
 ## Current Platform
 
@@ -14,13 +14,14 @@ The S1 command foundation, S2 embedded renderer, S3 apply flow, and S4 audit eng
 
 ## Major Components
 
-- `cmd/govna`: command dispatch, version and usage output, terminal-color gating, and operational render, apply, and audit handlers.
+- `cmd/govna`: command dispatch, version and usage output, terminal-color gating, and operational render, apply, audit, and removal handlers.
 - `internal/canon`: embedded canon assets, substitutions, overlay composition, and deterministic baseline generation.
 - `internal/render`: render argument handling, cwd inference, validation, and filesystem emission.
 - `internal/repository`: shared repository identity and source-checkout resolution.
 - `internal/apply`: fresh/existing adoption, protected writes, boundary merging, symlink handling, and optional Git initialization.
 - `internal/audit`: strict durable-state parsing, ordered canon classification, bounded target-only evidence, deterministic reports, and non-mutating audit orchestration.
-- `internal/emission`: monotonic AC numbering and guarded version-keyed audit-stub reuse with body-hash edit detection.
+- `internal/remove`: deterministic delete, keep, and review classification with no-follow target traversal and non-destructive removal-AC emission.
+- `internal/emission`: monotonic AC numbering and guarded stem/version-keyed stub reuse with body-hash edit detection.
 - Governance, release scaffolding, and the behavioral-parity contract.
 
 ## Core Files
@@ -43,6 +44,8 @@ The S1 command foundation, S2 embedded renderer, S3 apply flow, and S4 audit eng
 Apply resolves the cwd through `internal/repository`, renders the same canon set, then writes all files in new mode or preserves and boundary-merges settled paths in existing mode. `internal/emission` writes one ordinary adoption AC. Apply never reads or changes legacy `governa/` content. Git initialization is an optional final step and uses `main` only.
 
 Audit resolves and validates an adopted Git worktree, parses metadata plus baseline and preserve control state, and compares canon-owned regions in byte order. It uses baseline hashes for ordinary drift, bounded Git history only for first-baseline migration, and merged baseline, tombstone, all-stack cross-flavor, or divergent-reference evidence for target-only paths. Clean audits allocate and write nothing. Actionable audits write or reuse only one unedited canon-version-keyed AC stub; JSON uses the same report model.
+
+Removal resolves the same repository identity and strict preserve state, then compares existing current-canon files and traverses target-only entries without following symlinks. It sorts ordinary deletion, keep, and review routes; places preserve control-state removal last; and writes or byte-identically reuses one guarded removal AC. It executes no route and excludes only its eligible emitted stub from target-only classification.
 
 ## AC Lifecycle Control Flow
 

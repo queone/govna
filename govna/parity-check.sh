@@ -9,6 +9,7 @@ traceability_path="$repo_root/internal/canon/testdata/rnd-traceability.txt"
 growth_path="$repo_root/internal/canon/testdata/governance-growth-baseline.txt"
 apply_traceability_path="$repo_root/internal/apply/testdata/apl-traceability.txt"
 audit_traceability_path="$repo_root/internal/audit/testdata/aud-traceability.txt"
+remove_traceability_path="$repo_root/internal/remove/testdata/rem-traceability.txt"
 
 die() {
   printf '%s\n' "parity-check: $*" >&2
@@ -89,6 +90,20 @@ if [ -f "$audit_traceability_path" ]; then
     [ -s "$repo_root/internal/audit/testdata/$golden" ] || die "missing S4 golden $golden"
   done
   printf '%s\n' 'S4 Go traceability and audit goldens: pass'
+fi
+if [ -f "$remove_traceability_path" ]; then
+  for number in $(awk 'BEGIN { for (i = 1; i <= 11; i++) printf "%03d\n", i }'); do
+    [ "$(grep -Ec "^REM-$number( |$)" "$remove_traceability_path")" -eq 1 ] ||
+      die "S5 traceability must contain exactly one REM-$number record"
+  done
+  while read -r _ tests; do
+    for test_name in $tests; do
+      grep -Rqs "func $test_name(" "$repo_root/cmd" "$repo_root/internal" ||
+        die "S5 traceability names missing Go test $test_name"
+    done
+  done < "$remove_traceability_path"
+  [ -s "$repo_root/internal/remove/testdata/removal-golden.md" ] || die 'missing S5 removal golden'
+  printf '%s\n' 'S5 Go traceability and removal golden: pass'
 fi
 
 if [ -f "$apply_traceability_path" ]; then
