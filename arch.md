@@ -28,7 +28,7 @@ Command dispatch, embedded rendering, apply, audit, removal assessment, and prod
 ## Core Files
 
 - `AGENTS.md`: base governance contract
-- `cmd/govna/main.go`: executable entry point and S1 command runner
+- `cmd/govna/main.go`: executable entry point and command runner
 - `plan.md`: prioritized roadmap and approved direction
 - `build.sh`: self-contained build / release-prep / release script (Bash 3.2+, no external tools)
 - `govna/development-cycle.md`: workflow from roadmap through release
@@ -37,7 +37,7 @@ Command dispatch, embedded rendering, apply, audit, removal assessment, and prod
 
 ## Data And Control Flow
 
-`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner routes render requests into `internal/render`, which resolves cwd identity and asks `internal/canon` for a path-sorted in-memory file set. The renderer writes that set without pre-cleaning, applies deterministic modes, installs the baseline, and recreates the `CLAUDE.md` symlink. Removal remains a temporary handler until S5 replaces it.
+`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner routes render requests into `internal/render`, which resolves cwd identity and asks `internal/canon` for a path-sorted in-memory file set. The renderer writes that set without pre-cleaning, applies deterministic modes, installs the baseline, and recreates the `CLAUDE.md` symlink.
 
 Apply resolves the cwd through `internal/repository`, renders the same canon set, then writes all files in new mode or preserves and boundary-merges settled paths in existing mode. `internal/emission` writes one ordinary adoption AC. Apply never reads or changes legacy `governa/` content. Git initialization is an optional final step and uses `main` only.
 
@@ -54,7 +54,6 @@ The governed change path is `Draft → Audit → Refine → Implement → Ratify
 ## Architecture Notes
 
 - Record approved intentional differences in the owning AC, documentation, and tests.
-- Keep S1 on the standard library; defer later package layout, dependencies, and implementation strategy to each stage's owning implementation AC.
 
 ## Conventions
 
