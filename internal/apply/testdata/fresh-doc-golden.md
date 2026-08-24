@@ -1,10 +1,10 @@
 # AC1 Govna Apply
 
-Applied govna v0.31.0 governance template (DOC overlay) to handbook.
+Applied govna v0.32.0 governance template (DOC overlay) to handbook.
 
 ## Summary
 
-Applied govna v0.31.0 governance template (DOC overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.
+Applied govna v0.32.0 governance template (DOC overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.
 
 ## In Scope
 

@@ -26,7 +26,8 @@ Rules:
 - Preserve the fixed `##` section list.
 - Edit sections in place.
 - Change section order or the `##` section list only when the user explicitly requests a contract amendment.
-- Name the exact sections to change and keep edits local during every update.
+- Name the exact sections to change during every update.
+- Keep edits local during every update.
 - Edit this file as a governed config artifact, with rule-shaped bullets only.
 - Use `##` for top-level sections.
 - Use `###` for thematic groupings inside a section.
@@ -53,7 +54,8 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Open each response with the answer, finding, open question, or one-sentence note on what you're about to do.
 - Use terse flat bullets.
 - Skip preambles, recaps, and implication walk-throughs.
-- Create files and make repository edits only after explicit user authorization — including draft files, scratch scripts, scaffolding, and config tweaks.
+- Create files only after explicit user authorization — including draft files, scratch scripts, scaffolding, and config tweaks.
+- Make repository edits only after explicit user authorization.
 - Make the smallest change that satisfies the request once authorized.
 - Surface assumptions, ambiguities, and missing context before any direction-changing action.
 - Operate as the Operator on every interaction under `govna/roles.md`.
@@ -73,7 +75,8 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Treat changed-content integrity, AC-template structure, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.
 - Resolve instruction conflicts in this order: user instruction within authorized scope, then AGENTS.md, then referenced govna docs, then model defaults.
 - Follow an explicit Director workflow override without requiring contract-amendment language.
-- Stop and ask when a request lacks authorization, scope, or required context.
+- Stop when a request lacks authorization, scope, or required context.
+- Ask for the missing authorization, scope, or context.
 
 ### Contract Integrity
 
@@ -95,7 +98,8 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Cite the authoritative upstream section or document for every consumer-observed Govna-canon finding.
 - Prohibit permanent local governance from recording an upstream canon correction.
 - Pair a blocking `Govna canon` recommendation with a temporary consumer mitigation only when the mitigation remains compatible with canon.
-- Mark every temporary consumer mitigation explicitly and state its removal condition.
+- Mark every temporary consumer mitigation explicitly.
+- State every temporary consumer mitigation's removal condition.
 - Prohibit a temporary consumer mitigation from overriding or contradicting canon.
 - Classify a finding as `Unclear` when repository evidence supports both destinations.
 - Present both candidate destinations and defer an `Unclear` classification to the Director.
@@ -148,7 +152,8 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Apply the effective-scope exception in `### Effective Implementation Scope` during Implement, closure-audit correction, and Ratify correction.
 - Apply the audit effective-scope exception in `### Audit Adoption` when a Director resolves any routing action.
 - Apply the same effective-implementation-scope principle to any other emitted-AC tool with Director-resolved routing decisions (e.g., `rm`'s Routing Decisions) — the named target is in scope once resolved, even when absent from `## In Scope`.
-- Stop and ask when a request is ambiguous, or when the change is hard to reverse.
+- Stop when a request is ambiguous or the change is hard to reverse.
+- Ask for direction before proceeding.
 - Wait for explicit user request before preparing, executing, publishing, deploying, or distributing — including drafting commit messages, commit commands, version bumps, or release notes.
 - **Leave every `git commit` for the user to execute. No EXCEPTION.**
 - Treat an explicit standalone `Package`, `package`, `pack`, or `prep` request in an active Ratified AC context as the trigger for release-prep bookkeeping (CHANGELOG row insertion, release-tag drafting, commit-command drafting, release-command presentation).

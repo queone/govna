@@ -122,7 +122,8 @@ Every Director-resolved routing target becomes effective implementation scope wh
 
 ### Emitted AC instruction and phase shape
 
-- Place the count paragraph first under `## Summary` and start it with `This adoption covers`.
+- Place the count paragraph first under `## Summary`.
+- Start the count paragraph with `This adoption covers`.
 - Start the Summary sentences with `This audit adoption synchronizes`, `Audit surfaced`, and `Per-file inspection uses` in that order.
 - Keep the count and Summary paragraphs descriptive.
 - Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes.
@@ -140,7 +141,8 @@ Every Director-resolved routing target becomes effective implementation scope wh
 - Include the boundary line, its line ending, the complete repository-owned tail, and the final-newline state in the protected region.
 - Emit the expected digest and boundary in the file-specific automated acceptance test for every direct sync.
 - Emit the same conditional verification for every review item whose Director resolution is sync.
-- Recompute the protected-region digest after adoption and require it to match the emitted digest.
+- Recompute the protected-region digest after adoption.
+- Require the protected-region digest to match the emitted digest.
 - Keep rendered-canon comparison scoped to the canon zone above the boundary.
 - Avoid comparing the repository-owned tail with rendered defaults.
 - Keep the protected-region digest out of classification, baseline scope, and JSON output.

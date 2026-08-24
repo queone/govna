@@ -1,4 +1,4 @@
-# AC7 Audit v0.31.0
+# AC7 Audit v0.32.0
 
 ## Summary
 

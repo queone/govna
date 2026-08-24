@@ -36,8 +36,11 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 - Confirm scope, claims, citations, reference integrity, structure, terminology, and tests for every code change.
 - Search for stale references after renames, moves, or deletions.
 - Red-team assumptions and underspecified behavior.
-- Run `./build.sh` and confirm it passes when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).
-- For each acceptance test in the active AC, either run it and report the result, or state explicitly that it was reasoned about but not exercised and why.
+- Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).
+- Confirm that `./build.sh` passes when the change touches code or build-relevant files.
+- Run each acceptance test in the active AC when it can be exercised.
+- Report the result of each exercised acceptance test.
+- State explicitly why each unexercised acceptance test was only reasoned about.
 
 - Report `Verified`, `Red-teamed`, and `Not checked` as distinct completion sections.
 - Keep each independently useful self-review item distinct.
@@ -65,7 +68,8 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 - Do not self-certify quality or decide when something publishes, ships, or deploys.
 - Do not make irreversible decisions (releases, publications, destructive changes, external communications) without explicit director approval.
 - Do not make architectural bets (build vs. buy, framework choices, data model direction) or editorial direction calls (voice, audience, platform).
-- Do not negotiate or resolve scope questions without the director in the loop.
+- Do not negotiate scope questions without the director in the loop.
+- Do not resolve scope questions without the director in the loop.
 - Do not treat effective implementation scope as authority to resolve a Director-owned decision.
 - Correct an evidenced completeness gap without a fresh phase instruction only under the bounded exception in `AGENTS.md`.
 - Do not expand or contract the definition of "done" for any work item.

@@ -16,7 +16,9 @@ Keep repo-specific practices in `## Project Practices`.
 ## Schema And Data Migrations
 
 - Treat schema changes as first-class events: version them, document them, test the migration path
-- Never assume old data fits new schemas — write migration logic or fail explicitly
+- Never assume old data fits new schemas.
+- Write migration logic for old data.
+- Fail explicitly when migration logic is unavailable.
 - Audit all foreign key references when a migration changes identity or key structure.
 
 ## External Integration Patterns
