@@ -37,7 +37,7 @@ func TestVersionAliases(t *testing.T) {
 
 func TestDetailedVersion(t *testing.T) {
 	stdout, stderr, code := execute("version")
-	assertResult(t, stdout, stderr, code, fmt.Sprintf("govna binary: v%s\nembedded canon: v0.30.0\n", programVersion), "", 0)
+	assertResult(t, stdout, stderr, code, fmt.Sprintf("govna binary: v%s\nembedded canon: v0.31.0\n", programVersion), "", 0)
 
 	stdout, stderr, code = execute("version", "extra", "ignored")
 	assertResult(t, stdout, stderr, code, "", "unexpected argument for version: extra\nUsage: govna version\n", 2)

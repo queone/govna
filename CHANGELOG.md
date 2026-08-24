@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.7.1 | AC10: correct audit baseline classification and AC emission |
 | 0.7.0 | AC9: finalize Go canon and retire migration scaffolding |
 | 0.6.0 | AC8: complete Go product tooling and final parity |
 | 0.5.0 | AC7: add non-destructive removal assessment |

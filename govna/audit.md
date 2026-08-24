@@ -122,10 +122,12 @@ Every Director-resolved routing target becomes effective implementation scope wh
 
 ### Emitted AC instruction and phase shape
 
-- Start the count paragraph with `This adoption covers`.
+- Place the count paragraph first under `## Summary` and start it with `This adoption covers`.
 - Start the Summary sentences with `This audit adoption synchronizes`, `Audit surfaced`, and `Per-file inspection uses` in that order.
 - Keep the count and Summary paragraphs descriptive.
-- Place routing procedure and the CODE reachability check under `### Adoption Instructions`.
+- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes.
+- Place that CODE reachability check and all routing procedure under `### Adoption Instructions`.
+- Omit the CODE reachability check from DOC audit emissions.
 - Emit each adoption instruction as one imperative bullet.
 - Format every numbered routing entry as one Director decision question.
 - End every numbered routing entry with `?`.
@@ -143,9 +145,19 @@ Every Director-resolved routing target becomes effective implementation scope wh
 - Avoid comparing the repository-owned tail with rendered defaults.
 - Keep the protected-region digest out of classification, baseline scope, and JSON output.
 
-When baseline migration is present, audit infers validation only from bounded target governance evidence. Positive declarations come only from exactly one AGENTS.md rule shaped ``Run `<command>` as the first validation command ...`` and exactly one rule shaped ``Use `<command>` for repository-wide ... validation ...``; CODE infers `./build.sh` only when both name that command and root `build.sh` is a regular file. DOC infers `Not applicable` only when `govna/release.md` contains the exact canon no-automated-content-validation declaration and AGENTS.md contains no recognized positive declaration. Missing, duplicate, incomplete, mismatched, positive-plus-negative, non-`./build.sh`, or non-regular-file evidence stays unresolved for a Director decision. Audit ignores other prose, governance documents, executables, manifests, CI files, and flavor defaults.
+- Apply validation inference when baseline installation or replacement is present.
+- Infer validation only from bounded target governance evidence.
+- Accept positive declarations only from exactly one AGENTS.md rule shaped ``Run `<command>` as the first validation command ...`` and exactly one rule shaped ``Use `<command>` for repository-wide ... validation ...``.
+- Infer `./build.sh` for CODE only when both rules name that command and root `build.sh` is a regular file.
+- Infer `Not applicable` for DOC only when `govna/release.md` contains the exact canon no-automated-content-validation declaration and AGENTS.md contains no recognized positive declaration.
+- Leave missing, duplicate, incomplete, mismatched, positive-plus-negative, non-`./build.sh`, or non-regular-file evidence unresolved for a Director decision.
+- Ignore other prose, governance documents, executables, manifests, CI files, and flavor defaults.
 
-An inferred disposition records its evidence without requesting Director confirmation. A baseline-only migration with inferred validation has no routing decision or manual routing AT. An unresolved disposition remains a numbered routing decision with the existing manual and conditional routing ATs. Emitted count summaries use singular nouns only for a count of one and plural nouns for zero or multiple counts.
+- Record inferred disposition evidence without requesting Director confirmation.
+- Omit routing decisions and manual routing ATs for a baseline-only update with inferred validation.
+- Keep an unresolved disposition as a numbered routing decision with the existing manual and conditional routing ATs.
+- Use singular nouns in emitted count summaries only for a count of one.
+- Use plural nouns in emitted count summaries for zero or multiple counts.
 
 Emitted acceptance tests verify sync, migration, deletion, and preservation according to the resolved outcome. The pre-install rendered-canon blanket covers declared sync items except `govna/canon-baseline.txt`, routing targets resolved as sync, and canon-backed migration destinations. After all selected work, the resolved validation command must succeed, or the `Not applicable` evidence must hold. Only after every other applicable automated AT and routing outcome passes does the baseline get installed and verified separately from the same scratch render as the final adoption step.
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const Version = "0.30.0"
+const Version = "0.31.0"
 
 //go:embed assets
 var assets embed.FS

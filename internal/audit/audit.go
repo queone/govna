@@ -290,8 +290,10 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		fr.CompareCommand = comparisonDescription(fr, path)
 		report.Files = append(report.Files, fr)
 	}
-	if !basePresent || !bytes.Equal(baseBytes, canonMap[baselinePath]) {
+	if !basePresent {
 		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "migration-required", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
+	} else if !bytes.Equal(baseBytes, canonMap[baselinePath]) {
+		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
 	}
 	for path, evidence := range targetOnly(root, canonMap, prior, flavor, name) {
 		fr := FileResult{Path: path, Classification: "target-has-no-canon", CanonReference: evidence, CompareCommand: "inspect target-only file " + path}
@@ -720,7 +722,9 @@ func buildAC(report Report, path, validation string) string {
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%s Audit v%s\n\n## Summary\n\nAdopt the actionable govna audit findings for `%s`.\n\n## In Scope\n\n", number, canon.Version, report.Header.RepoName)
+	fmt.Fprintf(&b, "# AC%s Audit v%s\n\n## Summary\n\n", number, canon.Version)
+	fmt.Fprintf(&b, "This adoption covers %s, %s, %s, and %s.\n\n", countLabel(len(sync), "sync path"), countLabel(len(migrate), "migration path"), countLabel(len(review), "review path"), countLabel(len(preserve), "out-of-scope path"))
+	fmt.Fprintf(&b, "This audit adoption synchronizes deterministic canon changes for `%s`. Audit surfaced %s and %s. Per-file inspection uses rendered canon, durable baseline evidence, preserve decisions, and bounded target evidence.\n\n## In Scope\n\n", report.Header.RepoName, countLabel(len(migrate), "migration path"), countLabel(len(review), "review path"))
 	writeGroup := func(title string, files []FileResult) {
 		fmt.Fprintf(&b, "### %s\n\n", title)
 		if len(files) == 0 {
@@ -735,7 +739,11 @@ func buildAC(report Report, path, validation string) string {
 	writeGroup("Direct sync", sync)
 	writeGroup("Migration", migrate)
 	writeGroup("Review", review)
-	b.WriteString("### Adoption Instructions\n\n- Resolve every routing decision in chat.\n- Leave this emitted stub unchanged.\n- Render canon into a scratch directory.\n- Apply every resolved outcome without changing unrelated content.\n- Install `govna/canon-baseline.txt` last.\n\n")
+	b.WriteString("### Adoption Instructions\n\n- Resolve every routing decision in chat.\n- Leave this emitted stub unchanged.\n- Render canon into a scratch directory.\n")
+	if report.Header.Flavor == "code" {
+		b.WriteString("- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes.\n")
+	}
+	b.WriteString("- Apply every resolved outcome without changing unrelated content.\n- Install `govna/canon-baseline.txt` last.\n\n")
 	if len(review) > 0 {
 		b.WriteString("### Routing Decisions\n\n")
 		for i, f := range review {
@@ -761,7 +769,23 @@ func buildAC(report Report, path, validation string) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("## Migration findings\n\n- Apply only the migration outcomes resolved above.\n\n## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every resolved sync target against rendered canon and every resolved preserve target against `govna/preserve.txt`.\n\n")
+	b.WriteString("## Migration findings\n\n")
+	if len(migrate) == 0 {
+		b.WriteString("- None.\n\n")
+	} else {
+		for _, f := range migrate {
+			switch f.Path {
+			case baselinePath:
+				b.WriteString("- Create `govna/canon-baseline.txt` from the final scratch render only after all other work and validation pass.\n")
+			case "govna/metadata.txt":
+				b.WriteString("- Create `govna/metadata.txt` from the selected scratch render before installing `govna/canon-baseline.txt`.\n")
+			default:
+				fmt.Fprintf(&b, "- Create `%s` from the selected scratch render.\n", f.Path)
+			}
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every resolved sync target except `govna/canon-baseline.txt` against rendered canon and every resolved preserve target against `govna/preserve.txt`.\n\n")
 	at := 2
 	for _, f := range append(sync, review...) {
 		if f.protectedHash != "" {
@@ -775,14 +799,21 @@ func buildAC(report Report, path, validation string) string {
 	return b.String()
 }
 
+func countLabel(count int, singular string) string {
+	if count == 1 {
+		return "1 " + singular
+	}
+	return fmt.Sprintf("%d %ss", count, singular)
+}
+
 func validationDisposition(root string, report Report) string {
-	baselineMigration := false
+	baselineUpdate := false
 	for _, file := range report.Files {
-		if file.Path == baselinePath && file.Classification == "migration-required" {
-			baselineMigration = true
+		if file.Path == baselinePath && (file.Classification == "migration-required" || file.Classification == "clear-sync") {
+			baselineUpdate = true
 		}
 	}
-	if !baselineMigration {
+	if !baselineUpdate {
 		return "`Not applicable` because no baseline migration is present"
 	}
 	agents, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))

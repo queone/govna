@@ -1,8 +1,8 @@
-# AC7 Govna Removal from v0.30.0
+# AC7 Govna Removal from v0.31.0
 
 ## Summary
 
-Extricate govna canon from this consumer repo without deleting consumer-owned content. Emitted by `govna rm` against canon v0.30.0. Implement only after the Director resolves the routing decisions below.
+Extricate govna canon from this consumer repo without deleting consumer-owned content. Emitted by `govna rm` against canon v0.31.0. Implement only after the Director resolves the routing decisions below.
 
 Compare each routing-pending file yourself before choosing how to route it. Do not auto-delete routing-pending files until the Director chooses their routing.
 

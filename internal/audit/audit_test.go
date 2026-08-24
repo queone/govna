@@ -69,7 +69,7 @@ func TestAuditCleanAndJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Header.CanonSHA != "v0.30.0" || report.Emitted != nil || strings.Contains(stdout.String(), "no AC emitted") {
+	if report.Header.CanonSHA != "v0.31.0" || report.Emitted != nil || strings.Contains(stdout.String(), "no AC emitted") {
 		t.Fatalf("bad JSON: %s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "canon_reference") || strings.Contains(stdout.String(), "prior_commits") || !strings.Contains(stdout.String(), `"canon_ref"`) || !strings.Contains(stdout.String(), `"compare_command"`) {
@@ -87,10 +87,10 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 	if code := Run([]string{"--repo-name", "widget"}, &stdout, &stderr, root); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
-	if !strings.HasPrefix(stdout.String(), "wrote govna/ac1-audit-v0.30.0.md") {
+	if !strings.HasPrefix(stdout.String(), "wrote govna/ac1-audit-v0.31.0.md") {
 		t.Fatalf("stdout=%q", stdout.String())
 	}
-	stub := filepath.Join(root, "govna", "ac1-audit-v0.30.0.md")
+	stub := filepath.Join(root, "govna", "ac1-audit-v0.31.0.md")
 	body, err := os.ReadFile(stub)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func TestMissingFormatFileKeepsClassificationAndForcesSync(t *testing.T) {
 			if file.Classification != "missing-in-target" || !file.forceSync {
 				t.Fatalf("file=%+v", file)
 			}
-			body := buildAC(report, "govna/ac1-audit-v0.30.0.md", "`./build.sh`")
+			body := buildAC(report, "govna/ac1-audit-v0.31.0.md", "`./build.sh`")
 			if !strings.Contains(body, "### Direct sync\n\n- `govna/ac-template.md` — `missing-in-target`.") {
 				t.Fatalf("routing=%s", body)
 			}
@@ -227,14 +227,14 @@ func TestAuditDiffTruncationAndCrossFlavor(t *testing.T) {
 
 func TestAuditGoldens(t *testing.T) {
 	report := Report{
-		Header: Header{Invocation: "govna audit --repo-name widget", CanonSHA: "v0.30.0", Target: "<TARGET>", Flavor: "code", FlavorSource: "explicit", RepoName: "widget", CanonVersion: "v0.28.0", CodeStack: "Go"},
+		Header: Header{Invocation: "govna audit --repo-name widget", CanonSHA: "v0.31.0", Target: "<TARGET>", Flavor: "code", FlavorSource: "explicit", RepoName: "widget", CanonVersion: "v0.28.0", CodeStack: "Go"},
 		Files: []FileResult{
-			{Path: "README.md", Classification: "clear-sync", PriorCommits: []string{"abc123"}, CanonReference: "govna @ v0.30.0: README.md", CompareCommand: "compare embedded canon with target: README.md"},
-			{Path: "govna/canon-baseline.txt", Classification: "migration-required", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"},
+			{Path: "README.md", Classification: "clear-sync", PriorCommits: []string{"abc123"}, CanonReference: "govna @ v0.31.0: README.md", CompareCommand: "compare embedded canon with target: README.md"},
+			{Path: "govna/canon-baseline.txt", Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"},
 			{Path: "local.md", Classification: "target-has-no-canon", CanonReference: "name-referenced from divergent governed file", CompareCommand: "inspect target-only file local.md"},
 			{Path: "plan.md", Classification: "expected-divergence"},
 		},
-		Emitted: &Emitted{ACStub: "govna/ac7-audit-v0.30.0.md"},
+		Emitted: &Emitted{ACStub: "govna/ac7-audit-v0.31.0.md"},
 	}
 	markdown, err := os.ReadFile("testdata/actionable-golden.md")
 	if err != nil {
@@ -257,6 +257,84 @@ func TestAuditGoldens(t *testing.T) {
 	if encoded.String() != string(jsonGolden) {
 		t.Fatalf("JSON golden mismatch\n%s", encoded.String())
 	}
+}
+
+func TestExistingAndMissingBaselineClassification(t *testing.T) {
+	t.Run("existing stale baseline is sync", func(t *testing.T) {
+		root := fixture(t)
+		path := filepath.Join(root, filepath.FromSlash(baselinePath))
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = bytes.Replace(data, []byte("canon_version = v0.31.0\n"), []byte("canon_version = v0.30.0\n"), 1)
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		report, clean, err := inspect(Config{DiffLines: 200, invocation: "govna audit"}, root)
+		if err != nil || clean {
+			t.Fatalf("clean=%v err=%v", clean, err)
+		}
+		baseline := reportFile(t, report, baselinePath)
+		if baseline.Classification != "clear-sync" {
+			t.Fatalf("baseline=%+v", baseline)
+		}
+		disposition := validationDisposition(root, report)
+		if !strings.Contains(disposition, "`./build.sh`") {
+			t.Fatalf("validation disposition=%s", disposition)
+		}
+		body := buildAC(report, "govna/ac1-audit-v0.31.0.md", disposition)
+		if !strings.Contains(body, "### Direct sync\n\n- `govna/canon-baseline.txt` — `clear-sync`.") || !strings.Contains(body, "## Migration findings\n\n- None.") {
+			t.Fatalf("body=%s", body)
+		}
+	})
+	t.Run("missing baseline is migration", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.Remove(filepath.Join(root, filepath.FromSlash(baselinePath))); err != nil {
+			t.Fatal(err)
+		}
+		report, clean, err := inspect(Config{DiffLines: 200, invocation: "govna audit"}, root)
+		if err != nil || clean {
+			t.Fatalf("clean=%v err=%v", clean, err)
+		}
+		baseline := reportFile(t, report, baselinePath)
+		if baseline.Classification != "migration-required" {
+			t.Fatalf("baseline=%+v", baseline)
+		}
+		body := buildAC(report, "govna/ac1-audit-v0.31.0.md", "`./build.sh`")
+		want := "- Create `govna/canon-baseline.txt` from the final scratch render only after all other work and validation pass."
+		if !strings.Contains(body, want) {
+			t.Fatalf("body=%s", body)
+		}
+	})
+}
+
+func TestEmittedSummaryAndFlavorInstructions(t *testing.T) {
+	report := Report{Header: Header{Flavor: "code", RepoName: "widget"}, Files: []FileResult{{Path: "README.md", Classification: "clear-sync"}, {Path: "local.md", Classification: "ambiguity"}, {Path: "plan.md", Classification: "preserve"}}}
+	body := buildAC(report, "govna/ac1-audit-v0.31.0.md", "`./build.sh`")
+	wantSummary := "## Summary\n\nThis adoption covers 1 sync path, 0 migration paths, 1 review path, and 1 out-of-scope path.\n\nThis audit adoption synchronizes"
+	if !strings.Contains(body, wantSummary) {
+		t.Fatalf("summary=%s", body)
+	}
+	reachability := "Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes."
+	if !strings.Contains(body, reachability) {
+		t.Fatalf("CODE instruction missing: %s", body)
+	}
+	report.Header.Flavor = "doc"
+	if doc := buildAC(report, "govna/ac1-audit-v0.31.0.md", "`Not applicable`"); strings.Contains(doc, reachability) {
+		t.Fatalf("DOC contains CODE instruction: %s", doc)
+	}
+}
+
+func reportFile(t *testing.T, report Report, path string) FileResult {
+	t.Helper()
+	for _, file := range report.Files {
+		if file.Path == path {
+			return file
+		}
+	}
+	t.Fatalf("report omits %s", path)
+	return FileResult{}
 }
 
 func TestAuditInvocationPreservesOptionOrder(t *testing.T) {
