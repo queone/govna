@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,9 +59,23 @@ type Emitted struct {
 	ACStub string `json:"ac_stub"`
 }
 type Report struct {
-	Header  Header       `json:"header"`
-	Files   []FileResult `json:"files"`
-	Emitted *Emitted     `json:"emitted"`
+	Header        Header       `json:"header"`
+	Files         []FileResult `json:"files"`
+	Emitted       *Emitted     `json:"emitted"`
+	selectedStack string
+}
+
+type validationOutcomeKind uint8
+
+const (
+	validationUnresolved validationOutcomeKind = iota
+	validationInferred
+	validationNotApplicable
+)
+
+type validationOutcome struct {
+	kind     validationOutcomeKind
+	evidence string
 }
 
 type baseline struct {
@@ -220,6 +235,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	} else if stack != "" {
 		return report, false, fmt.Errorf("CODE-only option used with DOC canon")
 	}
+	report.selectedStack = stack
 	module := ""
 	if stack == "Go" {
 		module = repository.ModulePath(root)
@@ -698,7 +714,7 @@ func tally(files []FileResult) string {
 	return strings.Join(parts, ", ")
 }
 
-func buildAC(report Report, path, validation string) string {
+func buildAC(report Report, path string, validation validationOutcome) string {
 	base := filepath.Base(path)
 	number := ""
 	if m := regexp.MustCompile(`^ac([0-9]+)-`).FindStringSubmatch(base); m != nil {
@@ -750,7 +766,7 @@ func buildAC(report Report, path, validation string) string {
 		}
 	}
 	b.WriteString("\n")
-	if len(review) > 0 {
+	if len(review) > 0 || validation.kind == validationUnresolved {
 		b.WriteString("### Routing Decisions\n\n")
 		for i, f := range review {
 			if strings.Contains(f.CanonReference, "replacement missing:") {
@@ -758,6 +774,9 @@ func buildAC(report Report, path, validation string) string {
 			} else {
 				fmt.Fprintf(&b, "%d. **`%s`**: Which outcome applies: sync, preserve, migrate, or delete?\n", i+1, f.Path)
 			}
+		}
+		if validation.kind == validationUnresolved {
+			fmt.Fprintf(&b, "%d. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?\n", len(review)+1)
 		}
 		b.WriteString("\n")
 	}
@@ -794,8 +813,15 @@ func buildAC(report Report, path, validation string) string {
 			at++
 		}
 	}
-	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Satisfy validation disposition %s after selected work and before baseline installation.\n\n", at, validation)
-	at++
+	if validation.kind == validationUnresolved {
+		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Resolve the validation disposition in chat.\n\n", at)
+		at++
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Satisfy the resolved validation disposition after selected work and before baseline installation.\n\n", at)
+		at++
+	} else {
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Satisfy validation disposition %s after selected work and before baseline installation.\n\n", at, validation.evidence)
+		at++
+	}
 	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.\n\n## Status\n\n`PENDING` — audit emission; awaiting explicit Director Audit.\n", at)
 	return b.String()
 }
@@ -807,7 +833,7 @@ func countLabel(count int, singular string) string {
 	return fmt.Sprintf("%d %ss", count, singular)
 }
 
-func validationDisposition(root string, report Report) string {
+func validationDisposition(root string, report Report) validationOutcome {
 	baselineUpdate := false
 	for _, file := range report.Files {
 		if file.Path == baselinePath && (file.Classification == "migration-required" || file.Classification == "clear-sync") {
@@ -815,22 +841,56 @@ func validationDisposition(root string, report Report) string {
 		}
 	}
 	if !baselineUpdate {
-		return "`Not applicable` because no baseline migration is present"
+		return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` because no baseline migration is present"}
 	}
 	agents, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
 	first := regexp.MustCompile(`(?m)^- Run `+"`"+`([^`+"`"+`\n]+)`+"`"+` as the first validation command(?:\s|\.|$)[^\n]*$`).FindAllSubmatch(agents, -1)
 	wide := regexp.MustCompile(`(?m)^- Use `+"`"+`([^`+"`"+`\n]+)`+"`"+` for repository-wide [^\n]*validation[^\n]*$`).FindAllSubmatch(agents, -1)
 	if report.Header.Flavor == "code" && len(first) == 1 && len(wide) == 1 && string(first[0][1]) == "./build.sh" && string(wide[0][1]) == "./build.sh" {
 		if info, err := os.Stat(filepath.Join(root, "build.sh")); err == nil && info.Mode().IsRegular() {
-			return "`./build.sh` inferred from exact AGENTS.md declarations"
+			if stackManifestReachable(root, report.selectedStack) {
+				return validationOutcome{kind: validationInferred, evidence: "`./build.sh` inferred from exact AGENTS.md declarations"}
+			}
 		}
 	}
 	if report.Header.Flavor == "doc" && len(first) == 0 && len(wide) == 0 {
 		release, _ := os.ReadFile(filepath.Join(root, "govna", "release.md"))
 		const declaration = "DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command."
 		if bytes.Contains(release, []byte(declaration)) {
-			return "`Not applicable` inferred from exact DOC governance evidence"
+			return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` inferred from exact DOC governance evidence"}
 		}
 	}
-	return "`Director decision required` because bounded repository evidence is unresolved"
+	return validationOutcome{kind: validationUnresolved}
+}
+
+func stackManifestReachable(root, stack string) bool {
+	manifests := map[string][]string{
+		"Go":     {"go.mod"},
+		"Rust":   {"Cargo.toml"},
+		"Swift":  {"Package.swift"},
+		"Node":   {"package.json"},
+		"Python": {"pyproject.toml"},
+		"Java":   {"pom.xml", "build.gradle"},
+	}
+	for _, manifest := range manifests[stack] {
+		if regularFile(filepath.Join(root, manifest)) {
+			return true
+		}
+	}
+	if stack != "Terraform" {
+		return false
+	}
+	if regularFile(filepath.Join(root, ".terraform.lock.hcl")) {
+		return true
+	}
+	matches, err := filepath.Glob(filepath.Join(root, "*.tf"))
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(matches, regularFile)
+}
+
+func regularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }

@@ -150,16 +150,30 @@ Every Director-resolved routing target becomes effective implementation scope wh
 - Apply validation inference when baseline installation or replacement is present.
 - Infer validation only from bounded target governance evidence.
 - Accept positive declarations only from exactly one AGENTS.md rule shaped ``Run `<command>` as the first validation command ...`` and exactly one rule shaped ``Use `<command>` for repository-wide ... validation ...``.
-- Infer `./build.sh` for CODE only when both rules name that command and root `build.sh` is a regular file.
+- Require both positive declarations to name `./build.sh` for CODE inference.
+- Require root `build.sh` to resolve to a regular file for CODE inference.
+- Require the selected CODE stack's recognized root manifest before inferring `./build.sh`.
+- Recognize `go.mod`, `Cargo.toml`, `Package.swift`, `.terraform.lock.hcl` or a root `*.tf`, `package.json`, `pyproject.toml`, and `pom.xml` or `build.gradle` for Go, Rust, Swift, Terraform, Node, Python, and Java respectively.
+- Require each recognized manifest path used as evidence to resolve to a regular file.
+- Treat selected-stack manifest evidence only as a validation-command reachability precondition.
+- Keep exact AGENTS.md declarations as the validation-command authority.
 - Infer `Not applicable` for DOC only when `govna/release.md` contains the exact canon no-automated-content-validation declaration and AGENTS.md contains no recognized positive declaration.
 - Leave missing, duplicate, incomplete, mismatched, positive-plus-negative, non-`./build.sh`, or non-regular-file evidence unresolved for a Director decision.
-- Ignore other prose, governance documents, executables, manifests, CI files, and flavor defaults.
+- Leave absent, non-regular, or other-stack-only selected-manifest evidence unresolved for a Director decision.
+- Ignore unrelated manifests, other prose, governance documents, executables, CI files, and flavor defaults.
 
 - Record inferred disposition evidence without requesting Director confirmation.
-- Omit routing decisions and manual routing ATs for a baseline-only update with inferred validation.
-- Keep an unresolved disposition as a numbered routing decision with the existing manual and conditional routing ATs.
+- Omit the validation routing question and its manual resolution AT when validation is inferred.
+- Emit an unresolved validation disposition as the final numbered routing decision.
+- Use the exact unresolved-validation question recorded in the note below.
+- Emit one manual resolution AT for an unresolved validation disposition.
+- Place the manual validation AT after every protected-region AT.
+- Emit one automated resolved-disposition AT for an unresolved validation disposition.
+- Place the automated resolved-disposition AT immediately after its manual AT.
 - Use singular nouns in emitted count summaries only for a count of one.
 - Use plural nouns in emitted count summaries for zero or multiple counts.
+
+Note: exact unresolved-validation question: ``<N>. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?``
 
 Emitted acceptance tests verify sync, migration, deletion, and preservation according to the resolved outcome. The pre-install rendered-canon blanket covers declared sync items except `govna/canon-baseline.txt`, routing targets resolved as sync, and canon-backed migration destinations. After all selected work, the resolved validation command must succeed, or the `Not applicable` evidence must hold. Only after every other applicable automated AT and routing outcome passes does the baseline get installed and verified separately from the same scratch render as the final adoption step.
 

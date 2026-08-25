@@ -10,7 +10,7 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 
 ### Direct sync
 
-- `README.md` — `clear-sync`.
+- `AGENTS.md` — `clear-sync`.
 - `govna/canon-baseline.txt` — `clear-sync`.
 
 ### Migration
@@ -19,7 +19,7 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 
 ### Review
 
-- `local.md` — `target-has-no-canon`.
+- `local.md` — `ambiguity`.
 
 ### Adoption Instructions
 
@@ -33,10 +33,11 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 ### Routing Decisions
 
 1. **`local.md`**: Which outcome applies: sync, preserve, migrate, or delete?
+2. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?
 
 ## Out Of Scope
 
-- `plan.md` — `expected-divergence`.
+- `plan.md` — `preserve`.
 
 ## Migration findings
 
@@ -46,9 +47,13 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 
 **AT1** [Automated] [Pre-release gate] — Verify every resolved sync target except `govna/canon-baseline.txt` against rendered canon and every resolved preserve target against `govna/preserve.txt`.
 
-**AT2** [Automated] [Pre-release gate] — Satisfy validation disposition `./build.sh` inferred from exact AGENTS.md declarations after selected work and before baseline installation.
+**AT2** [Automated] [Pre-release gate] — Preserve the protected region in `AGENTS.md` from `## Project Rules` through EOF with SHA-256 `abc123` for any sync outcome.
 
-**AT3** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.
+**AT3** [Manual] [Pre-release gate] — Resolve the validation disposition in chat.
+
+**AT4** [Automated] [Pre-release gate] — Satisfy the resolved validation disposition after selected work and before baseline installation.
+
+**AT5** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.
 
 ## Status
 

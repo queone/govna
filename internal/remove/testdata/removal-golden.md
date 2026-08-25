@@ -1,8 +1,8 @@
-# AC7 Govna Removal from v0.34.0
+# AC7 Govna Removal from v0.35.0
 
 ## Summary
 
-This removal AC was emitted by govna executable v9.8.7 with embedded canon v0.34.0. It removes Govna canon from this consumer repository without deleting consumer-owned content. Director-resolved routing protects every review path.
+This removal AC was emitted by govna executable v9.8.7 with embedded canon v0.35.0. It removes Govna canon from this consumer repository without deleting consumer-owned content. Director-resolved routing protects every review path.
 
 ### Removal Instructions
 

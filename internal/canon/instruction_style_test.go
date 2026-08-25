@@ -192,6 +192,8 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I25", "Verify every resolved removal target under ## In Scope is absent."},
 	{"I26", "Verify every routing-pending path matches its Director-resolved route."},
 	{"I27", "Verify every preserve-registry decision is applied before the final removal of govna/preserve.txt."},
+	{"I28", "Resolve the validation disposition in chat."},
+	{"I29", "Satisfy the resolved validation disposition after selected work and before baseline installation."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)\b|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)\b`)
@@ -215,8 +217,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 27 {
-		t.Fatalf("generated instruction manifest has %d entries, want 27", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 29 {
+		t.Fatalf("generated instruction manifest has %d entries, want 29", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -298,6 +300,9 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1,
+		},
+		"internal/audit/testdata/unresolved-validation-golden.md": {
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I28": 1, "I29": 1,
 		},
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,

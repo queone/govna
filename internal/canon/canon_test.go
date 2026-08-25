@@ -50,7 +50,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.34.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.35.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -103,6 +103,21 @@ func TestBaselineHashes(t *testing.T) {
 		if fmt.Sprintf("%x", hash) != fields[2] {
 			t.Fatalf("hash mismatch: %s", fields[0])
 		}
+	}
+}
+
+func TestSelfHostedGoBaseline(t *testing.T) {
+	files, err := Render(Config{Flavor: Code, RepoName: "govna", Stack: "Go", ModulePath: "github.com/queone/govna"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := fileText(t, files, "govna/canon-baseline.txt")
+	want, err := os.ReadFile(filepath.Join("..", "..", "govna", "canon-baseline.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != string(want) {
+		t.Fatalf("self-hosted Go baseline differs from render\n%s", got)
 	}
 }
 
@@ -175,6 +190,47 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	}
 	if strings.TrimSpace(gotParts[1]) != "- Follow existing repo patterns unless an approved improvement says otherwise." {
 		t.Errorf("unexpected Project Rules seed: %s", gotParts[1])
+	}
+}
+
+func TestAuditValidationContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		"govna/audit.md",
+		"internal/canon/assets/overlays/code/files/govna/audit.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/audit.md.tmpl",
+	}
+	var authority []byte
+	for _, path := range paths {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if authority == nil {
+			authority = content
+		} else if string(content) != string(authority) {
+			t.Errorf("%s does not mirror govna/audit.md", path)
+		}
+		for _, required := range []string{
+			"- Require the selected CODE stack's recognized root manifest before inferring `./build.sh`.",
+			"- Ignore unrelated manifests, other prose, governance documents, executables, CI files, and flavor defaults.",
+			"- Emit an unresolved validation disposition as the final numbered routing decision.",
+			"- Emit one manual resolution AT for an unresolved validation disposition.",
+			"- Emit one automated resolved-disposition AT for an unresolved validation disposition.",
+			"<N>. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?",
+		} {
+			if strings.Count(string(content), required) != 1 {
+				t.Errorf("%s requires one occurrence of %q", path, required)
+			}
+		}
+		for _, removed := range []string{
+			"Ignore other prose, governance documents, executables, manifests, CI files, and flavor defaults.",
+			"existing manual and conditional routing ATs",
+		} {
+			if strings.Contains(string(content), removed) {
+				t.Errorf("%s retains superseded claim %q", path, removed)
+			}
+		}
 	}
 }
 
