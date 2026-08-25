@@ -1,10 +1,10 @@
 # AC2 Govna Apply
 
-govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay) to widget.
+govna executable v9.8.7 applied embedded canon v0.34.0 (CODE overlay) to widget.
 
 ## Summary
 
-govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay). Every file listed below is consumer-owned.
+govna executable v9.8.7 applied embedded canon v0.34.0 (CODE overlay). Every file listed below is consumer-owned.
 
 ## In Scope
 

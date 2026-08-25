@@ -1,10 +1,10 @@
 # AC1 Govna Apply
 
-govna executable v9.8.7 applied embedded canon v0.33.0 (DOC overlay) to handbook.
+govna executable v9.8.7 applied embedded canon v0.34.0 (DOC overlay) to handbook.
 
 ## Summary
 
-govna executable v9.8.7 applied embedded canon v0.33.0 (DOC overlay). Every file listed below is consumer-owned.
+govna executable v9.8.7 applied embedded canon v0.34.0 (DOC overlay). Every file listed below is consumer-owned.
 
 ## In Scope
 

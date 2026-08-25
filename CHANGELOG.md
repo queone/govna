@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.7.5 | AC14: restore Go canon build helper closure |
 | 0.7.4 | AC13: correct generated governance emission |
 | 0.7.3 | AC12: correct rewritten instruction style |
 | 0.7.2 | AC11: enforce atomic canon instructions |

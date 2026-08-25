@@ -395,6 +395,63 @@ EOF
   trap - EXIT HUP INT TERM
 }
 
+_print_coverage_summary() { # $1=cover_path $2=module_path
+  local cover_path="$1" module_path="$2"
+  local func_out total
+  func_out=$(go tool cover "-func=$cover_path")
+  total=$(printf '%s\n' "$func_out" | awk '/^total:/{print $NF}')
+  [ -z "$total" ] && return 0
+  local pct tenths styled
+  pct=$(_domain_coverage "$cover_path" "$module_path/internal/")
+  local text="domain coverage: ${pct}%"
+  tenths=$(printf '%s' "$pct" | awk '{printf "%d", $1*10}')
+  if [ "$tenths" -ge 750 ]; then
+    styled=$(grn3 "$text")
+  elif [ "$tenths" -ge 500 ]; then
+    styled=$(yel7 "$text")
+  else
+    styled=$(red3 "$text")
+  fi
+  printf '    %s  %s\n' "$styled" "$(gra5 "(total: $total)")"
+}
+
+_domain_coverage() { # $1=cover_path $2=prefix -> NN.N
+  awk -v prefix="$2" '
+    /^mode:/ { next }
+    { if (NF != 3) next
+      if (index($1, prefix) != 1) next
+      total += $2
+      if ($3+0 > 0) covered += $2
+    }
+    END {
+      if (total == 0) { printf "0.0"; exit }
+      printf "%.1f", covered/total*100
+    }' "$1"
+}
+
+_extract_program_version() { # $1=main.go path -> version or empty
+  [ -f "$1" ] || { printf ''; return 0; }
+  local v
+  v=$(awk '
+    match($0, /^[ \t]*const[ \t]+programVersion[ \t]*(string[ \t]*)?=[ \t]*"[^"]*"/) {
+      s = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", s); sub(/".*/, "", s)
+      print s; exit
+    }' "$1")
+  if [ -n "$v" ]; then printf '%s' "$v"; return 0; fi
+  v=$(awk '
+    /const[ \t]*\(/ { ingroup=1 }
+    ingroup && match($0, /programVersion[ \t]*(string[ \t]*)?=[ \t]*"[^"]*"/) {
+      s = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", s); sub(/".*/, "", s)
+      print s; exit
+    }
+    ingroup && /\)/ { ingroup=0 }' "$1")
+  printf '%s' "$v"
+}
+
+_is_strict_stable_semver() { # $1=version -> success when MAJOR.MINOR.PATCH
+  printf '%s' "$1" | LC_ALL=C grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+}
+
 _validate_utility_version_output() { # $1=binary $2=utility ID $3=declared version
   local binary="$1" utility_id="$2" declared="$3" probe_dir rc actual
   probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/govna-version.XXXXXX") || {
@@ -435,7 +492,7 @@ _ensure_staticcheck() { # $1=bin_dir $2=ext -> sets _staticcheck_path; stdout ms
   # match buildtool's step output; the result path is returned via a global so
   # this function is not run inside a command substitution.
   local bin_dir="$1" ext="$2"
-  local pinned='honnef.co/go/tools/cmd/staticcheck@v0.7.0'
+  local pinned='honnef.co/go/tools/cmd/staticcheck@v0.8.0'
   printf '    installing: %s\n' "$(grn3 "$pinned")"
   run_streaming grn3 go install "$pinned"
   _staticcheck_path="$bin_dir/staticcheck$ext"
@@ -1248,7 +1305,7 @@ build_main() {
     *) targets+=("$arg") ;;
     esac
   done
-  build_run "$verbose" "${targets[@]}"
+  build_run "$verbose" ${targets[@]+"${targets[@]}"}
 }
 
 rel_main() {

@@ -50,7 +50,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.33.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.34.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -208,11 +208,21 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 			t.Errorf("rendered Go build unexpectedly contains %q", marker)
 		}
 	}
+	for _, helper := range []string{"_print_coverage_summary()", "_domain_coverage()", "_extract_program_version()", "_is_strict_stable_semver()"} {
+		if strings.Count(goBuild, helper) != 1 {
+			t.Errorf("rendered Go build helper %q count=%d", helper, strings.Count(goBuild, helper))
+		}
+	}
+	if !strings.Contains(goBuild, "honnef.co/go/tools/cmd/staticcheck@v0.8.0") || strings.Contains(goBuild, "staticcheck@v0.7.0") {
+		t.Fatal("rendered Go build does not use the repository-governed Staticcheck pin")
+	}
 	if !strings.Contains(goBuild, "validation-token options are unsupported for Go") {
 		t.Fatal("rendered Go build does not reject validation-token input")
 	}
-	if strings.Contains(goBuild, "internal/canon.Version") || strings.Contains(goBuild, "cmd/govna canonVersion") {
-		t.Fatal("rendered Go consumer contains root-only canon-version coupling")
+	for _, rootOnly := range []string{"internal/canon.Version", "cmd/govna canonVersion", "_literal_const_value()", "_validate_root_canon_version()", "_install_compiled_utility()", "_release_rebuild_and_verify()"} {
+		if strings.Contains(goBuild, rootOnly) {
+			t.Errorf("rendered Go consumer contains root-only marker %q", rootOnly)
+		}
 	}
 
 	rustFiles, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Rust"})

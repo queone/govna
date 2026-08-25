@@ -20,8 +20,8 @@ func runAt(t *testing.T, d string, args ...string) (string, string, int) {
 func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, "created")
 	for _, want := range []string{
-		"govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay) to widget.",
-		"govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay). Every file listed below is consumer-owned.",
+		"govna executable v9.8.7 applied embedded canon v0.34.0 (CODE overlay) to widget.",
+		"govna executable v9.8.7 applied embedded canon v0.34.0 (CODE overlay). Every file listed below is consumer-owned.",
 		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
 		"**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).",
 		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.",
@@ -31,7 +31,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.33.0", "Director reads", "review applied governance"} {
+	for _, invalid := range []string{"Applied govna v0.34.0", "Director reads", "review applied governance"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}

@@ -1,10 +1,13 @@
 package buildtest
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -59,6 +62,342 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	}
 	if !strings.Contains(string(a), "_validate_root_canon_version") || strings.Contains(string(b), "_validate_root_canon_version") {
 		t.Fatal("root-only canon-version boundary is incorrect")
+	}
+}
+
+func TestRenderedGoHelperClosure(t *testing.T) {
+	root := repoRoot(t)
+	path := filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")
+	script := string(mustRead(t, path))
+	closure := scanShellHelperClosure(script)
+	if err := closure.validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, helper := range []string{"_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_is_strict_stable_semver"} {
+		if closure.definitions[helper] != 1 {
+			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
+		}
+	}
+	wantReferences := []string{
+		"_byte_len",
+		"_cleanup_build_owned",
+		"_collect_test_files",
+		"_color_init",
+		"_count_program_version_declarations",
+		"_domain_coverage",
+		"_emit_usage_line",
+		"_ensure_git_repo",
+		"_ensure_staticcheck",
+		"_extract_program_version",
+		"_go_quote",
+		"_is_blank",
+		"_is_strict_stable_semver",
+		"_join_comma_space",
+		"_lint_regex_hits",
+		"_lint_test_naming",
+		"_md_files",
+		"_next_patch_tag",
+		"_prep_apply_changelog_insert",
+		"_prep_apply_version_bump",
+		"_prep_build",
+		"_prep_detect_changelog_targets",
+		"_prep_detect_version_targets",
+		"_prep_emit_release_command",
+		"_prep_find_ac_files",
+		"_prep_find_ie_lines",
+		"_prep_module_basename",
+		"_prep_parse_ac_refs",
+		"_prep_print_dry_run",
+		"_prep_remove_ie_lines",
+		"_prep_validate_git_state",
+		"_prep_validate_multi_utility_versions",
+		"_print_coverage_summary",
+		"_recovery_error",
+		"_rel_step",
+		"_run_git",
+		"_scan_nested_fences",
+		"_trim",
+		"_validate_utility_version_output",
+		"_wrap",
+	}
+	if got := closure.referenceNames(); strings.Join(got, "\n") != strings.Join(wantReferences, "\n") {
+		t.Fatalf("helper references:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(wantReferences, "\n"))
+	}
+	if out, err := exec.Command("/bin/bash", "-n", path).CombinedOutput(); err != nil {
+		t.Fatalf("bash syntax: %v: %s", err, out)
+	}
+}
+
+func TestRenderedGoHelperClosureRecognizesCallForms(t *testing.T) {
+	forms := []struct {
+		name string
+		call string
+	}{
+		{"direct call", "_known_helper"},
+		{"command-boundary call", "true && _known_helper"},
+		{"conditional call", "if ! _known_helper; then :; fi"},
+		{"command substitution", "value=$(_known_helper)"},
+		{"nested command substitution", `value=$(printf '%s' "$(_known_helper)")`},
+		{"input process substitution", "cat < <(_known_helper)"},
+		{"output process substitution", "cat > >(_known_helper)"},
+		{"active heredoc substitution", "cat <<EOF\n$(_known_helper)\nEOF"},
+	}
+	for _, form := range forms {
+		t.Run(form.name, func(t *testing.T) {
+			closure := scanShellHelperClosure("_known_helper() { :; }\n" + form.call + "\n")
+			if err := closure.validate(); err != nil {
+				t.Fatal(err)
+			}
+			if got := closure.referenceNames(); len(got) != 1 || got[0] != "_known_helper" {
+				t.Fatalf("helper references=%v", got)
+			}
+		})
+	}
+}
+
+func TestRenderedGoHelperClosureRejectsMutations(t *testing.T) {
+	root := repoRoot(t)
+	script := string(mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")))
+	removed := strings.Replace(script, "_extract_program_version() {", "extract_program_version_removed() {", 1)
+	if removed == script {
+		t.Fatal("definition-removal mutation did not change the script")
+	}
+	mutations := map[string]string{
+		"definition removed":          removed,
+		"definition duplicated":       script + "\n_extract_program_version() { :; }\n",
+		"direct call":                 script + "\n_missing_helper\n",
+		"command-boundary call":       script + "\ntrue && _missing_helper\n",
+		"conditional call":            script + "\nif ! _missing_helper; then :; fi\n",
+		"command substitution":        script + "\nvalue=$(_missing_helper)\n",
+		"nested command substitution": script + "\nvalue=$(printf '%s' \"$(_missing_helper)\")\n",
+		"input process substitution":  script + "\ncat < <(_missing_helper)\n",
+		"output process substitution": script + "\ncat > >(_missing_helper)\n",
+		"active heredoc substitution": script + "\ncat <<EOF\n$(_missing_helper)\nEOF\n",
+	}
+	for name, mutated := range mutations {
+		t.Run(name, func(t *testing.T) {
+			if err := scanShellHelperClosure(mutated).validate(); err == nil {
+				t.Fatal("mutation passed helper-closure validation")
+			}
+		})
+	}
+}
+
+func TestRenderedGoHelperClosureIgnoresNonCalls(t *testing.T) {
+	corpus := `_known_helper() { :; }
+_shell_variable=value
+$_variable_command argument
+"$_quoted_variable_command" argument
+# _comment_only
+pattern='(_single_quoted_data)'
+pattern="(_double_quoted_data)"
+awk 'BEGIN { _embedded_language() }'
+cat <<'EOF'
+_quoted_heredoc_data
+$(_quoted_heredoc_substitution)
+EOF
+cat <<EOF
+_unquoted_heredoc_data
+EOF
+`
+	closure := scanShellHelperClosure(corpus)
+	if err := closure.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := closure.referenceNames(); len(got) != 0 {
+		t.Fatalf("non-calls classified as helpers: %v", got)
+	}
+	if closure.definitions["_known_helper"] != 1 {
+		t.Fatalf("definition count=%d", closure.definitions["_known_helper"])
+	}
+}
+
+func TestRenderedGoBuildExecutesWithoutNetwork(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	script := mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\n\nconst programVersion = \"1.2.3\"\n\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "internal/domain/domain.go"), []byte("package domain\n"), 0o644)
+
+	fakeBin := filepath.Join(dir, "fakebin")
+	gopath := filepath.Join(dir, "gopath")
+	trace := filepath.Join(dir, "go.trace")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeGo := `#!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FAKE_TRACE"
+case "$1" in
+list)
+  printf '%s\n' 'example.com/widget'
+  ;;
+env)
+  case "$2" in
+  GOPATH) printf '%s\n' "$FAKE_GOPATH" ;;
+  GOEXE) printf '\n' ;;
+  *) exit 2 ;;
+  esac
+  ;;
+mod)
+  [ "$2" = tidy ]
+  ;;
+fmt|fix|vet)
+  ;;
+test)
+  cover=''
+  for arg in "$@"; do
+    case "$arg" in -coverprofile=*) cover="${arg#-coverprofile=}" ;; esac
+  done
+  [ -n "$cover" ]
+  printf '%s\n' 'mode: set' 'example.com/widget/internal/domain/domain.go:1.1,1.2 1 1' >"$cover"
+  ;;
+tool)
+  [ "$2" = cover ]
+  printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
+  ;;
+install)
+  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.0' ]
+  mkdir -p "$FAKE_GOPATH/bin"
+  printf '%s\n' '#!/bin/bash' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
+  chmod +x "$FAKE_GOPATH/bin/staticcheck"
+  ;;
+build)
+  output=''
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then
+      shift
+      output="$1"
+      break
+    fi
+    shift
+  done
+  [ -n "$output" ]
+  mkdir -p "$(dirname "$output")"
+  cat >"$output" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = --version ]; then
+  printf 'widget 1.2.3\n'
+  exit 0
+fi
+exit 2
+EOF
+  chmod +x "$output"
+  ;;
+*)
+  printf 'unexpected fake go command: %s\n' "$*" >&2
+  exit 2
+  ;;
+esac
+`
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGo), 0o755)
+	if err := os.MkdirAll(filepath.Join(gopath, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("/bin/bash", "./build.sh")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"NO_COLOR=1",
+		"TERM=dumb",
+		"GOVNA_FORCE_TTY=0",
+		"FAKE_GOPATH="+gopath,
+		"FAKE_TRACE="+trace,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("rendered build: %v:\n%s", err, out)
+	}
+	output := string(out)
+	for _, want := range []string{"domain coverage: 100.0%", `programVersion = "1.2.3"`, "installed:"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("rendered build output omits %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "command not found") {
+		t.Fatalf("rendered build has undefined command:\n%s", output)
+	}
+	scoped := exec.Command("/bin/bash", "./build.sh", "widget")
+	scoped.Dir = dir
+	scoped.Env = cmd.Env
+	scopedOut, scopedErr := scoped.CombinedOutput()
+	if scopedErr != nil {
+		t.Fatalf("rendered scoped build: %v:\n%s", scopedErr, scopedOut)
+	}
+	if !strings.Contains(string(scopedOut), "Building specific utilities: widget") || strings.Contains(string(scopedOut), "command not found") {
+		t.Fatalf("rendered scoped build output:\n%s", scopedOut)
+	}
+	traceBody := string(mustRead(t, trace))
+	if !strings.Contains(traceBody, "install honnef.co/go/tools/cmd/staticcheck@v0.8.0\n") {
+		t.Fatalf("go trace omits exact Staticcheck pin:\n%s", traceBody)
+	}
+	installed := filepath.Join(gopath, "bin", "widget")
+	if versionOut, versionErr := exec.Command(installed, "--version").CombinedOutput(); versionErr != nil || string(versionOut) != "widget 1.2.3\n" {
+		t.Fatalf("installed version: %v: %q", versionErr, versionOut)
+	}
+}
+
+func TestRenderedGoVersionHelpers(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "single.go"), []byte("package main\nconst programVersion string = \"1.2.3\"\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "grouped.go"), []byte("package main\nconst (\n\tprogramVersion = \"2.3.4\"\n)\n"), 0o644)
+	check := `source ./build.sh
+[ "$(_extract_program_version single.go)" = 1.2.3 ]
+[ "$(_extract_program_version grouped.go)" = 2.3.4 ]
+`
+	if out, err := run(t, dir, "", "-c", check); err != nil {
+		t.Fatalf("version extraction: %v: %s", err, out)
+	}
+	for _, version := range []string{"0.0.0", "1.2.3", "10.20.30"} {
+		if out, err := run(t, dir, "", "-c", `source ./build.sh; _is_strict_stable_semver "$1"`, "fixture", version); err != nil {
+			t.Errorf("valid SemVer %q rejected: %v: %s", version, err, out)
+		}
+	}
+	for _, version := range []string{"01.2.3", "1.02.3", "1.2.03", "1.2.3-rc.1", "1.2.3+meta", "1.2", "v1.2.3", ""} {
+		if _, err := run(t, dir, "", "-c", `source ./build.sh; _is_strict_stable_semver "$1"`, "fixture", version); err == nil {
+			t.Errorf("invalid SemVer %q accepted", version)
+		}
+	}
+}
+
+func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/alpha/main.go"), []byte("package main\nconst programVersion = \"1.2.3\"\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/beta/main.go"), []byte("package main\nconst (\n\tprogramVersion string = \"2.3.4\"\n)\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---|---|\n| Unreleased | |\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "fixture")
+	before, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, runErr := run(t, dir, "", "./build.sh", "prep", "v3.0.0", "AC14 fixture", "--dry-run", "--no-build")
+	if runErr != nil {
+		t.Fatalf("prep dry-run: %v: %s", runErr, out)
+	}
+	for _, want := range []string{"multi-utility repo detected (2 programVersion targets", "cmd/alpha/main.go", "cmd/beta/main.go", "release command:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("prep output omits %q: %s", want, out)
+		}
+	}
+	after, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("prep dry-run changed fixture: before=%q after=%q", before, after)
 	}
 }
 
@@ -281,6 +620,321 @@ func TestPreparationMutationFailureAndCleanup(t *testing.T) {
 	matches, err := filepath.Glob(filepath.Join(dir, ".govna-install-*"))
 	if err != nil || len(matches) != 0 {
 		t.Fatalf("install temporaries=%v err=%v", matches, err)
+	}
+}
+
+type shellHelperClosure struct {
+	definitions map[string]int
+	references  map[string]bool
+}
+
+type shellLexState struct {
+	quote            byte
+	heredoc          string
+	heredocQuoted    bool
+	heredocStripTabs bool
+}
+
+var shellFunctionDefinitionRE = regexp.MustCompile(`^[\t ]*(_[A-Za-z][A-Za-z0-9_]*)[\t ]*\(\)[\t ]*\{`)
+var shellDirectStartRE = regexp.MustCompile(`^[\t ]*((if|elif|while|until|then|do|else)[\t ]+)?(![\t ]+)?(?P<helper>_[A-Za-z][A-Za-z0-9_]*)`)
+var shellDirectBoundaryRE = regexp.MustCompile(`[;|&{}(][\t ]*((if|elif|while|until|then|do|else)[\t ]+)?(![\t ]+)?(?P<helper>_[A-Za-z][A-Za-z0-9_]*)`)
+
+func scanShellHelperClosure(script string) shellHelperClosure {
+	closure := shellHelperClosure{definitions: map[string]int{}, references: map[string]bool{}}
+	state := shellLexState{}
+	for line := range strings.SplitSeq(script, "\n") {
+		if state.heredoc != "" {
+			candidate := line
+			if state.heredocStripTabs {
+				candidate = strings.TrimLeft(candidate, "\t")
+			}
+			if candidate == state.heredoc {
+				state.heredoc = ""
+				state.heredocQuoted = false
+				state.heredocStripTabs = false
+				continue
+			}
+			if !state.heredocQuoted {
+				scanHeredocSubstitutions(line, closure.references)
+			}
+			continue
+		}
+
+		code := maskShellLine(line, &state.quote, closure.references)
+		if match := shellFunctionDefinitionRE.FindStringSubmatch(code); match != nil {
+			closure.definitions[match[1]]++
+		}
+		addDirectShellHelpers(code, closure.references)
+		if delimiter, quoted, stripTabs, ok := shellHeredocStart(line, code); ok {
+			state.heredoc = delimiter
+			state.heredocQuoted = quoted
+			state.heredocStripTabs = stripTabs
+		}
+	}
+	return closure
+}
+
+func (closure shellHelperClosure) validate() error {
+	issues := []string{}
+	definitionNames := make([]string, 0, len(closure.definitions))
+	for name := range closure.definitions {
+		definitionNames = append(definitionNames, name)
+	}
+	sort.Strings(definitionNames)
+	for _, name := range definitionNames {
+		if closure.definitions[name] > 1 {
+			issues = append(issues, fmt.Sprintf("duplicate helper %s has %d definitions", name, closure.definitions[name]))
+		}
+	}
+	for _, name := range closure.referenceNames() {
+		if closure.definitions[name] == 0 {
+			issues = append(issues, "undefined helper "+name)
+		}
+	}
+	if len(issues) != 0 {
+		return fmt.Errorf("shell helper closure: %s", strings.Join(issues, "; "))
+	}
+	return nil
+}
+
+func (closure shellHelperClosure) referenceNames() []string {
+	names := make([]string, 0, len(closure.references))
+	for name := range closure.references {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func maskShellLine(line string, quote *byte, references map[string]bool) string {
+	masked := []byte(strings.Repeat(" ", len(line)))
+	for index := 0; index < len(line); index++ {
+		char := line[index]
+		if *quote != 0 {
+			if *quote == '"' && char == '$' && index+1 < len(line) && line[index+1] == '(' {
+				end := shellMatchingParen(line, index+1)
+				if end == len(line) {
+					continue
+				}
+				if index+2 >= len(line) || line[index+2] != '(' {
+					scanShellFragment(line[index+2:end], references)
+				}
+				index = end
+				continue
+			}
+			if char == '\\' && *quote != '\'' && index+1 < len(line) {
+				index++
+				continue
+			}
+			if char == *quote {
+				*quote = 0
+			}
+			continue
+		}
+
+		if char == '#' && shellCommentStart(line, index) {
+			break
+		}
+		if char == '\'' || char == '"' || char == '`' {
+			*quote = char
+			continue
+		}
+		if char == '\\' && index+1 < len(line) {
+			index++
+			continue
+		}
+		if char == '$' && index+1 < len(line) && line[index+1] == '(' {
+			end := shellMatchingParen(line, index+1)
+			if end == len(line) {
+				masked[index] = char
+				masked[index+1] = line[index+1]
+				index++
+				continue
+			}
+			if index+2 >= len(line) || line[index+2] != '(' {
+				scanShellFragment(line[index+2:end], references)
+			}
+			index = end
+			continue
+		}
+		if (char == '<' || char == '>') && index+1 < len(line) && line[index+1] == '(' {
+			end := shellMatchingParen(line, index+1)
+			if end == len(line) {
+				masked[index] = char
+				masked[index+1] = line[index+1]
+				index++
+				continue
+			}
+			scanShellFragment(line[index+2:end], references)
+			index = end
+			continue
+		}
+		if char == '$' && index+1 < len(line) && line[index+1] == '{' {
+			if end := shellMatchingBrace(line, index+1); end < len(line) {
+				index = end
+				continue
+			}
+		}
+		masked[index] = char
+	}
+	return string(masked)
+}
+
+func scanShellFragment(fragment string, references map[string]bool) {
+	quote := byte(0)
+	code := maskShellLine(fragment, &quote, references)
+	addDirectShellHelpers(code, references)
+}
+
+func scanHeredocSubstitutions(line string, references map[string]bool) {
+	for index := 0; index+1 < len(line); index++ {
+		if line[index] == '\\' {
+			index++
+			continue
+		}
+		if line[index] != '$' || line[index+1] != '(' {
+			continue
+		}
+		end := shellMatchingParen(line, index+1)
+		if index+2 >= len(line) || line[index+2] != '(' {
+			scanShellFragment(line[index+2:end], references)
+		}
+		index = end
+	}
+}
+
+func shellMatchingParen(line string, open int) int {
+	depth := 0
+	quote := byte(0)
+	for index := open; index < len(line); index++ {
+		char := line[index]
+		if quote != 0 {
+			if char == '\\' && quote != '\'' && index+1 < len(line) {
+				index++
+				continue
+			}
+			if char == quote {
+				quote = 0
+			}
+			continue
+		}
+		if char == '\'' || char == '"' || char == '`' {
+			quote = char
+			continue
+		}
+		if char == '\\' && index+1 < len(line) {
+			index++
+			continue
+		}
+		switch char {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return index
+			}
+		}
+	}
+	return len(line)
+}
+
+func shellMatchingBrace(line string, open int) int {
+	depth := 0
+	for index := open; index < len(line); index++ {
+		if line[index] == '\\' && index+1 < len(line) {
+			index++
+			continue
+		}
+		switch line[index] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return index
+			}
+		}
+	}
+	return len(line)
+}
+
+func shellCommentStart(line string, index int) bool {
+	if index == 0 {
+		return true
+	}
+	return strings.ContainsRune(" \t;|&(){}", rune(line[index-1]))
+}
+
+func addDirectShellHelpers(code string, references map[string]bool) {
+	for _, expression := range []*regexp.Regexp{shellDirectStartRE, shellDirectBoundaryRE} {
+		helperGroup := expression.SubexpIndex("helper")
+		for _, match := range expression.FindAllStringSubmatchIndex(code, -1) {
+			start := match[helperGroup*2]
+			end := match[helperGroup*2+1]
+			if start < 0 || end < 0 {
+				continue
+			}
+			if end < len(code) && strings.ContainsRune("=([+-", rune(code[end])) {
+				continue
+			}
+			references[code[start:end]] = true
+		}
+	}
+}
+
+func shellHeredocStart(line, code string) (string, bool, bool, bool) {
+	for index := 0; index+1 < len(code); index++ {
+		if code[index] != '<' || code[index+1] != '<' || index+2 < len(code) && code[index+2] == '<' {
+			continue
+		}
+		cursor := index + 2
+		stripTabs := false
+		if cursor < len(line) && line[cursor] == '-' {
+			stripTabs = true
+			cursor++
+		}
+		for cursor < len(line) && (line[cursor] == ' ' || line[cursor] == '\t') {
+			cursor++
+		}
+		if cursor >= len(line) {
+			return "", false, false, false
+		}
+		quoted := false
+		quote := byte(0)
+		if line[cursor] == '\'' || line[cursor] == '"' {
+			quoted = true
+			quote = line[cursor]
+			cursor++
+		} else if line[cursor] == '\\' {
+			quoted = true
+			cursor++
+		}
+		start := cursor
+		for cursor < len(line) {
+			if quote != 0 {
+				if line[cursor] == quote {
+					break
+				}
+			} else if strings.ContainsRune(" \t;|&<>", rune(line[cursor])) {
+				break
+			}
+			cursor++
+		}
+		if cursor > start {
+			return line[start:cursor], quoted, stripTabs, true
+		}
+	}
+	return "", false, false, false
+}
+
+func writeBuildFixture(t *testing.T, path string, content []byte, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content, mode); err != nil {
+		t.Fatal(err)
 	}
 }
 
