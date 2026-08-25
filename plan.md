@@ -4,12 +4,6 @@
 
 Maintain govna as deterministic, dependency-free governance tooling with package-owned behavior tests and self-contained product tooling.
 
-## Next Action
-
-- Complete AC9 corrective behavior, migration-artifact retirement, and release-provenance hardening.
-
 ## Ideas To Explore
 
 Ideas captured for future reference. A bullet list — each line starts with `- IE<N>: ` (sequential N) for stable references. Two kinds: (a) **pre-rubric IE** — `IE<N>: <one-liner>`, awaiting director discussion and the objective-fit rubric (see `AGENTS.md` Approval Boundaries); (b) **AC-pointer** — `IE<N>: <one-liner> → govna/ac<N>-<slug>.md`, pointing at a drafted AC stub not yet through critique. A pre-rubric entry that clears the rubric converts to an AC-pointer at AC-draft time, keeping its `IE<N>` number. Remove entries when the idea is rejected, retired, or (for AC-pointers) the AC has shipped and its file deleted. Not a historical record.
-
-- IE1: audit every unwrapped `fmt.Errorf` call site in `internal/audit` (~20) and `internal/remove` (~10) and decide a repo-wide convention for which user-facing errors route through `internal/usererr.Errorf` (raised during AC17's F5 dedup; the duplicated helper definition was removed, but consistent application across all call sites was left for a separate pass).
