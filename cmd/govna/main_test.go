@@ -38,20 +38,20 @@ func TestVersionAliases(t *testing.T) {
 
 func TestDetailedVersion(t *testing.T) {
 	stdout, stderr, code := execute("version")
-	assertResult(t, stdout, stderr, code, fmt.Sprintf("govna binary: v%s\nembedded canon: v0.35.0\n", programVersion), "", 0)
+	assertResult(t, stdout, stderr, code, fmt.Sprintf("Govna executable version: v%s\nEmbedded governance-file version (canon version): v%s\n", programVersion, canonVersion), "", 0)
 
 	stdout, stderr, code = execute("version", "extra", "ignored")
 	assertResult(t, stdout, stderr, code, "", "unexpected argument for version: extra\nUsage: govna version\n", 2)
 }
 
 func TestTopLevelUsage(t *testing.T) {
-	expected := fmt.Sprintf("govna v%s\nRepo governance templates — github.com/queone/govna\n\nUsage: govna <command> [options]\n\n", programVersion) +
-		"  apply                         apply governance template to a repo\n" +
-		"  audit                         drift scan an adopted repo against govna canon\n" +
-		"  rm                            emit cleanup AC for removing govna canon\n" +
-		"  render                        render flavor-specific canon files into a target directory\n" +
-		"  version                       print binary and embedded canon versions\n" +
-		"  ver, v, --version             print binary version\n" +
+	expected := fmt.Sprintf("govna v%s\nAdd and maintain Govna governance files — github.com/queone/govna\n\nUsage: govna <command> [options]\n\n", programVersion) +
+		"  apply                         add Govna governance files to a repository\n" +
+		"  audit                         check a repository with Govna for updates and local changes\n" +
+		"  rm                            write a reviewable AC for removing Govna files\n" +
+		"  render                        write the selected built-in Govna files to a directory\n" +
+		"  version                       print executable and embedded governance-file versions\n" +
+		"  ver, v, --version             print executable version\n" +
 		"  help, h                       show this help\n\n" +
 		"Run 'govna <command> -h' for command-specific flags.\n"
 
@@ -73,26 +73,28 @@ func TestTopLevelUsage(t *testing.T) {
 
 func TestReservedCommandHelp(t *testing.T) {
 	render := "Usage: govna render [--flavor code|doc] [--stack <name>] [--module-path <path>] <target>\n\n" +
-		"  -f, --flavor code|doc         select consumer flavor (default: inferred from cwd)\n" +
+		"  -f, --flavor code|doc         select Govna file set: CODE or DOC (default: inferred from cwd)\n" +
 		"  -s, --stack <name>            select CODE stack (default: inferred from cwd manifests)\n" +
-		"  -m, --module-path <path>      module path for Go CODE canon (default: read from cwd's go.mod)\n\n" +
-		"Render canon files into <target>/ in flat repo-relative layout. Canon files only —\n" +
-		"no adoption record. Target is not pre-cleaned; remove or empty it beforehand if you\n" +
-		"need a fresh tree.\n"
+		"  -m, --module-path <path>      module path for Go CODE files (default: read from cwd's go.mod)\n\n" +
+		"Write the selected built-in Govna files to <target>/ using repository-relative\n" +
+		"paths. This command does not add an adoption AC. Existing target files remain\n" +
+		"unless render replaces them; empty the directory first when you need only the\n" +
+		"rendered files.\n"
 	audit := "Usage: govna audit [options]\n\n" +
-		"Scan an adopted-govna repo against canon. Run from the consumer repo root\n" +
-		"(no positional arguments). Emits an AC stub under govna/.\n\nFlags:\n" +
-		"  -f, --flavor code|doc      overlay flavor (default: auto-detect)\n" +
+		"Compare a repository's Govna files with the files built into this executable.\n" +
+		"Run from the repository root with no positional arguments. Writes a reviewable\n" +
+		"AC under govna/ when updates or Director choices are needed.\n\nFlags:\n" +
+		"  -f, --flavor code|doc      Govna file set (CODE or DOC; default: auto-detect)\n" +
 		"  -s, --stack <name>         CODE stack (default: inferred from manifests)\n" +
 		"  -j, --json                 emit JSON report alongside markdown emission\n" +
 		"  -l, --diff-lines <N>       diff truncation limit (default: 200)\n" +
 		"  -n, --repo-name <name>     override repo name (default: basename of cwd)\n" +
 		"  -h, --help                 show this help\n"
 	rm := "Usage: govna rm [flags]\n\n" +
-		"Emit a Director-reviewed cleanup AC for removing govna canon from an\n" +
-		"adopted repo. Run from the consumer repo root (no positional arguments).\n" +
-		"Deletes nothing itself.\n\nFlags:\n" +
-		"  -f, --flavor code|doc      overlay flavor (default: auto-detect)\n" +
+		"Write an AC that lists which Govna files can be removed and which files\n" +
+		"need a Director choice. Run from the repository root with no positional\n" +
+		"arguments. This command deletes nothing.\n\nFlags:\n" +
+		"  -f, --flavor code|doc      Govna file set (CODE or DOC; default: auto-detect)\n" +
 		"  -s, --stack <name>         CODE stack (default: inferred from manifests)\n" +
 		"  -n, --repo-name <name>     override repo name (default: basename of cwd)\n" +
 		"  -h, --help                 show this help\n"
@@ -148,7 +150,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantApply := fmt.Sprintf("govna executable v%s applied embedded canon v%s (DOC overlay)", programVersion, canonVersion)
+	wantApply := fmt.Sprintf("Govna executable v%s added its embedded governance files (canon v%s) for the DOC repository", programVersion, canonVersion)
 	if !strings.Contains(string(applyBody), wantApply) {
 		t.Fatalf("apply body omits top-level version axes: %s", applyBody)
 	}
@@ -166,7 +168,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.35.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.36.0.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -176,7 +178,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.35.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.36.0.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}
@@ -223,7 +225,7 @@ func TestColorGating(t *testing.T) {
 			env := mapEnvironment(tc.terminal, tc.env)
 			got := usageText(env)
 			if tc.colored {
-				wantPrefix := fmt.Sprintf("\x1b[1m\x1b[38;5;231mgovna\x1b[0m v%s\n\x1b[38;5;245mRepo governance templates — github.com/queone/govna\x1b[0m", programVersion)
+				wantPrefix := fmt.Sprintf("\x1b[1m\x1b[38;5;231mgovna\x1b[0m v%s\n\x1b[38;5;245mAdd and maintain Govna governance files — github.com/queone/govna\x1b[0m", programVersion)
 				if !strings.HasPrefix(got, wantPrefix) {
 					t.Fatalf("color prefix mismatch: %q", got)
 				}

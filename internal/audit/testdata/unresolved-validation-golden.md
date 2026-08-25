@@ -1,43 +1,43 @@
-# AC7 Audit v0.35.0
+# AC7 Review Govna File Updates
 
 ## Summary
 
-This adoption covers 2 sync paths, 0 migration paths, 1 review path, and 1 out-of-scope path.
+Govna found 2 files ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.
 
-This audit adoption synchronizes deterministic canon changes for `widget`. Audit surfaced 0 migration paths and 1 review path. Per-file inspection uses rendered canon, durable baseline evidence, preserve decisions, and bounded target evidence.
+This AC updates `widget` to Govna's embedded governance files (canon v0.36.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
 
 ## In Scope
 
-### Direct sync
+### Files ready to update
 
-- `AGENTS.md` — `clear-sync`.
-- `govna/canon-baseline.txt` — `clear-sync`.
+- `AGENTS.md` — `clear-sync`: the file still matches the previously installed Govna version and is safe to update.
+- `govna/canon-baseline.txt` — `clear-sync`: the file still matches the previously installed Govna version and is safe to update.
 
-### Migration
+### Required control files
 
 - None.
 
-### Review
+### Files needing a Director choice
 
-- `local.md` — `ambiguity`.
+- `local.md` — `ambiguity`: Govna cannot safely choose between updating and keeping the file.
 
 ### Adoption Instructions
 
-- Resolve every routing decision in chat.
-- Leave this emitted stub unchanged.
-- Render canon into a scratch directory.
-- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition.
-- Apply every resolved outcome within the authorized content boundaries.
-- Install `govna/canon-baseline.txt` last.
+- Resolve every Director choice in chat.
+- Leave this generated AC unchanged.
+- Create a temporary copy of the embedded Govna files with `govna render`.
+- Confirm each file selected for update exists in the selected CODE render.
+- Apply each Director choice only to its authorized file region.
+- Write `govna/canon-baseline.txt` as the final file update.
 
 ### Routing Decisions
 
-1. **`local.md`**: Which outcome applies: sync, preserve, migrate, or delete?
-2. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?
+1. **`local.md`**: Which action should Govna record: update (sync), keep local (preserve), move content (migrate), or remove (delete)?
+2. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?
 
 ## Out Of Scope
 
-- `plan.md` — `preserve`.
+- `plan.md` — `preserve`: the preserve list says to keep the repository's version.
 
 ## Migration findings
 
@@ -45,15 +45,15 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 
 ## Acceptance Tests
 
-**AT1** [Automated] [Pre-release gate] — Verify every resolved sync target except `govna/canon-baseline.txt` against rendered canon and every resolved preserve target against `govna/preserve.txt`.
+**AT1** [Automated] [Pre-release gate] — Verify every file selected for update except `govna/canon-baseline.txt` against the rendered Govna files and every preserved file against `govna/preserve.txt`.
 
-**AT2** [Automated] [Pre-release gate] — Preserve the protected region in `AGENTS.md` from `## Project Rules` through EOF with SHA-256 `abc123` for any sync outcome.
+**AT2** [Automated] [Pre-release gate] — Preserve the protected region in `AGENTS.md` from `## Project Rules` through EOF with SHA-256 `abc123` for any update choice.
 
-**AT3** [Manual] [Pre-release gate] — Resolve the validation disposition in chat.
+**AT3** [Manual] [Pre-release gate] — Choose the repository check in chat.
 
-**AT4** [Automated] [Pre-release gate] — Satisfy the resolved validation disposition after selected work and before baseline installation.
+**AT4** [Automated] [Pre-release gate] — Verify the chosen repository check succeeds before `govna/canon-baseline.txt` installation.
 
-**AT5** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.
+**AT5** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.
 
 ## Status
 

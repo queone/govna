@@ -3,6 +3,7 @@ package repository
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -45,5 +46,40 @@ func TestAuditPreconditions(t *testing.T) {
 	}
 	if err := RequireGitWorktree(d); err == nil {
 		t.Fatal("non-worktree accepted")
+	}
+}
+
+func TestFlavorErrorsExplainTheProblemAndRecovery(t *testing.T) {
+	t.Run("no evidence", func(t *testing.T) {
+		_, err := Flavor(t.TempDir(), "")
+		want := "Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest"
+		if err == nil || err.Error() != want {
+			t.Fatalf("err=%v", err)
+		}
+	})
+	t.Run("conflicting evidence", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/widget\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "_config.yml"), []byte("title: Widget\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Flavor(root, "")
+		want := "Govna found both CODE and DOC evidence: the repository has _config.yml and a CODE project manifest; pass --flavor code or --flavor doc"
+		if err == nil || err.Error() != want {
+			t.Fatalf("err=%v", err)
+		}
+	})
+}
+
+func TestAdoptionErrorNamesAcceptedEvidence(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := RequireAdopted(root)
+	if err == nil || !strings.Contains(err.Error(), "Govna could not find the files that confirm Govna was added") || !strings.Contains(err.Error(), "govna/ac-template.md") || !strings.Contains(err.Error(), "CHANGELOG.md") {
+		t.Fatalf("err=%v", err)
 	}
 }

@@ -11,6 +11,10 @@ import (
 	"github.com/queone/govna/internal/canon"
 )
 
+func userMessageErrorf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
+}
+
 func Flavor(root, explicit string) (canon.Flavor, error) {
 	if explicit == "code" {
 		return canon.Code, nil
@@ -52,7 +56,7 @@ func Flavor(root, explicit string) (canon.Flavor, error) {
 		hasCode = hasCode || exists(filepath.Join(root, name))
 	}
 	if hasCode && hasDoc {
-		return "", fmt.Errorf("conflicting flavor signals: target has _config.yml and a strong CODE manifest; pass --flavor code or --flavor doc")
+		return "", userMessageErrorf("Govna found both CODE and DOC evidence: the repository has _config.yml and a CODE project manifest; pass --flavor code or --flavor doc")
 	}
 	if hasCode {
 		return canon.Code, nil
@@ -60,7 +64,7 @@ func Flavor(root, explicit string) (canon.Flavor, error) {
 	if hasDoc {
 		return canon.Doc, nil
 	}
-	return "", fmt.Errorf("could not infer flavor: add govna/metadata.txt, pass --flavor code|doc, or add a recognized flavor manifest")
+	return "", userMessageErrorf("Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest")
 }
 
 func Stack(root string) string {
@@ -130,7 +134,7 @@ func RequireAdopted(root string) error {
 	if strings.Contains(text, "govna apply") || strings.Contains(text, "govna render") || strings.Contains(text, "govna render-canon") {
 		return nil
 	}
-	return fmt.Errorf("repository has no govna adoption signal")
+	return userMessageErrorf("Govna could not find the files that confirm Govna was added to this repository; expected AGENTS.md plus govna/ac-template.md, govna/release.md, govna/build-release.md, or a CHANGELOG.md entry for govna apply or govna render")
 }
 
 // RequireGitWorktree verifies Git availability and worktree membership.

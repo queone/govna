@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const Version = "0.35.0"
+const Version = "0.36.0"
 
 //go:embed assets
 var assets embed.FS
@@ -32,6 +32,10 @@ type Config struct {
 type File struct {
 	Path    string
 	Content []byte
+}
+
+func userMessageErrorf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
 }
 
 var boundaries = map[string]string{
@@ -124,7 +128,7 @@ func Render(cfg Config) ([]File, error) {
 	if stack == "Rust" {
 		raw, err := fs.ReadFile(assets, "assets/stack-build-release/rust.md")
 		if err != nil {
-			return nil, fmt.Errorf("compose stack build/release guidance: %w", err)
+			return nil, userMessageErrorf("Govna could not load the Rust build and release guidance: %w", err)
 		}
 		values["{{STACK_BUILD_RELEASE_GUIDANCE}}"] = strings.TrimSpace(string(raw))
 	}
@@ -235,7 +239,7 @@ func insertBeforeBoundary(content, block string) (string, error) {
 	const marker = "\n## Project Practices\n"
 	index := strings.Index(content, marker)
 	if index < 0 {
-		return "", fmt.Errorf("compose stack guidelines: ## Project Practices boundary not found")
+		return "", userMessageErrorf("Govna could not add stack guidance because the ## Project Practices boundary is missing from govna/development-guidelines.md")
 	}
 	return strings.TrimRight(content[:index+1], "\n") + "\n\n" + block + "\n\n" + content[index+1:], nil
 }
@@ -256,7 +260,7 @@ func baseline(files map[string][]byte) (string, error) {
 			var found bool
 			region, found = ComparisonRegion(path, content)
 			if !found {
-				return "", fmt.Errorf("render baseline: %s is missing registered boundary %q", path, boundary)
+				return "", userMessageErrorf("Govna could not build the baseline for %s because its required boundary %q is missing", path, boundary)
 			}
 			scope = "before:" + boundary
 		}

@@ -32,7 +32,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		return 2
 	}
 	if repository.IsSource(cwd) {
-		fmt.Fprintf(stderr, "rm: target %s looks like a govna checkout — rm is for adopted repos, not the govna source\n", cwd)
+		fmt.Fprintf(stderr, "rm: a Govna removal AC cannot be created inside the Govna source checkout at %s; run this command from the target repository\n", cwd)
 		return 1
 	}
 	if err := repository.RequireAdopted(cwd); err != nil {
@@ -50,7 +50,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 	}
 	flavor, err := repository.Flavor(cwd, cfg.Flavor)
 	if err != nil {
-		fmt.Fprintf(stderr, "rm: infer flavor from cwd: %v (use --flavor to override)\n", err)
+		fmt.Fprintf(stderr, "rm: %v\n", err)
 		return 1
 	}
 	stack := cfg.Stack
@@ -109,7 +109,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 	body := []byte(buildAC(stub, programVersion, canon.Version, flavor, stack, assessment))
 	content := emission.GuardedBody(emission.RemovalMarkerPrefix, programVersion, canon.Version, body)
 	if reused && bytes.Equal(existing, content) {
-		fmt.Fprintf(stdout, "wrote %s\n", stub)
+		fmt.Fprintf(stdout, "Wrote %s for review.\n", stub)
 		return 0
 	}
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -120,16 +120,16 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		fmt.Fprintf(stderr, "rm: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "wrote %s\n", stub)
+	fmt.Fprintf(stdout, "Wrote %s for review.\n", stub)
 	return 0
 }
 
 func Help() string {
 	return "Usage: govna rm [flags]\n\n" +
-		"Emit a Director-reviewed cleanup AC for removing govna canon from an\n" +
-		"adopted repo. Run from the consumer repo root (no positional arguments).\n" +
-		"Deletes nothing itself.\n\nFlags:\n" +
-		"  -f, --flavor code|doc      overlay flavor (default: auto-detect)\n" +
+		"Write an AC that lists which Govna files can be removed and which files\n" +
+		"need a Director choice. Run from the repository root with no positional\n" +
+		"arguments. This command deletes nothing.\n\nFlags:\n" +
+		"  -f, --flavor code|doc      Govna file set (CODE or DOC; default: auto-detect)\n" +
 		"  -s, --stack <name>         CODE stack (default: inferred from manifests)\n" +
 		"  -n, --repo-name <name>     override repo name (default: basename of cwd)\n" +
 		"  -h, --help                 show this help\n"
@@ -203,7 +203,7 @@ func classify(root string, files []canon.File, preserve map[string]bool, eligibl
 			return out, fmt.Errorf("inspect %s: %w", path, err)
 		}
 		if path == "plan.md" || path == "arch.md" {
-			out.OutOfScope = append(out.OutOfScope, Route{path, "keep", "repo-owned govna-adjacent content"})
+			out.OutOfScope = append(out.OutOfScope, Route{path, "keep", "repository-owned file not managed by Govna"})
 			continue
 		}
 		if preserve[path] {
@@ -215,11 +215,11 @@ func classify(root string, files []canon.File, preserve map[string]bool, eligibl
 			continue
 		}
 		if path == "README.md" || path == "CHANGELOG.md" {
-			out.Review = append(out.Review, Route{path, "hybrid", "mixed canon-shape and consumer content"})
+			out.Review = append(out.Review, Route{path, "hybrid", "contains both Govna-managed and repository-owned content"})
 			continue
 		}
 		if _, mixed := canon.Boundary(path); mixed {
-			out.Review = append(out.Review, Route{path, "hybrid", "mixed canon-shape and consumer content"})
+			out.Review = append(out.Review, Route{path, "hybrid", "contains both Govna-managed and repository-owned content"})
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -227,9 +227,9 @@ func classify(root string, files []canon.File, preserve map[string]bool, eligibl
 			return out, fmt.Errorf("read %s: %w", path, err)
 		}
 		if bytes.Equal(data, current[path]) {
-			out.InScope = append(out.InScope, Route{path, "delete file", "byte-equal govna canon"})
+			out.InScope = append(out.InScope, Route{path, "delete file", "matches the current Govna file exactly"})
 		} else {
-			out.Review = append(out.Review, Route{path, "ambiguity", "consumer-edited canon file"})
+			out.Review = append(out.Review, Route{path, "ambiguity", "Govna-managed file has local edits"})
 		}
 	}
 	claude := filepath.Join(root, "CLAUDE.md")
@@ -285,7 +285,7 @@ func targetOnly(root string, current map[string][]byte, eligible string) ([]Rout
 			if _, ok := current[rel]; ok {
 				continue
 			}
-			routes = append(routes, Route{rel, "keep", "target-only repo-owned file"})
+			routes = append(routes, Route{rel, "keep", "repository-owned file not managed by Govna"})
 		}
 		return nil
 	}
@@ -309,24 +309,24 @@ func buildAC(stub, programVersion, canonVersion string, flavor canon.Flavor, sta
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%s Govna Removal from v%s\n\n## Summary\n\nThis removal AC was emitted by govna executable v%s with embedded canon v%s. It removes Govna canon from this consumer repository without deleting consumer-owned content. Director-resolved routing protects every review path.\n\n### Removal Instructions\n\n", number, canonVersion, programVersion, canonVersion)
+	fmt.Fprintf(&b, "# AC%s Review Removal of Govna Files\n\n## Summary\n\nGovna executable v%s created this removal plan from its embedded governance files (canon v%s). This AC removes Govna-managed content without deleting repository-owned content. Files needing a choice stay unchanged until the Director decides what to do.\n\n### Removal Instructions\n\n", number, programVersion, canonVersion)
 	recipe := "govna render --flavor " + strings.ToLower(string(flavor))
 	if flavor == canon.Code {
 		recipe += " --stack " + stack
 	}
 	recipe += " <scratch>"
 	if len(a.Review) == 0 {
-		b.WriteString("- Apply each in-scope route.\n")
+		b.WriteString("- Apply each in-scope removal.\n")
 	} else {
-		fmt.Fprintf(&b, "- Render the selected canon into `<scratch>` with `%s`.\n", recipe)
-		b.WriteString("- Preserve every routing-pending path until its route is resolved.\n- Resolve every routing decision in chat.\n- Apply each in-scope route and each Director-resolved review route.\n")
+		fmt.Fprintf(&b, "- Create a temporary copy of the selected Govna files with `%s`.\n", recipe)
+		b.WriteString("- Preserve every file under Routing Decisions until the Director resolves it.\n- Resolve every Director choice in chat.\n- Apply each in-scope removal and Director choice.\n")
 	}
 	b.WriteString("\n### Routing Decisions\n\n")
 	if len(a.Review) == 0 {
 		b.WriteString("`None` — no review items.\n")
 	} else {
 		for i, r := range a.Review {
-			fmt.Fprintf(&b, "%d. `%s` is %s.\n   - Compare `%s` with `diff -ru <scratch>/%s %s`.\n   - Choose one route for `%s`: canon-only deletion, full preservation, or full deletion.\n", i+1, r.Path, r.Reason, r.Path, r.Path, r.Path, r.Path)
+			fmt.Fprintf(&b, "%d. `%s`: %s.\n   - Compare `%s` with `diff -ru <scratch>/%s %s`.\n   - Choose what to remove from `%s`: only its Govna-managed section, nothing, or the whole file.\n", i+1, r.Path, r.Reason, r.Path, r.Path, r.Path, r.Path)
 		}
 	}
 	b.WriteString("\n## In Scope\n\n")
@@ -336,9 +336,9 @@ func buildAC(stub, programVersion, canonVersion string, flavor canon.Flavor, sta
 	}
 	b.WriteString("\n## Out Of Scope\n\n")
 	writeRoutes(&b, a.OutOfScope)
-	b.WriteString("\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every resolved removal target under `## In Scope` is absent.\n\n**AT2** [Manual] [Pre-release gate] — Verify every routing-pending path matches its Director-resolved route.\n")
+	b.WriteString("\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every resolved removal target under `## In Scope` is absent.\n\n**AT2** [Manual] [Pre-release gate] — Verify every file under Routing Decisions matches its Director-resolved action.\n")
 	if a.ControlState != nil {
-		b.WriteString("\n**AT3** [Automated] [Pre-release gate] — Verify every preserve-registry decision is applied before the final removal of `govna/preserve.txt`.\n")
+		b.WriteString("\n**AT3** [Automated] [Pre-release gate] — Verify every keep-local choice is applied before the final removal of `govna/preserve.txt`.\n")
 	}
 	b.WriteString("\n## Status\n\n`PENDING` — removal emission; awaiting explicit Director Audit.\n")
 	return b.String()

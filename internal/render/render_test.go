@@ -83,11 +83,11 @@ func TestRunErrors(t *testing.T) {
 		{"non-go module", []string{"--flavor", "code", "--stack", "Rust", "--module-path", "x/y", "out"}, nil, "applies only to Go CODE canon", 1},
 		{"unsupported stack", []string{"--flavor", "code", "--stack", "Ruby", "out"}, nil, "unsupported CODE stack", 1},
 		{"missing go module", []string{"--flavor", "code", "--stack", "Go", "out"}, nil, "could not read module path", 1},
-		{"absent flavor", []string{"out"}, nil, "could not infer flavor", 1},
+		{"absent flavor", []string{"out"}, nil, "Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest", 1},
 		{"conflict", []string{"out"}, func(cwd string) {
 			os.WriteFile(filepath.Join(cwd, "go.mod"), []byte("module x\n"), 0o644)
 			os.WriteFile(filepath.Join(cwd, "_config.yml"), []byte("x\n"), 0o644)
-		}, "conflicting flavor signals", 1},
+		}, "Govna found both CODE and DOC evidence: the repository has _config.yml and a CODE project manifest; pass --flavor code or --flavor doc", 1},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -131,22 +131,22 @@ func TestMetadataPrecedence(t *testing.T) {
 }
 
 func TestInvalidMetadata(t *testing.T) {
-	for name, content := range map[string]string{
-		"missing newline":   "repo_type = DOC",
-		"malformed line":    "repo_type DOC\n",
-		"missing repo type": "schema_version = 1\n",
-		"unknown repo type": "repo_type = OTHER\n",
+	for name, tc := range map[string]struct{ content, want string }{
+		"missing newline":   {"repo_type = DOC", "require a final newline"},
+		"malformed line":    {"repo_type DOC\n", "each line must use `key = value`"},
+		"missing repo type": {"schema_version = 1\n", "missing repo_type"},
+		"unknown repo type": {"repo_type = OTHER\n", "unknown repo_type \"OTHER\""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cwd := t.TempDir()
 			if err := os.Mkdir(filepath.Join(cwd, "govna"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(cwd, "govna", "metadata.txt"), []byte(content), 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(cwd, "govna", "metadata.txt"), []byte(tc.content), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := resolveFlavor(cwd, ""); err == nil {
-				t.Fatal("invalid metadata accepted")
+			if _, err := resolveFlavor(cwd, ""); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("invalid metadata error=%v want fragment=%q", err, tc.want)
 			}
 		})
 	}

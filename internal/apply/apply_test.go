@@ -20,8 +20,11 @@ func runAt(t *testing.T, d string, args ...string) (string, string, int) {
 func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, "created")
 	for _, want := range []string{
-		"govna executable v9.8.7 applied embedded canon v0.35.0 (CODE overlay) to widget.",
-		"govna executable v9.8.7 applied embedded canon v0.35.0 (CODE overlay). Every file listed below is consumer-owned.",
+		"# AC7 Review Files Added by Govna",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.36.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.36.0). The list below records whether each file was written, merged, or preserved.",
+		"Files Govna processed:",
+		"- Files not listed above.",
 		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
 		"**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).",
 		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.",
@@ -31,7 +34,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.35.0", "Director reads", "review applied governance"} {
+	for _, invalid := range []string{"Applied govna v0.36.0", "Director reads", "review applied governance", "overlay", "consumer-owned"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
@@ -54,10 +57,10 @@ func TestFreshAndReapply(t *testing.T) {
 			t.Fatalf("missing %s", p)
 		}
 	}
-	if !strings.Contains(out, "write govna/ac1-govna-apply.md") {
+	if !strings.Contains(out, "wrote govna/ac1-govna-apply.md (review AC)") {
 		t.Fatal(out)
 	}
-	for _, line := range []string{"mode: apply\n", "repo-shape: empty\n", "signals: code=0 doc=0\n", "existing-artifacts: none\n", "overwrite-risk: low\n"} {
+	for _, line := range []string{"mode: apply\n", "repository type: empty\n", "type evidence: CODE score=0 DOC score=0\n", "existing files: none\n", "risk of replacing content: low\n"} {
 		if !strings.Contains(out, line) {
 			t.Fatalf("assessment missing %q in %q", line, out)
 		}
@@ -130,11 +133,63 @@ func TestAssessmentForExistingCodeRepository(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code=%d stderr=%s", code, stderr)
 	}
-	for _, line := range []string{"repo-shape: likely CODE\n", "signals: code=4 doc=2\n", "existing-artifacts: README.md\n", "overwrite-risk: medium\n"} {
+	for _, line := range []string{"repository type: likely CODE\n", "type evidence: CODE score=4 DOC score=2\n", "existing files: README.md\n", "risk of replacing content: medium\n"} {
 		if !strings.Contains(out, line) {
 			t.Fatalf("assessment missing %q in %q", line, out)
 		}
 	}
+}
+
+func TestExistingRepositoryWarningsExplainTheEffectAndRecovery(t *testing.T) {
+	t.Run("whole file replacement", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("local rules without boundary\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		stdout, stderr, code := runAt(t, root, "--flavor", "doc")
+		if code != 0 {
+			t.Fatalf("code=%d stderr=%q", code, stderr)
+		}
+		for _, want := range []string{
+			"existing governance files detected; Govna will report whether each file is written, merged, or preserved",
+			"warning: AGENTS.md has no `## Project Rules` boundary; replacing the whole file because the named Govna/local boundary is missing",
+		} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("stderr %q omits %q", stderr, want)
+			}
+		}
+		if !strings.Contains(stdout, "wrote AGENTS.md (Govna-managed file)") {
+			t.Errorf("stdout=%q", stdout)
+		}
+	})
+
+	t.Run("manual boundary merge", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("canon\n\n## Project Rules\n\n- Local.\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, "govna"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "govna", "build-release.md"), []byte("local release rules\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, stderr, code := runAt(t, root, "--flavor", "code", "--stack", "rust")
+		if code != 0 {
+			t.Fatalf("code=%d stderr=%q", code, stderr)
+		}
+		want := "warning: govna/build-release.md has no `## Project Practices` boundary; kept the existing file; add the named boundary and merge the Govna-managed section manually"
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr %q omits %q", stderr, want)
+		}
+		content, err := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-apply.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), "kept existing file; add the missing Govna/local boundary and merge the Govna-managed section manually") {
+			t.Errorf("adoption AC omits recovery action: %s", content)
+		}
+	})
 }
 
 func assertGolden(t *testing.T, actual, golden string) {

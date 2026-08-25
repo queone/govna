@@ -2,7 +2,7 @@
 
 Dependency-free governance tooling for CODE and DOC repositories.
 
-Govna embeds a deterministic governance canon in a single Go binary. It can bootstrap that canon into a repository, inspect an adopted repository for drift, prepare a Director-reviewed removal plan, or render the canon for inspection.
+Govna carries a versioned set of governance files inside one Go executable. That embedded file set is the canon. Govna can add those files to a repository, check an adopted repository for updates, prepare a Director-reviewed removal plan, or write a temporary copy for inspection.
 
 ## Why
 
@@ -66,16 +66,16 @@ The build installs `govna` into `$(go env GOPATH)/bin` after validation succeeds
 
 ```text
 govna v<version>
-Repo governance templates — github.com/queone/govna
+Add and maintain Govna governance files — github.com/queone/govna
 
 Usage: govna <command> [options]
 
-  apply                         apply governance template to a repo
-  audit                         drift scan an adopted repo against govna canon
-  rm                            emit cleanup AC for removing govna canon
-  render                        render flavor-specific canon files into a target directory
-  version                       print binary and embedded canon versions
-  ver, v, --version             print binary version
+  apply                         add Govna governance files to a repository
+  audit                         check a repository with Govna for updates and local changes
+  rm                            write a reviewable AC for removing Govna files
+  render                        write the selected built-in Govna files to a directory
+  version                       print executable and embedded governance-file versions
+  ver, v, --version             print executable version
   help, h                       show this help
 ```
 
@@ -83,9 +83,9 @@ Run `govna <command> -h` for command-specific flags.
 
 ### `apply`
 
-Run `govna apply` from the target repository or empty directory. Govna detects the repository shape, resolves omitted parameters, writes the selected canon, and emits an adoption AC for review.
+Run `govna apply` from the target repository or empty directory. Adding Govna's governance files to a repository is adoption. Govna determines the repository type, writes the selected CODE or DOC file set (the flavor), and creates an adoption AC for review.
 
-The adoption AC records the Govna executable version separately from the embedded canon version, so executable provenance is never confused with the governance content version.
+The adoption AC records the executable version—the version of the installed `govna` program—separately from the canon version, which identifies the governance files embedded in that program.
 
 ```bash
 govna apply
@@ -99,65 +99,65 @@ govna apply --flavor code --stack Go --repo-name my-service --module-path exampl
 
 Flags:
 
-- `-f, --flavor code|doc` — select the overlay flavor; otherwise auto-detect it.
+- `-f, --flavor code|doc` — select the CODE or DOC Govna file set; otherwise auto-detect it.
 - `-s, --stack <name>` — select the CODE stack; otherwise infer it from manifests.
 - `-n, --repo-name <name>` — set the repository name; otherwise use the current directory name.
 - `-m, --module-path <path>` — set the Go module path; otherwise read it from `go.mod`.
 - `-g, --init-git` — initialize Git on `main` when the target is not already a repository.
 
-For an existing repository, apply preserves designated consumer-owned files, merges registered governance boundaries, and reports every outcome in the adoption AC. After adoption, the repository owns its generated files and may adapt them to local needs.
+For an existing repository, apply keeps designated repository-owned files, merges registered governance boundaries, and reports every outcome in the adoption AC. After adoption, the repository owns its generated files and may adapt them to local needs.
 
 ### `audit`
 
-Run `govna audit` from an adopted CODE or DOC Git worktree to compare its governed files with embedded canon:
+Run `govna audit` from a CODE or DOC Git worktree that has adopted Govna. Audit compares the repository's Govna-managed files with the versioned governance files built into the executable:
 
 ```bash
 govna audit
 ```
 
-Audit validates the repository’s metadata, canon baseline, and optional preserve registry. It classifies drift and emits one guarded routing AC only when it finds actionable work. It does not apply routing decisions or modify existing governed content.
+Audit reads the repository metadata and its baseline, the saved hashes of Govna-managed file regions previously installed there. It also reads the optional preserve registry, the list of files a Director chose to keep local. Each file receives a classification, which is the exact result label explaining its state. When Govna cannot safely act, the emitted AC asks for a routing decision: a Director choice to update, keep, migrate, or remove the file. The AC also records the repository check, meaning the command to run after updates or the reason no command applies. Audit does not make those choices or modify existing governed content.
 
-Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and embedded-canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
+Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
 
 Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
 
 ### `rm`
 
-Run `govna rm` from an adopted CODE or DOC Git worktree to assess removal of Govna canon:
+Run `govna rm` from a CODE or DOC Git worktree that has adopted Govna to review removal of Govna-managed files:
 
 ```bash
 govna rm
 ```
 
-The command classifies paths for deletion, preservation, or Director review and emits a guarded cleanup AC. It does not execute any route or delete repository content.
+The command labels files for deletion, preservation, or Director review and writes a guarded removal AC. It does not carry out any removal choice or delete repository content.
 
 Removal stubs use the same canon-keyed path and dual-axis guarded-marker model as audit stubs.
 
 ### `render`
 
-Render flavor-specific canon into a target directory for inspection or deterministic comparison:
+Write the selected CODE or DOC built-in governance files to a target directory for inspection or deterministic comparison. This temporary copy is a scratch render:
 
 ```bash
 govna render --flavor code --stack Go --module-path example.com/my-service <target>
 ```
 
-Render writes canon files only and creates no adoption record. The target is not pre-cleaned.
+Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned.
 
 ### `version`
 
-Inspect both the product and embedded canon versions:
+Inspect both version axes. The executable version identifies the installed program; the canon version identifies its embedded governance files:
 
 ```text
 $ govna version
-govna binary: v<binary-version>
-embedded canon: v<canon-version>
+Govna executable version: v<executable-version>
+Embedded governance-file version (canon version): v<canon-version>
 ```
 
 ## Canon Model
 
-Canon is embedded into the binary at compile time and rendered deterministically. Adopted repositories carry metadata and a generated baseline so audit can distinguish canon changes from consumer edits without depending on transient session state.
+Canon is the versioned set of governance files embedded into the executable at compile time. Govna writes those files deterministically. A consumer repository is any repository that has adopted Govna. It carries metadata and a baseline—the saved hashes of the Govna-managed regions previously installed there—so audit can distinguish new Govna files from local edits.
 
-Consumer-owned divergence can be recorded in `govna/preserve.txt`. Audit keeps those decisions explicit while continuing to identify sync, migration, and review paths elsewhere.
+The preserve registry at `govna/preserve.txt` lists files that a Director chose to keep local. Audit keeps those decisions explicit while continuing to identify updates, migrations, and review choices elsewhere.
 
 ## Repository Types and CODE Stacks
 
@@ -170,9 +170,9 @@ CODE repositories have first-class stack contracts for Go, Rust, Terraform, and 
 
 ## Design
 
-Govna is implemented as a standard-library-only Go module. Its templates are embedded in the executable, so rendering and adoption require no runtime package, network service, submodule, or template checkout.
+Govna is a standard-library-only Go module. It keeps every governance template inside the executable, so adding or rendering Govna files needs no runtime package, network service, submodule, or separate template checkout.
 
-Canonical builds apply a semantic instruction gate to generated apply, audit, and removal AC fixtures. The gate validates positive imperative starters, atomic actions, the settled normalized instruction inventory, and expected emitter branches independently of byte-exact golden comparisons.
+The canonical build checks generated apply, audit, and removal ACs for direct imperative instructions, one action per instruction, expected wording, and every expected output branch. These language checks run separately from byte-for-byte fixture comparisons.
 
 Command output is deterministic and terminal color is gated by TTY capability, `NO_COLOR`, `TERM=dumb`, and 256-color support. The generated build scripts are self-contained and remain compatible with their documented stack environments.
 

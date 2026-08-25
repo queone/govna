@@ -30,6 +30,10 @@ type Config struct {
 	invocation              string
 }
 
+func userMessageErrorf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
+}
+
 type FileResult struct {
 	Path                  string   `json:"relpath"`
 	Classification        string   `json:"classification"`
@@ -138,9 +142,9 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 			return 1
 		}
 	} else if clean {
-		fmt.Fprintf(stdout, "clean (%s); no AC emitted\n", tally(report.Files))
+		fmt.Fprintf(stdout, "No Govna updates or Director choices found (%s). No AC was written.\n", plainTally(report.Files))
 	} else {
-		fmt.Fprintf(stdout, "wrote %s (%s)\n", report.Emitted.ACStub, tally(report.Files))
+		fmt.Fprintf(stdout, "Wrote %s for review (%s).\n", report.Emitted.ACStub, plainTally(report.Files))
 	}
 	return 0
 }
@@ -312,7 +316,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
 	}
 	for path, evidence := range targetOnly(root, canonMap, prior, flavor, name) {
-		fr := FileResult{Path: path, Classification: "target-has-no-canon", CanonReference: evidence, CompareCommand: "inspect target-only file " + path}
+		fr := FileResult{Path: path, Classification: "target-has-no-canon", CanonReference: evidence, CompareCommand: "review " + path + " because it is not in the selected embedded Govna files"}
 		data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		fr.Diff = diffText(nil, data, path, cfg.DiffLines)
 		if markers := legacy[path]; len(markers) > 0 {
@@ -400,7 +404,7 @@ func checkCoherence(files map[string][]byte) error {
 	for _, rule := range coherenceRules {
 		content, ok := files[rule.Path]
 		if !ok || !bytes.Contains(content, []byte(rule.Contains)) {
-			return fmt.Errorf("canon-coherence precondition failed: %s must contain %q; ping govna maintainer", rule.Path, rule.Contains)
+			return userMessageErrorf("Govna's embedded files disagree with each other: %s must contain %q; report this to the Govna maintainer", rule.Path, rule.Contains)
 		}
 	}
 	return nil
@@ -684,34 +688,64 @@ func readOptional(path string) ([]byte, bool, error) {
 func comparisonDescription(f FileResult, path string) string {
 	switch f.Classification {
 	case "match":
-		return "byte-equal with embedded canon: " + path
+		return "matches the embedded Govna file: " + path
 	case "missing-in-target":
-		return "target missing; compare embedded canon with " + path
+		return "repository is missing " + path + "; compare it with the embedded Govna file"
 	case "target-has-no-canon":
-		return "inspect target-only file " + path
+		return "review " + path + " because it is not in the selected embedded Govna files"
 	default:
-		return "compare embedded canon with target: " + path
+		return "compare the embedded Govna file with the repository file: " + path
 	}
 }
 func actionable(c string) bool {
 	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon"
 }
-func tally(files []FileResult) string {
+func plainTally(files []FileResult) string {
 	order := []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required"}
 	count := map[string]int{}
-	for _, f := range files {
-		count[f.Classification]++
+	for _, file := range files {
+		count[file.Classification]++
+	}
+	labels := map[string][2]string{
+		"match":               {"file needs no update", "files need no update"},
+		"expected-divergence": {"expected local difference", "expected local differences"},
+		"preserve":            {"file kept by Director choice", "files kept by Director choice"},
+		"ambiguity":           {"file needs a Director choice", "files need a Director choice"},
+		"clear-sync":          {"file is safe to update", "files are safe to update"},
+		"missing-in-target":   {"missing Govna file", "missing Govna files"},
+		"target-has-no-canon": {"Govna-linked extra file", "Govna-linked extra files"},
+		"migration-required":  {"missing required control file", "missing required control files"},
 	}
 	var parts []string
-	for _, k := range order {
-		if count[k] > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", count[k], k))
+	for _, classification := range order {
+		value := count[classification]
+		if value == 0 {
+			continue
 		}
+		label := labels[classification][1]
+		if value == 1 {
+			label = labels[classification][0]
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", value, label))
 	}
 	if len(parts) == 0 {
 		return "0 files"
 	}
 	return strings.Join(parts, ", ")
+}
+
+func classificationMeaning(classification string) string {
+	meanings := map[string]string{
+		"match":               "the file already needs no Govna update",
+		"missing-in-target":   "a file from current Govna rules is missing from the repository",
+		"expected-divergence": "the repository is expected to keep its own version of this file",
+		"preserve":            "the preserve list says to keep the repository's version",
+		"clear-sync":          "the file still matches the previously installed Govna version and is safe to update",
+		"ambiguity":           "Govna cannot safely choose between updating and keeping the file",
+		"target-has-no-canon": "the file is absent from the selected current canon but specific repository evidence connects it to Govna",
+		"migration-required":  "a required Govna control file is missing and must be added through the AC",
+	}
+	return meanings[classification]
 }
 
 func buildAC(report Report, path string, validation validationOutcome) string {
@@ -738,9 +772,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%s Audit v%s\n\n## Summary\n\n", number, canon.Version)
-	fmt.Fprintf(&b, "This adoption covers %s, %s, %s, and %s.\n\n", countLabel(len(sync), "sync path"), countLabel(len(migrate), "migration path"), countLabel(len(review), "review path"), countLabel(len(preserve), "out-of-scope path"))
-	fmt.Fprintf(&b, "This audit adoption synchronizes deterministic canon changes for `%s`. Audit surfaced %s and %s. Per-file inspection uses rendered canon, durable baseline evidence, preserve decisions, and bounded target evidence.\n\n## In Scope\n\n", report.Header.RepoName, countLabel(len(migrate), "migration path"), countLabel(len(review), "review path"))
+	fmt.Fprintf(&b, "# AC%s Review Govna File Updates\n\n## Summary\n\n", number)
+	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
+	fmt.Fprintf(&b, "This AC updates `%s` to Govna's embedded governance files (canon v%s). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.\n\n## In Scope\n\n", report.Header.RepoName, canon.Version)
 	writeGroup := func(title string, files []FileResult) {
 		fmt.Fprintf(&b, "### %s\n\n", title)
 		if len(files) == 0 {
@@ -748,21 +782,21 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 			return
 		}
 		for _, f := range files {
-			fmt.Fprintf(&b, "- `%s` — `%s`.\n", f.Path, f.Classification)
+			fmt.Fprintf(&b, "- `%s` — `%s`: %s.\n", f.Path, f.Classification, classificationMeaning(f.Classification))
 		}
 		b.WriteString("\n")
 	}
-	writeGroup("Direct sync", sync)
-	writeGroup("Migration", migrate)
-	writeGroup("Review", review)
-	b.WriteString("### Adoption Instructions\n\n- Resolve every routing decision in chat.\n- Leave this emitted stub unchanged.\n- Render canon into a scratch directory.\n")
+	writeGroup("Files ready to update", sync)
+	writeGroup("Required control files", migrate)
+	writeGroup("Files needing a Director choice", review)
+	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
 	if report.Header.Flavor == "code" {
-		b.WriteString("- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition.\n")
+		b.WriteString("- Confirm each file selected for update exists in the selected CODE render.\n")
 	}
-	b.WriteString("- Apply every resolved outcome within the authorized content boundaries.\n- Install `govna/canon-baseline.txt` last.\n")
+	b.WriteString("- Apply each Director choice only to its authorized file region.\n- Write `govna/canon-baseline.txt` as the final file update.\n")
 	for _, f := range report.Files {
 		if len(f.LegacyPreserveMarkers) > 0 && f.Classification == "clear-sync" {
-			fmt.Fprintf(&b, "- Remove the legacy preserve phrase for `%s` only after the required sync and registry state are verified.\n", f.Path)
+			fmt.Fprintf(&b, "- Remove the legacy preserve phrase for `%s` only after the file update and preserve-list state are verified.\n", f.Path)
 		}
 	}
 	b.WriteString("\n")
@@ -770,13 +804,13 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		b.WriteString("### Routing Decisions\n\n")
 		for i, f := range review {
 			if strings.Contains(f.CanonReference, "replacement missing:") {
-				fmt.Fprintf(&b, "%d. **`%s`**: Which outcome applies while its replacement is missing: restore the replacement, migrate this path, or preserve it?\n", i+1, f.Path)
+				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record while its replacement is missing: restore the replacement, move its content (migrate), or keep it local (preserve)?\n", i+1, f.Path)
 			} else {
-				fmt.Fprintf(&b, "%d. **`%s`**: Which outcome applies: sync, preserve, migrate, or delete?\n", i+1, f.Path)
+				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record: update (sync), keep local (preserve), move content (migrate), or remove (delete)?\n", i+1, f.Path)
 			}
 		}
 		if validation.kind == validationUnresolved {
-			fmt.Fprintf(&b, "%d. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?\n", len(review)+1)
+			fmt.Fprintf(&b, "%d. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?\n", len(review)+1)
 		}
 		b.WriteString("\n")
 	}
@@ -785,7 +819,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		b.WriteString("- No preserved or expected-divergence entries.\n\n")
 	} else {
 		for _, f := range preserve {
-			fmt.Fprintf(&b, "- `%s` — `%s`.\n", f.Path, f.Classification)
+			fmt.Fprintf(&b, "- `%s` — `%s`: %s.\n", f.Path, f.Classification, classificationMeaning(f.Classification))
 		}
 		b.WriteString("\n")
 	}
@@ -796,41 +830,45 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		for _, f := range migrate {
 			switch f.Path {
 			case baselinePath:
-				b.WriteString("- Create `govna/canon-baseline.txt` from the final scratch render only after all other work and validation pass.\n")
+				b.WriteString("- Write `govna/canon-baseline.txt` from the final temporary render only after all other work is complete and the repository check succeeds.\n")
 			case "govna/metadata.txt":
-				b.WriteString("- Create `govna/metadata.txt` from the selected scratch render before `govna/canon-baseline.txt` installation.\n")
+				b.WriteString("- Create `govna/metadata.txt` from the selected temporary render before `govna/canon-baseline.txt` installation.\n")
 			default:
-				fmt.Fprintf(&b, "- Create `%s` from the selected scratch render.\n", f.Path)
+				fmt.Fprintf(&b, "- Create `%s` from the selected temporary render.\n", f.Path)
 			}
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every resolved sync target except `govna/canon-baseline.txt` against rendered canon and every resolved preserve target against `govna/preserve.txt`.\n\n")
+	b.WriteString("## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every file selected for update except `govna/canon-baseline.txt` against the rendered Govna files and every preserved file against `govna/preserve.txt`.\n\n")
 	at := 2
 	for _, f := range append(sync, review...) {
 		if f.protectedHash != "" {
-			fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Preserve the protected region in `%s` from `%s` through EOF with SHA-256 `%s` for any sync outcome.\n\n", at, f.Path, f.Boundary, f.protectedHash)
+			fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Preserve the protected region in `%s` from `%s` through EOF with SHA-256 `%s` for any update choice.\n\n", at, f.Path, f.Boundary, f.protectedHash)
 			at++
 		}
 	}
 	if validation.kind == validationUnresolved {
-		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Resolve the validation disposition in chat.\n\n", at)
+		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Choose the repository check in chat.\n\n", at)
 		at++
-		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Satisfy the resolved validation disposition after selected work and before baseline installation.\n\n", at)
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the chosen repository check succeeds before `govna/canon-baseline.txt` installation.\n\n", at)
+		at++
+	} else if validation.kind == validationInferred {
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Run `./build.sh` after the selected file updates and before `govna/canon-baseline.txt` installation (selected from exact AGENTS.md declarations).\n\n", at)
 		at++
 	} else {
-		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Satisfy validation disposition %s after selected work and before baseline installation.\n\n", at, validation.evidence)
+		reason := strings.TrimSpace(strings.TrimPrefix(validation.evidence, "`Not applicable`"))
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation (%s).\n\n", at, reason)
 		at++
 	}
-	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.\n\n## Status\n\n`PENDING` — audit emission; awaiting explicit Director Audit.\n", at)
+	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.\n\n## Status\n\n`PENDING` — audit emission; awaiting explicit Director Audit.\n", at)
 	return b.String()
 }
 
-func countLabel(count int, singular string) string {
+func countPhrase(count int, singular, plural string) string {
 	if count == 1 {
 		return "1 " + singular
 	}
-	return fmt.Sprintf("%d %ss", count, singular)
+	return fmt.Sprintf("%d %s", count, plural)
 }
 
 func validationDisposition(root string, report Report) validationOutcome {

@@ -32,7 +32,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		return 2
 	}
 	if repository.IsSource(cwd) {
-		fmt.Fprintf(stderr, "apply: target %s looks like a govna checkout — apply is for adopted repos, not the govna source\n", cwd)
+		fmt.Fprintf(stderr, "apply: Govna files cannot be added inside the Govna source checkout at %s; run this command from the target repository\n", cwd)
 		return 1
 	}
 	a, err := assess(cwd)
@@ -42,23 +42,23 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	}
 	fmt.Fprintln(stdout, "mode: apply")
 	fmt.Fprintf(stdout, "target: %s\n", cwd)
-	fmt.Fprintf(stdout, "repo-shape: %s\n", a.shape)
-	fmt.Fprintf(stdout, "signals: code=%d doc=%d\n", a.code, a.doc)
+	fmt.Fprintf(stdout, "repository type: %s\n", a.shape)
+	fmt.Fprintf(stdout, "type evidence: CODE score=%d DOC score=%d\n", a.code, a.doc)
 	existing := "none"
 	if len(a.existingArtifacts) > 0 {
 		existing = strings.Join(a.existingArtifacts, ", ")
 	}
-	fmt.Fprintf(stdout, "existing-artifacts: %s\n", existing)
-	fmt.Fprintf(stdout, "overwrite-risk: %s\n", a.risk)
+	fmt.Fprintf(stdout, "existing files: %s\n", existing)
+	fmt.Fprintf(stdout, "risk of replacing content: %s\n", a.risk)
 	flavor, err := repository.Flavor(cwd, cfg.Flavor)
 	if err != nil {
-		fmt.Fprintf(stderr, "apply: infer flavor from cwd: %v (use --flavor to override)\n", err)
+		fmt.Fprintf(stderr, "apply: %v\n", err)
 		return 1
 	}
 	stack := cfg.Stack
 	module := cfg.ModulePath
 	if flavor == canon.Doc && (stack != "" || module != "") {
-		fmt.Fprintln(stderr, "apply: CODE-only option used with DOC canon")
+		fmt.Fprintln(stderr, "apply: --stack and --module-path cannot be used for a DOC repository")
 		return 2
 	}
 	if flavor == canon.Code {
@@ -86,7 +86,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	mode := "new"
 	if exists(filepath.Join(cwd, "AGENTS.md")) || exists(filepath.Join(cwd, "CLAUDE.md")) {
 		mode = "existing"
-		fmt.Fprintln(stderr, "existing governance files detected; apply will overwrite them")
+		fmt.Fprintln(stderr, "existing governance files detected; Govna will report whether each file is written, merged, or preserved")
 	}
 	name := repository.Name(cwd, module, cfg.RepoName)
 	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module})
@@ -101,8 +101,8 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		if mode == "existing" && exists(dest) {
 			switch file.Path {
 			case "README.md", "CHANGELOG.md", "arch.md", "plan.md":
-				label = "existing content preserved"
-				fmt.Fprintf(stdout, "skip %s (existing content preserved)\n", file.Path)
+				label = "kept existing file"
+				fmt.Fprintf(stdout, "kept %s (existing file)\n", file.Path)
 				outcomes = append(outcomes, Outcome{file.Path, label})
 				continue
 			}
@@ -115,15 +115,15 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 				merged, ok := merge(string(old), string(file.Content), boundary)
 				if ok {
 					file.Content = []byte(merged)
-					label = "canon zone merged, existing tail preserved"
+					label = "updated Govna-managed section; kept repository-owned section"
 				} else if file.Path == "govna/build-release.md" {
-					label = "existing content preserved — manual boundary migration required"
-					fmt.Fprintf(stderr, "warning: %s has no `%s` boundary; existing content preserved for manual migration\n", file.Path, boundary)
+					label = "kept existing file; add the missing Govna/local boundary and merge the Govna-managed section manually"
+					fmt.Fprintf(stderr, "warning: %s has no `%s` boundary; kept the existing file; add the named boundary and merge the Govna-managed section manually\n", file.Path, boundary)
 					outcomes = append(outcomes, Outcome{file.Path, label})
 					continue
 				} else {
-					label = "written — no boundary found, blind overwrite"
-					fmt.Fprintf(stderr, "warning: %s has no `%s` boundary; overwriting whole file\n", file.Path, boundary)
+					label = "replaced whole file because the Govna/local boundary was missing"
+					fmt.Fprintf(stderr, "warning: %s has no `%s` boundary; replacing the whole file because the named Govna/local boundary is missing\n", file.Path, boundary)
 				}
 			}
 		}
@@ -138,7 +138,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 			return fail(stderr, err)
 		}
 		os.Chmod(dest, perm)
-		fmt.Fprintf(stdout, "write %s (canon file)\n", file.Path)
+		fmt.Fprintf(stdout, "wrote %s (Govna-managed file)\n", file.Path)
 		outcomes = append(outcomes, Outcome{file.Path, label})
 	}
 	symlink := "created"
@@ -162,7 +162,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	if err := os.WriteFile(filepath.Join(cwd, rel), []byte(body), 0o644); err != nil {
 		return fail(stderr, err)
 	}
-	fmt.Fprintf(stdout, "write %s (adoption record)\n", rel)
+	fmt.Fprintf(stdout, "wrote %s (review AC)\n", rel)
 	if cfg.InitGit {
 		if exists(filepath.Join(cwd, ".git")) {
 			fmt.Fprintln(stdout, "skip git init (git repo already present)")
@@ -328,7 +328,7 @@ func merge(old, fresh, b string) (string, bool) {
 }
 func adoption(n int, name, flavor, programVersion string, out []Outcome, symlink string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%d Govna Apply\n\ngovna executable v%s applied embedded canon v%s (%s overlay) to %s.\n\n## Summary\n\ngovna executable v%s applied embedded canon v%s (%s overlay). Every file listed below is consumer-owned.\n\n## In Scope\n\nFiles written by govna apply:\n\n", n, programVersion, canon.Version, flavor, name, programVersion, canon.Version, flavor)
+	fmt.Fprintf(&b, "# AC%d Review Files Added by Govna\n\nGovna executable v%s added its embedded governance files (canon v%s) for the %s repository %s.\n\n## Summary\n\nGovna executable v%s added its embedded governance files (canon v%s). The list below records whether each file was written, merged, or preserved.\n\n## In Scope\n\nFiles Govna processed:\n\n", n, programVersion, canon.Version, flavor, name, programVersion, canon.Version)
 	for _, o := range out {
 		fmt.Fprintf(&b, "- `%s` (%s)\n", o.Path, o.Label)
 	}
@@ -337,7 +337,7 @@ func adoption(n int, name, flavor, programVersion string, out []Outcome, symlink
 	} else {
 		b.WriteString("- `CLAUDE.md` (existing regular file preserved — not a symlink, see warning)\n")
 	}
-	b.WriteString("\n## Out Of Scope\n\n- All applied files are consumer-owned and can be freely modified\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.\n\n**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).\n\n")
+	b.WriteString("\n## Out Of Scope\n\n- Files not listed above.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.\n\n**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).\n\n")
 	if symlink == "created" {
 		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n")
 	} else {

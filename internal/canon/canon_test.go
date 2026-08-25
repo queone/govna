@@ -50,7 +50,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.35.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.36.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -148,6 +148,17 @@ func TestComparisonRegions(t *testing.T) {
 	}
 }
 
+func TestRendererErrorsExplainTheMissingRequirement(t *testing.T) {
+	if _, err := insertBeforeBoundary("# Guidelines\n", "stack rules"); err == nil || err.Error() != "Govna could not add stack guidance because the ## Project Practices boundary is missing from govna/development-guidelines.md" {
+		t.Fatalf("stack-guidance error=%v", err)
+	}
+	_, err := baseline(map[string][]byte{"AGENTS.md": []byte("# Rules\n")})
+	want := "Govna could not build the baseline for AGENTS.md because its required boundary \"## Project Rules\" is missing"
+	if err == nil || err.Error() != want {
+		t.Fatalf("baseline error=%v", err)
+	}
+}
+
 func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	root := filepath.Join("..", "..")
 	for _, tc := range []struct {
@@ -214,10 +225,14 @@ func TestAuditValidationContract(t *testing.T) {
 		for _, required := range []string{
 			"- Require the selected CODE stack's recognized root manifest before inferring `./build.sh`.",
 			"- Ignore unrelated manifests, other prose, governance documents, executables, CI files, and flavor defaults.",
-			"- Emit an unresolved validation disposition as the final numbered routing decision.",
-			"- Emit one manual resolution AT for an unresolved validation disposition.",
-			"- Emit one automated resolved-disposition AT for an unresolved validation disposition.",
-			"<N>. **Validation disposition**: Which outcome applies after selected work: run a repository validation command, or record `Not applicable` with repository evidence?",
+			"- Start the count paragraph with `Govna found`.",
+			"- Start the repository paragraph with `This AC updates`.",
+			"- Follow it with `The result label (classification)`.",
+			"- Confirm each file selected for update exists in the selected CODE render.",
+			"- Emit an unresolved repository check as the final numbered routing decision.",
+			"- Emit one manual resolution AT for an unresolved repository check.",
+			"- Emit one automated verification AT for an unresolved repository check.",
+			"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
 		} {
 			if strings.Count(string(content), required) != 1 {
 				t.Errorf("%s requires one occurrence of %q", path, required)
@@ -226,6 +241,9 @@ func TestAuditValidationContract(t *testing.T) {
 		for _, removed := range []string{
 			"Ignore other prose, governance documents, executables, manifests, CI files, and flavor defaults.",
 			"existing manual and conditional routing ATs",
+			"Validation disposition",
+			"validation disposition",
+			"This adoption covers",
 		} {
 			if strings.Contains(string(content), removed) {
 				t.Errorf("%s retains superseded claim %q", path, removed)
@@ -249,6 +267,61 @@ func TestGovernanceScenarios(t *testing.T) {
 			if !strings.Contains(agents, required) {
 				t.Errorf("%s AGENTS lacks scenario marker %q", flavor, required)
 			}
+		}
+	}
+}
+
+func TestGovernanceGrowthBaseline(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "governance-growth-baseline.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]string{}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 3 {
+			t.Fatalf("invalid governance-growth line: %q", line)
+		}
+		expected[fields[0]] = fields[1] + "\t" + fields[2]
+	}
+	seen := map[string]bool{}
+	assetRoot := filepath.Join("assets")
+	err = filepath.WalkDir(assetRoot, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		key, err := filepath.Rel(assetRoot, path)
+		if err != nil {
+			return err
+		}
+		key = filepath.ToSlash(key)
+		if key == "base/AGENTS.md.tmpl" {
+			key = "base/AGENTS.md"
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		lines := strings.Count(string(content), "\n")
+		rules := 0
+		for line := range strings.SplitSeq(string(content), "\n") {
+			if strings.HasPrefix(line, "- ") {
+				rules++
+			}
+		}
+		got := fmt.Sprintf("%d\t%d", lines, rules)
+		if expected[key] != got {
+			t.Errorf("%s growth count=%s want=%s", key, got, expected[key])
+		}
+		seen[key] = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key := range expected {
+		if !seen[key] {
+			t.Errorf("governance-growth fixture names missing asset %s", key)
 		}
 	}
 }

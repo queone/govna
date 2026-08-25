@@ -1,40 +1,40 @@
-# AC2 Govna Apply
+# AC2 Review Files Added by Govna
 
-govna executable v9.8.7 applied embedded canon v0.35.0 (CODE overlay) to widget.
+Govna executable v9.8.7 added its embedded governance files (canon v0.36.0) for the CODE repository widget.
 
 ## Summary
 
-govna executable v9.8.7 applied embedded canon v0.35.0 (CODE overlay). Every file listed below is consumer-owned.
+Govna executable v9.8.7 added its embedded governance files (canon v0.36.0). The list below records whether each file was written, merged, or preserved.
 
 ## In Scope
 
-Files written by govna apply:
+Files Govna processed:
 
 - `.gitignore` (written)
-- `AGENTS.md` (canon zone merged, existing tail preserved)
-- `CHANGELOG.md` (existing content preserved)
-- `README.md` (existing content preserved)
-- `arch.md` (existing content preserved)
+- `AGENTS.md` (updated Govna-managed section; kept repository-owned section)
+- `CHANGELOG.md` (kept existing file)
+- `README.md` (kept existing file)
+- `arch.md` (kept existing file)
 - `build.sh` (written)
 - `govna/README.md` (written)
 - `govna/ac-template.md` (written)
 - `govna/audit.md` (written)
-- `govna/build-release.md` (canon zone merged, existing tail preserved)
+- `govna/build-release.md` (updated Govna-managed section; kept repository-owned section)
 - `govna/canon-baseline.txt` (written)
 - `govna/canon-cycle.md` (written)
 - `govna/code-stacks.md` (written)
 - `govna/development-cycle.md` (written)
-- `govna/development-guidelines.md` (canon zone merged, existing tail preserved)
+- `govna/development-guidelines.md` (updated Govna-managed section; kept repository-owned section)
 - `govna/metadata.txt` (written)
 - `govna/operator-contract-rationale.md` (written)
 - `govna/roles.md` (written)
-- `plan.md` (existing content preserved)
+- `plan.md` (kept existing file)
 - `tests/build_cli.sh` (written)
 - `CLAUDE.md` (existing regular file preserved — not a symlink, see warning)
 
 ## Out Of Scope
 
-- All applied files are consumer-owned and can be freely modified
+- Files not listed above.
 
 ## Migration findings
 

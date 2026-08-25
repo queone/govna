@@ -1,14 +1,14 @@
-# AC1 Govna Apply
+# AC1 Review Files Added by Govna
 
-govna executable v9.8.7 applied embedded canon v0.35.0 (CODE overlay) to widget.
+Govna executable v9.8.7 added its embedded governance files (canon v0.36.0) for the CODE repository widget.
 
 ## Summary
 
-govna executable v9.8.7 applied embedded canon v0.35.0 (CODE overlay). Every file listed below is consumer-owned.
+Govna executable v9.8.7 added its embedded governance files (canon v0.36.0). The list below records whether each file was written, merged, or preserved.
 
 ## In Scope
 
-Files written by govna apply:
+Files Govna processed:
 
 - `.gitignore` (written)
 - `AGENTS.md` (written)
@@ -34,7 +34,7 @@ Files written by govna apply:
 
 ## Out Of Scope
 
-- All applied files are consumer-owned and can be freely modified
+- Files not listed above.
 
 ## Migration findings
 

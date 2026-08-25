@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Provide deterministic governance canon and repository lifecycle tooling for CODE and DOC repositories.
+Add, compare, inspect, and remove Govna governance files predictably in CODE and DOC repositories. The versioned governance files built into Govna are its canon.
 
 ## System Summary
 
-Command dispatch, embedded rendering, apply, audit, removal assessment, and product tooling are implemented as a dependency-free Go module.
+One dependency-free Go module handles the complete workflow. It selects the CODE or DOC file set, writes embedded files, compares adopted repositories, prepares removal plans, and validates Govna itself.
 
 ## Current Platform
 
@@ -14,15 +14,15 @@ Command dispatch, embedded rendering, apply, audit, removal assessment, and prod
 
 ## Major Components
 
-- `cmd/govna`: command dispatch, version and usage output, terminal-color gating, and operational render, apply, audit, and removal handlers.
-- `internal/canon`: embedded canon assets, substitutions, overlay composition, and deterministic baseline generation.
-- `internal/render`: render argument handling, cwd inference, validation, and filesystem emission.
-- `internal/repository`: shared repository identity and source-checkout resolution.
-- `internal/apply`: fresh/existing adoption, protected writes, boundary merging, symlink handling, and optional Git initialization.
-- `internal/audit`: strict durable-state parsing, ordered canon classification, bounded target-only evidence, deterministic reports, and non-mutating audit orchestration.
-- `internal/remove`: deterministic delete, keep, and review classification with no-follow target traversal and non-destructive removal-AC emission.
-- `internal/buildtest`: isolated product-tooling fixtures and normalized output contracts.
-- `internal/emission`: monotonic AC numbering and guarded stem/version-keyed stub reuse with body-hash edit detection.
+- `cmd/govna`: accepts commands and prints help, versions, colored terminal text, and command results.
+- `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, and creates deterministic baselines.
+- `internal/render`: writes a selected file set to a directory after resolving and validating command options.
+- `internal/repository`: determines repository type, stack, module path, name, adoption state, and source-checkout identity.
+- `internal/apply`: adds Govna files to new or existing repositories while protecting local sections and optional Git state.
+- `internal/audit`: rejects malformed saved Govna state before comparing files, explains each exact classification label, and reviews extra repository files only when specific Govna evidence identifies them.
+- `internal/remove`: determines which files can be deleted, must be kept, or need a Director choice without following symlinks or deleting content.
+- `internal/buildtest`: checks product tooling in isolated repositories with stable expected output.
+- `internal/emission`: chooses the next AC number, reuses an unedited AC for the same canon version, and rejects edited generated bodies.
 - Governance and release scaffolding.
 
 ## Core Files
@@ -37,15 +37,17 @@ Command dispatch, embedded rendering, apply, audit, removal assessment, and prod
 
 ## Data And Control Flow
 
-`main` detects stderr terminal capability and passes it with environment lookup and output writers to the command runner. The runner routes render requests into `internal/render`, which resolves cwd identity and asks `internal/canon` for a path-sorted in-memory file set. The renderer writes that set without pre-cleaning, applies deterministic modes, installs the baseline, and recreates the `CLAUDE.md` symlink.
+The executable first detects whether stderr supports terminal color. Its command runner then sends each request to the matching package with explicit output writers and environment access.
 
-Apply resolves the cwd through `internal/repository`, renders the same canon set, then writes all files in new mode or preserves and boundary-merges settled paths in existing mode. `internal/emission` writes one ordinary adoption AC whose prose identifies the executable and embedded-canon versions separately. Apply never reads or changes legacy `governa/` content. Git initialization is an optional final step and uses `main` only.
+Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, and writes it without first emptying the target. It applies deterministic file modes, writes the baseline—the saved hashes of installed Govna-managed regions—and recreates the `CLAUDE.md` symlink.
 
-Audit resolves and validates an adopted Git worktree, parses metadata plus baseline and preserve control state, and compares canon-owned regions in byte order. It uses baseline hashes for ordinary drift, bounded Git history only for first-baseline migration, and merged baseline, tombstone, all-stack cross-flavor, or divergent-reference evidence for target-only paths. Clean audits allocate and write nothing. Actionable audits write or reuse only one unedited canon-version-keyed AC stub whose marker records both version axes; an unedited legacy canon-only marker upgrades at the same path and AC number. JSON uses the same report model.
+Apply determines repository identity through `internal/repository`, renders the selected embedded files, and either writes them into a new repository or merges registered Govna sections into an existing one. Adding those files is adoption. `internal/emission` writes one adoption AC that names the executable version and canon version separately. Apply never reads or changes legacy `governa/` content. Optional Git initialization runs last.
 
-Removal resolves the same repository identity and strict preserve state, then compares existing current-canon files and traverses target-only entries without following symlinks. It sorts ordinary deletion, keep, and review routes; places preserve control-state removal last; and writes or byte-identically reuses one canon-version-keyed guarded removal AC with the same dual-axis and legacy-upgrade behavior as audit. It executes no route and excludes only its eligible emitted stub from target-only classification.
+Audit validates a repository that has adopted Govna, reads metadata, the baseline, and the optional preserve registry—the files a Director chose to keep local—and compares Govna-managed regions in byte order. Each exact classification label explains whether a file needs no update, can be updated safely, stays local, or needs a Director choice. Clean audits write nothing. Actionable audits write or reuse one unedited AC keyed by canon version. Its marker records the executable and canon versions separately, and JSON uses the same report data.
 
-The canonical Go build discovers regular command entry points, validates their literal versions, compiles into invocation-owned external storage, validates compiled output, and only then replaces safe install destinations. Go release prep runs ordinary canonical validation before and after mutation and prints rather than executes the release command. Validation-token and baseline-refresh behavior remains specific to Rust tooling.
+Removal reads the same repository identity and preserve information. It compares current Govna files and examines repository-only entries without following symlinks. It sorts files into remove, keep, and Director-choice groups, removes preserve control state last, and writes or safely reuses one canon-version-keyed removal AC. The removal marker records executable and canon versions separately and upgrades unedited legacy markers. The command carries out no removal choice.
+
+The canonical Go build discovers regular command entry points, checks their literal versions, compiles into invocation-owned external storage, validates the compiled programs, and only then replaces safe install destinations. Go release prep validates before and after its edits and prints the release command without running it. Validation-token and baseline-refresh behavior remains specific to Rust tooling.
 
 ## AC Lifecycle Control Flow
 

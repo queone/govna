@@ -12,6 +12,10 @@ import (
 	"github.com/queone/govna/internal/repository"
 )
 
+func userMessageErrorf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
+}
+
 func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	flavor, stack, modulePath, target, code := parse(args, stderr)
 	if code != 0 {
@@ -19,7 +23,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	}
 	resolvedFlavor, err := repository.Flavor(cwd, flavor)
 	if err != nil {
-		fmt.Fprintf(stderr, "infer flavor from cwd: %v (use --flavor to override)\n", err)
+		fmt.Fprintf(stderr, "%v\n", err)
 		return 1
 	}
 	if resolvedFlavor == canon.Doc && stack != "" {
@@ -194,7 +198,7 @@ func resolveFlavor(cwd, explicit string) (canon.Flavor, error) {
 		}
 	}
 	if hasCode && hasJekyll {
-		return "", fmt.Errorf("conflicting flavor signals: target has _config.yml and a strong CODE manifest; pass --flavor code or --flavor doc")
+		return "", userMessageErrorf("Govna found both CODE and DOC evidence: the repository has _config.yml and a CODE project manifest; pass --flavor code or --flavor doc")
 	}
 	if hasCode {
 		return canon.Code, nil
@@ -202,7 +206,7 @@ func resolveFlavor(cwd, explicit string) (canon.Flavor, error) {
 	if hasJekyll {
 		return canon.Doc, nil
 	}
-	return "", fmt.Errorf("could not infer flavor: add govna/metadata.txt, pass --flavor code|doc, or add a recognized flavor manifest")
+	return "", userMessageErrorf("Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest")
 }
 
 func inferStack(cwd string) string {

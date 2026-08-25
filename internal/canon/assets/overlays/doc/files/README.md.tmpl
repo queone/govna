@@ -4,14 +4,14 @@ Describe what this repo publishes and who it serves.
 
 ## Why
 
-State why this repo exists — what content it carries, what audience it serves, and why that work belongs here rather than elsewhere.
+Describe the concrete publishing need this repository serves, its audience, and why the content belongs here.
 
 ## Governance
 
-This repo is governed by an explicit session-entry contract for AI coding agents — see [`govna/operator-contract-rationale.md`](govna/operator-contract-rationale.md) for the design reasoning and [`AGENTS.md`](AGENTS.md) for the operational rules.
+[`AGENTS.md`](AGENTS.md) states the working rules for human Directors and agent Operators. [`govna/operator-contract-rationale.md`](govna/operator-contract-rationale.md) explains why those session-entry rules exist.
 
 ## AC Workflow
 
-Here, "AC" names both the acceptance-criteria document—the change blueprint—and the governed change it tracks from Draft through Package.
+An acceptance-criteria document defines one bounded content change, its scope, and its tests. The short label AC refers both to that document and to the change it tracks.
 
-Use the standalone action vocabulary `Draft → Audit → Refine → Implement → Ratify → Package` for an active AC. Draft creates the AC; Audit, Refine, Implement, and Ratify are the four AC phases; Package is post-Ratify release preparation. Accept lowercase forms for the phase actions and `package`, `pack`, or `prep` for Package. Ordinary coding phrases such as `build`, `prepare the build`, and `package the binary` do not advance the workflow.
+Use `Draft → Audit → Refine → Implement → Ratify → Package` for an active AC. Draft writes the document. Audit challenges it without edits. Refine resolves findings in the document. Implement makes and verifies the settled content change. Ratify performs final acceptance review. Package prepares the accepted change for release. Lowercase phase names and `package`, `pack`, or `prep` carry the same workflow meanings. Ordinary coding phrases such as `build`, `prepare the build`, and `package the binary` do not advance the workflow.

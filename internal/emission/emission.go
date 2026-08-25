@@ -18,6 +18,10 @@ var filePattern = regexp.MustCompile(`^ac([0-9]+)-`)
 const AuditMarkerPrefix = "<!-- audit: emitted-by govna "
 const RemovalMarkerPrefix = "<!-- govna-rm: emitted-by govna "
 
+func userMessageErrorf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
+}
+
 // GuardedPath allocates or reuses the sole stem-and-version-keyed AC stub.
 func GuardedPath(root, stem, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
 	dir := filepath.Join(root, "govna")
@@ -31,7 +35,7 @@ func GuardedPath(root, stem, version string, command func(string, ...string) ([]
 	}
 	sort.Strings(matches)
 	if len(matches) > 1 {
-		return "", false, fmt.Errorf("multiple emitted AC stubs for %s %s: %v", stem, version, matches)
+		return "", false, userMessageErrorf("Govna found more than one generated %s AC for canon %s: %v. Rename extra files so only one matches before retrying", stem, version, matches)
 	}
 	if len(matches) == 1 {
 		return matches[0], true, nil
@@ -45,11 +49,7 @@ func GuardedPath(root, stem, version string, command func(string, ...string) ([]
 
 // AuditPath allocates or reuses the sole canon-version-keyed audit stub.
 func AuditPath(root, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
-	path, reused, err := GuardedPath(root, "audit", version, command)
-	if err != nil && strings.HasPrefix(err.Error(), "multiple emitted AC stubs") {
-		return "", false, fmt.Errorf("audit: multiple matching audit stubs for %s", version)
-	}
-	return path, reused, err
+	return GuardedPath(root, "audit", version, command)
 }
 
 // GuardedBody wraps body with deterministic executable and canon provenance.
@@ -115,7 +115,7 @@ func Next(root string, command func(string, ...string) ([]byte, error)) (int, er
 	if err != nil {
 		text := string(out)
 		if !strings.Contains(text, "not a git repository") && !strings.Contains(text, "does not have any commits") && !strings.Contains(text, "bad default revision") && !strings.Contains(text, "Not a valid object name") {
-			return 0, fmt.Errorf("read git log for AC-number allocation in %s: %w: %s", root, err, strings.TrimSpace(text))
+			return 0, userMessageErrorf("Govna could not read Git history to choose the next AC number in %s: %w: %s. Fix Git access before retrying", root, err, strings.TrimSpace(text))
 		}
 		out = nil
 	}

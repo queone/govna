@@ -1,35 +1,35 @@
-# AC7 Govna Removal from v0.35.0
+# AC7 Review Removal of Govna Files
 
 ## Summary
 
-This removal AC was emitted by govna executable v9.8.7 with embedded canon v0.35.0. It removes Govna canon from this consumer repository without deleting consumer-owned content. Director-resolved routing protects every review path.
+Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.36.0). This AC removes Govna-managed content without deleting repository-owned content. Files needing a choice stay unchanged until the Director decides what to do.
 
 ### Removal Instructions
 
-- Render the selected canon into `<scratch>` with `govna render --flavor code --stack Go <scratch>`.
-- Preserve every routing-pending path until its route is resolved.
-- Resolve every routing decision in chat.
-- Apply each in-scope route and each Director-resolved review route.
+- Create a temporary copy of the selected Govna files with `govna render --flavor code --stack Go <scratch>`.
+- Preserve every file under Routing Decisions until the Director resolves it.
+- Resolve every Director choice in chat.
+- Apply each in-scope removal and Director choice.
 
 ### Routing Decisions
 
-1. `README.md` is mixed canon-shape and consumer content.
+1. `README.md`: contains both Govna-managed and repository-owned content.
    - Compare `README.md` with `diff -ru <scratch>/README.md README.md`.
-   - Choose one route for `README.md`: canon-only deletion, full preservation, or full deletion.
-2. `govna/metadata.txt` is consumer-edited canon file.
+   - Choose what to remove from `README.md`: only its Govna-managed section, nothing, or the whole file.
+2. `govna/metadata.txt`: Govna-managed file has local edits.
    - Compare `govna/metadata.txt` with `diff -ru <scratch>/govna/metadata.txt govna/metadata.txt`.
-   - Choose one route for `govna/metadata.txt`: canon-only deletion, full preservation, or full deletion.
+   - Choose what to remove from `govna/metadata.txt`: only its Govna-managed section, nothing, or the whole file.
 
 ## In Scope
 
 - `CLAUDE.md` — delete symlink; govna compatibility link.
-- `govna/roles.md` — delete file; byte-equal govna canon.
+- `govna/roles.md` — delete file; matches the current Govna file exactly.
 - `govna/preserve.txt` — delete control state last; preserve decisions applied before registry removal.
 
 ## Out Of Scope
 
-- `custom.md` — keep; target-only repo-owned file.
-- `plan.md` — keep; repo-owned govna-adjacent content.
+- `custom.md` — keep; repository-owned file not managed by Govna.
+- `plan.md` — keep; repository-owned file not managed by Govna.
 
 ## Migration findings
 
@@ -39,9 +39,9 @@ This removal AC was emitted by govna executable v9.8.7 with embedded canon v0.35
 
 **AT1** [Automated] [Pre-release gate] — Verify every resolved removal target under `## In Scope` is absent.
 
-**AT2** [Manual] [Pre-release gate] — Verify every routing-pending path matches its Director-resolved route.
+**AT2** [Manual] [Pre-release gate] — Verify every file under Routing Decisions matches its Director-resolved action.
 
-**AT3** [Automated] [Pre-release gate] — Verify every preserve-registry decision is applied before the final removal of `govna/preserve.txt`.
+**AT3** [Automated] [Pre-release gate] — Verify every keep-local choice is applied before the final removal of `govna/preserve.txt`.
 
 ## Status
 

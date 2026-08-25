@@ -23,17 +23,14 @@ var acDocument = regexp.MustCompile(`^ac[0-9]+-`)
 var instructionExceptions = []instructionException{
 	{"AGENTS.md", "Ask the Director to narrow the task or split the AC before proposing delegation when the task exceeds practical inline capacity.", "one ask action offers two exclusive request objects"},
 	{"AGENTS.md", "Map every in-scope command entry point, provider/API fetch, normalized-table write, durable snapshot, stale fallback, freshness gate, and complete-snapshot reconciliation path in the closure audit.", "one map action applies to a path-category list"},
-	{"AGENTS.md", "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test, routing outcome, and validation disposition passes.", "exclusive operations apply to one target state"},
 	{"AGENTS.md", "Reach for `Read` only to fetch unseen content or check for recent changes.", "one reach action has two exclusive purposes"},
 	{"govna/development-cycle.md", "Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.", "one keep action applies to two object classes"},
 	{"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl", "Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.", "one keep action applies to two object classes"},
 	{"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl", "Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.", "one keep action applies to two object classes"},
 	{"internal/canon/assets/base/AGENTS.md.tmpl", "Ask the Director to narrow the task or split the AC before proposing delegation when the task exceeds practical inline capacity.", "one ask action offers two exclusive request objects"},
 	{"internal/canon/assets/base/AGENTS.md.tmpl", "Map every in-scope command entry point, provider/API fetch, normalized-table write, durable snapshot, stale fallback, freshness gate, and complete-snapshot reconciliation path in the closure audit.", "one map action applies to a path-category list"},
-	{"internal/canon/assets/base/AGENTS.md.tmpl", "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test, routing outcome, and validation disposition passes.", "exclusive operations apply to one target state"},
 	{"internal/canon/assets/base/AGENTS.md.tmpl", "Reach for `Read` only to fetch unseen content or check for recent changes.", "one reach action has two exclusive purposes"},
 	{"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl", "Ask the Director to narrow the task or split the AC before proposing delegation when the task exceeds practical inline capacity.", "one ask action offers two exclusive request objects"},
-	{"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl", "Install or replace `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test, routing outcome, and validation disposition passes.", "exclusive operations apply to one target state"},
 	{"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl", "Reach for `Read` only to fetch unseen content or check for recent changes.", "one reach action has two exclusive purposes"},
 	{"internal/canon/assets/overlays/code/files/arch.md.tmpl", "storage, messaging, or state boundaries", "architecture-outline list item is not an instruction"},
 }
@@ -159,6 +156,17 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 	{"Update every reference in the same pass.", "Update every reference in the same pass.", editingRewrittenPaths, reviewClean},
 }
 
+var currentInstructionReplacements = map[string]string{
+	"Start the count paragraph with `This adoption covers`.": "Start the count paragraph with `Govna found`.",
+}
+
+func currentReviewedInstruction(review rewrittenInstructionReview) string {
+	if current, ok := currentInstructionReplacements[review.v033]; ok {
+		return current
+	}
+	return review.v033
+}
+
 type generatedInstructionTemplate struct {
 	id   string
 	text string
@@ -169,42 +177,44 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I02", "Verify govna/roles.md reflects the repository's delivery model (Operator + Director)."},
 	{"I03", "Verify CLAUDE.md is a symlink to AGENTS.md."},
 	{"I04", "Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md."},
-	{"I05", "Resolve every routing decision in chat."},
-	{"I06", "Leave this emitted stub unchanged."},
-	{"I07", "Render canon into a scratch directory."},
-	{"I08", "Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition."},
-	{"I09", "Apply every resolved outcome within the authorized content boundaries."},
-	{"I10", "Install govna/canon-baseline.txt last."},
-	{"I11", "Remove the legacy preserve phrase for <path> only after the required sync and registry state are verified."},
-	{"I12", "Create govna/canon-baseline.txt from the final scratch render only after all other work and validation pass."},
-	{"I13", "Create govna/metadata.txt from the selected scratch render before govna/canon-baseline.txt installation."},
-	{"I14", "Create <path> from the selected scratch render."},
-	{"I15", "Verify every resolved sync target except govna/canon-baseline.txt against rendered canon and every resolved preserve target against govna/preserve.txt."},
-	{"I16", "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any sync outcome."},
-	{"I17", "Satisfy validation disposition <validation> after selected work and before baseline installation."},
-	{"I18", "Verify the final adoption step installed govna/canon-baseline.txt from the same scratch render."},
-	{"I19", "Render the selected canon into <scratch> with <render-command>."},
-	{"I20", "Preserve every routing-pending path until its route is resolved."},
-	{"I21", "Apply each in-scope route and each Director-resolved review route."},
-	{"I22", "Apply each in-scope route."},
+	{"I05", "Resolve every Director choice in chat."},
+	{"I06", "Leave this generated AC unchanged."},
+	{"I07", "Create a temporary copy of the embedded Govna files with govna render."},
+	{"I08", "Confirm each file selected for update exists in the selected CODE render."},
+	{"I09", "Apply each Director choice only to its authorized file region."},
+	{"I10", "Write govna/canon-baseline.txt as the final file update."},
+	{"I11", "Remove the legacy preserve phrase for <path> only after the file update and preserve-list state are verified."},
+	{"I12", "Write govna/canon-baseline.txt from the final temporary render only after all other work is complete and the repository check succeeds."},
+	{"I13", "Create govna/metadata.txt from the selected temporary render before govna/canon-baseline.txt installation."},
+	{"I14", "Create <path> from the selected temporary render."},
+	{"I15", "Verify every file selected for update except govna/canon-baseline.txt against the rendered Govna files and every preserved file against govna/preserve.txt."},
+	{"I16", "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any update choice."},
+	{"I17", "Run <command> after the selected file updates and before govna/canon-baseline.txt installation (<evidence>)."},
+	{"I18", "Verify the final file update installed govna/canon-baseline.txt from the same temporary render."},
+	{"I19", "Create a temporary copy of the selected Govna files with <render-command>."},
+	{"I20", "Preserve every file under Routing Decisions until the Director resolves it."},
+	{"I21", "Apply each in-scope removal and Director choice."},
+	{"I22", "Apply each in-scope removal."},
 	{"I23", "Compare <path> with <diff-command>."},
-	{"I24", "Choose one route for <path>: canon-only deletion, full preservation, or full deletion."},
+	{"I24", "Choose what to remove from <path>: only its Govna-managed section, nothing, or the whole file."},
 	{"I25", "Verify every resolved removal target under ## In Scope is absent."},
-	{"I26", "Verify every routing-pending path matches its Director-resolved route."},
-	{"I27", "Verify every preserve-registry decision is applied before the final removal of govna/preserve.txt."},
-	{"I28", "Resolve the validation disposition in chat."},
-	{"I29", "Satisfy the resolved validation disposition after selected work and before baseline installation."},
+	{"I26", "Verify every file under Routing Decisions matches its Director-resolved action."},
+	{"I27", "Verify every keep-local choice is applied before the final removal of govna/preserve.txt."},
+	{"I28", "Choose the repository check in chat."},
+	{"I29", "Verify the chosen repository check succeeds before govna/canon-baseline.txt installation."},
 }
 
-var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)\b|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)\b`)
+var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
 
 var (
-	legacyPreserveInstruction  = regexp.MustCompile("^Remove the legacy preserve phrase for `[^`]+` only after the required sync and registry state are verified\\.$")
-	protectedRegionInstruction = regexp.MustCompile("^Preserve the protected region in `[^`]+` from `[^`]+` through EOF with SHA-256 `[^`]+` for any sync outcome\\.$")
-	renderRemovalInstruction   = regexp.MustCompile("^Render the selected canon into `<scratch>` with `govna render --flavor (?:doc|code(?: --stack [^`]+)?) <scratch>`\\.$")
+	legacyPreserveInstruction  = regexp.MustCompile("^Remove the legacy preserve phrase for `[^`]+` only after the file update and preserve-list state are verified\\.$")
+	protectedRegionInstruction = regexp.MustCompile("^Preserve the protected region in `[^`]+` from `[^`]+` through EOF with SHA-256 `[^`]+` for any update choice\\.$")
+	inferredCheckInstruction   = regexp.MustCompile("^Run `[^`]+` after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
+	notApplicableInstruction   = regexp.MustCompile("^Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
+	renderRemovalInstruction   = regexp.MustCompile("^Create a temporary copy of the selected Govna files with `govna render --flavor (?:doc|code(?: --stack [^`]+)?) <scratch>`\\.$")
 	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff -ru <scratch>/[^`]+ [^`]+`\\.$")
-	chooseRemovalInstruction   = regexp.MustCompile("^Choose one route for `[^`]+`: canon-only deletion, full preservation, or full deletion\\.$")
-	otherMigrationInstruction  = regexp.MustCompile("^Create `[^`]+` from the selected scratch render\\.$")
+	chooseRemovalInstruction   = regexp.MustCompile("^Choose what to remove from `[^`]+`: only its Govna-managed section, nothing, or the whole file\\.$")
+	otherMigrationInstruction  = regexp.MustCompile("^Create `[^`]+` from the selected temporary render\\.$")
 )
 
 var generatedProseStarters = func() map[string]bool {
@@ -333,16 +343,16 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 func TestGeneratedInstructionDocumentation(t *testing.T) {
 	expectations := map[string][]string{
 		"README.md": {
-			"executable version separately from the embedded canon version",
+			"executable version—the version of the installed `govna` program—separately from the canon version",
 			"stub filenames remain keyed by canon version",
 			"legacy canon-only marker upgrades in place",
-			"semantic instruction gate",
+			"language checks run separately from byte-for-byte fixture comparisons",
 		},
 		"arch.md": {
-			"executable and embedded-canon versions separately",
-			"canon-version-keyed AC stub",
-			"legacy canon-only marker upgrades at the same path and AC number",
-			"same dual-axis and legacy-upgrade behavior",
+			"executable version and canon version separately",
+			"one unedited AC keyed by canon version",
+			"marker records the executable and canon versions separately",
+			"one canon-version-keyed removal AC",
 		},
 	}
 	root := filepath.Join("..", "..")
@@ -359,8 +369,205 @@ func TestGeneratedInstructionDocumentation(t *testing.T) {
 	}
 }
 
+func TestPlainLanguageContractAndMirrors(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	}
+	required := []string{
+		"### Plain Language\n\n- Apply plain-language rules to responses, ACs, findings, completion reports, and release summaries.\n- Lead with the concrete problem, effect, or decision in plain language.\n- Pair each necessary Govna label with its plain-language meaning at first use.",
+		"- Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.",
+		"- Confirm the AC title and Summary lead with the concrete outcome in plain language.",
+		"- Resolve an unresolved emitted repository check in chat.",
+		"- Run the chosen repository command after all selected sync, migration, and deletion work.",
+		"- Cite repository evidence when choosing `Not applicable` for the repository check.",
+		"- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.",
+	}
+	for _, path := range paths {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range required {
+			if strings.Count(string(content), text) != 1 {
+				t.Errorf("%s requires one occurrence of %q", path, text)
+			}
+		}
+	}
+}
+
+func TestPlainLanguageFirstUseExplanations(t *testing.T) {
+	root := filepath.Join("..", "..")
+	checks := map[string][]string{
+		"README.md": {
+			"That embedded file set is the canon.",
+			"Adding Govna's governance files to a repository is adoption.",
+			"selected CODE or DOC file set (the flavor)",
+			"executable version—the version of the installed `govna` program—separately from the canon version",
+			"baseline, the saved hashes of Govna-managed file regions previously installed there",
+			"preserve registry, the list of files a Director chose to keep local",
+			"classification, which is the exact result label explaining its state",
+			"routing decision: a Director choice to update, keep, migrate, or remove the file",
+			"repository check, meaning the command to run after updates or the reason no command applies",
+			"This temporary copy is a scratch render",
+			"A consumer repository is any repository that has adopted Govna.",
+		},
+		"govna/roles.md": {
+			"effective implementation scope as a narrow exception for a directly broken supporting artifact whose result the Director already settled",
+			"bounded completeness correction as an Implement-time fix for a missed path or instruction whose required result is already settled by the active AC",
+		},
+		"govna/operator-contract-rationale.md": {
+			"A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug.",
+			"A contract-growth review checks whether new rules duplicate, hide, misplace, or crowd out existing rules.",
+			"final read-only closure audit",
+			"final AC wording and scope check called Pre-Implementation Verification",
+		},
+	}
+	for path, phrases := range checks {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, phrase := range phrases {
+			if !strings.Contains(string(content), phrase) {
+				t.Errorf("%s omits first-use explanation %q", path, phrase)
+			}
+		}
+	}
+}
+
+func TestScopedPlainLanguageReplacements(t *testing.T) {
+	type replacement struct {
+		path, legacy, current string
+	}
+	checks := []replacement{
+		{"govna/audit.md", "Start the count paragraph with `This adoption covers`.", "Start the count paragraph with `Govna found`."},
+		{"govna/audit.md", "Start the Summary sentences with `This audit adoption synchronizes`", "Start the repository paragraph with `This AC updates`."},
+		{"govna/audit.md", "Audit surfaced", "Follow it with `The result label (classification)`."},
+		{"internal/audit/audit.go", " Audit v", "Review Govna File Updates"},
+		{"internal/audit/audit.go", "This adoption covers", "Govna found %s, %s, %s, and %s."},
+		{"internal/audit/audit.go", "This audit adoption synchronizes", "This AC updates"},
+		{"internal/audit/audit.go", "Per-file inspection uses rendered canon", "The result label (classification) beside each path explains why Govna can update it"},
+		{"internal/audit/audit.go", "Validation disposition", "**Repository check**"},
+		{"internal/audit/audit.go", "Which outcome applies after selected work", "Which command should run after the selected file updates"},
+		{"internal/audit/audit.go", "Resolve the validation disposition in chat.", "Choose the repository check in chat."},
+		{"internal/audit/audit.go", "Satisfy the resolved validation disposition", "Verify the chosen repository check succeeds"},
+		{"internal/audit/audit.go", "Satisfy validation disposition", "Run `./build.sh` after the selected file updates"},
+		{"internal/audit/audit.go", "Verify every direct-sync and canon-backed migration path", "Confirm each file selected for update exists in the selected CODE render."},
+		{"internal/remove/remove.go", "Govna Removal from", "Review Removal of Govna Files"},
+		{"internal/remove/remove.go", "This removal AC was emitted by govna executable", "Govna executable v%s created this removal plan from its embedded governance files"},
+		{"internal/remove/remove.go", "It removes Govna canon from this consumer repository", "This AC removes Govna-managed content without deleting repository-owned content."},
+		{"internal/remove/remove.go", "Director-resolved routing protects every review path", "Files needing a choice stay unchanged until the Director decides what to do."},
+		{"internal/remove/remove.go", "routing-pending path", "file under Routing Decisions"},
+		{"internal/remove/remove.go", "mixed canon-shape and consumer content", "contains both Govna-managed and repository-owned content"},
+		{"internal/remove/remove.go", "consumer-edited canon file", "Govna-managed file has local edits"},
+		{"internal/remove/remove.go", "byte-equal govna canon", "matches the current Govna file exactly"},
+		{"internal/remove/remove.go", "target-only repo-owned file", "repository-owned file not managed by Govna"},
+		{"internal/remove/remove.go", "repo-owned govna-adjacent content", "repository-owned file not managed by Govna"},
+		{"internal/remove/remove.go", "Choose one route for", "Choose what to remove from"},
+		{"internal/apply/apply.go", "repo-shape", "repository type"},
+		{"internal/apply/apply.go", "signals: code=", "type evidence: CODE score="},
+		{"internal/apply/apply.go", "existing-artifacts", "existing files"},
+		{"internal/apply/apply.go", "overwrite-risk", "risk of replacing content"},
+		{"internal/apply/apply.go", "existing governance files detected; apply will overwrite them", "existing governance files detected; Govna will report whether each file is written, merged, or preserved"},
+		{"internal/apply/apply.go", "canon zone merged, existing tail preserved", "updated Govna-managed section; kept repository-owned section"},
+		{"internal/apply/apply.go", "existing content preserved — manual boundary migration required", "kept existing file; add the missing Govna/local boundary and merge the Govna-managed section manually"},
+		{"internal/apply/apply.go", "written — no boundary found, blind overwrite", "replaced whole file because the Govna/local boundary was missing"},
+		{"internal/apply/apply.go", "existing content preserved for manual migration", "kept the existing file; add the named boundary and merge the Govna-managed section manually"},
+		{"internal/apply/apply.go", "overwriting whole file", "replacing the whole file because the named Govna/local boundary is missing"},
+		{"internal/apply/apply.go", "Govna Apply", "Review Files Added by Govna"},
+		{"internal/apply/apply.go", "applied embedded canon", "added its embedded governance files"},
+		{"internal/apply/apply.go", "Every file listed below is consumer-owned", "The list below records whether each file was written, merged, or preserved."},
+		{"cmd/govna/main.go", "Repo governance templates", "Add and maintain Govna governance files"},
+		{"cmd/govna/main.go", "apply governance template to a repo", "add Govna governance files to a repository"},
+		{"cmd/govna/main.go", "drift scan an adopted repo against govna canon", "check a repository with Govna for updates and local changes"},
+		{"cmd/govna/main.go", "emit cleanup AC for removing govna canon", "write a reviewable AC for removing Govna files"},
+		{"cmd/govna/main.go", "render flavor-specific canon files into a target directory", "write the selected built-in Govna files to a directory"},
+		{"cmd/govna/main.go", "print binary and embedded canon versions", "print executable and embedded governance-file versions"},
+		{"cmd/govna/main.go", "print binary version", "print executable version"},
+		{"cmd/govna/main.go", "govna binary:", "Govna executable version:"},
+		{"cmd/govna/main.go", "embedded canon:", "Embedded governance-file version (canon version):"},
+		{"cmd/govna/main.go", "Scan an adopted-govna repo against canon.", "Compare a repository's Govna files with the files built into this executable."},
+		{"cmd/govna/main.go", "Emits an AC stub under govna/.", "Writes a reviewable"},
+		{"cmd/govna/main.go", "Apply governance template to the current directory", "Add Govna governance files to the current directory."},
+		{"cmd/govna/main.go", "Detects repo state, resolves missing parameters", "Govna identifies the"},
+		{"cmd/govna/main.go", "Render canon files into <target>/", "Write the selected built-in Govna files to <target>/"},
+		{"internal/remove/remove.go", "Emit a Director-reviewed cleanup AC", "Write an AC that lists which Govna files can be removed"},
+		{"internal/audit/audit.go", "clean (%s); no AC emitted", "No Govna updates or Director choices found"},
+		{"internal/audit/audit.go", "wrote %s (%s)", "Wrote %s for review"},
+		{"internal/audit/audit.go", "byte-equal with embedded canon", "matches the embedded Govna file"},
+		{"internal/audit/audit.go", "target missing; compare embedded canon", "repository is missing"},
+		{"internal/audit/audit.go", "inspect target-only file", "because it is not in the selected embedded Govna files"},
+		{"internal/audit/audit.go", "compare embedded canon with target", "compare the embedded Govna file with the repository file"},
+		{"internal/repository/repository.go", "conflicting flavor signals", "Govna found both CODE and DOC evidence"},
+		{"internal/repository/repository.go", "could not infer flavor", "Govna could not determine whether this is a CODE or DOC repository"},
+		{"internal/repository/repository.go", "repository has no govna adoption signal", "Govna could not find the files that confirm Govna was added to this repository"},
+		{"internal/render/render.go", "conflicting flavor signals", "Govna found both CODE and DOC evidence"},
+		{"internal/render/render.go", "could not infer flavor", "Govna could not determine whether this is a CODE or DOC repository"},
+		{"internal/audit/audit.go", "canon-coherence precondition failed", "Govna's embedded files disagree with each other"},
+		{"internal/emission/emission.go", "multiple emitted AC stubs", "Govna found more than one generated"},
+		{"internal/emission/emission.go", "audit: multiple matching audit stubs", "Rename extra files so only one matches before retrying"},
+		{"internal/canon/canon.go", "compose stack build/release guidance", "Govna could not load the Rust build and release guidance"},
+		{"internal/canon/canon.go", "compose stack guidelines: ## Project Practices boundary not found", "Govna could not add stack guidance because the ## Project Practices boundary is missing"},
+		{"internal/canon/canon.go", "render baseline:", "Govna could not build the baseline for"},
+		{"arch.md", "strict durable-state parsing", "rejects malformed saved Govna state before comparing files"},
+		{"arch.md", "bounded target-only evidence", "reviews extra repository files only when specific Govna evidence identifies them"},
+		{"arch.md", "guarded stem/version-keyed stub reuse with body-hash edit detection", "reuses an unedited AC for the same canon version"},
+		{"arch.md", "dual-axis and legacy-upgrade behavior", "records executable and canon versions separately and upgrades unedited legacy markers"},
+		{"govna/operator-contract-rationale.md", "deterministic fallout", "one directly broken supporting file with only one valid correction"},
+		{"govna/operator-contract-rationale.md", "Evidence-triggered reporting distinguishes contract defects", "A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug."},
+		{"govna/operator-contract-rationale.md", "Atomicity reduces dropped qualifiers", "A contract-growth review checks whether new rules duplicate, hide, misplace, or crowd out existing rules."},
+		{"govna/operator-contract-rationale.md", "the three-round limit returns repeated or decision-bearing churn", "The Operator may correct at most three missed paths or instructions before asking the Director again."},
+	}
+	root := filepath.Join("..", "..")
+	for _, check := range checks {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(check.path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(content), check.legacy) {
+			t.Errorf("%s retains scoped legacy wording %q", check.path, check.legacy)
+		}
+		if !strings.Contains(string(content), check.current) {
+			t.Errorf("%s omits scoped replacement %q", check.path, check.current)
+		}
+	}
+	if !strings.Contains(readSourceForLanguageTest(t, "internal/audit/audit.go"), "validationDisposition") {
+		t.Error("path-specific checks must permit the unchanged internal validationDisposition identifier")
+	}
+}
+
+func TestManualACTitleAndSummaryScenario(t *testing.T) {
+	legacy := "gate audit validation on stack manifest reachability"
+	want := "avoid invalid repository checks when required project files are missing"
+	if legacy == want || !strings.HasPrefix(want, "avoid invalid repository checks") {
+		t.Fatalf("manual AC title scenario was not replaced: %q", want)
+	}
+	content := readSourceForLanguageTest(t, "govna/ac-template.md")
+	for _, requirement := range []string{
+		"Use a kebab-case slug and a `# AC<N> Title` heading that names the concrete outcome.",
+		"Lead with the concrete outcome in one short paragraph.",
+		"Explain each necessary Govna label before relying on it.",
+	} {
+		if !strings.Contains(content, requirement) {
+			t.Errorf("manual AC gate omits %q", requirement)
+		}
+	}
+}
+
+func readSourceForLanguageTest(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(content)
+}
+
 func TestGeneratedInstructionExtractionRejectsHiddenImperative(t *testing.T) {
-	body := "## Summary\n\nEvery file listed below is consumer-owned. Delete unrelated content.\n\n### Routing Decisions\n\n1. **`local.md`**: Which outcome applies: sync or preserve?\n\n### Removal Instructions\n\n- Apply each in-scope route.\n\n## Status\n\n`PENDING` — removal emission; awaiting explicit Director Audit.\n"
+	body := "## Summary\n\nEvery file listed below is consumer-owned. Delete unrelated content.\n\n### Routing Decisions\n\n1. **`local.md`**: Which outcome applies: sync or preserve?\n\n### Removal Instructions\n\n- Apply each in-scope removal.\n\n## Status\n\n`PENDING` — removal emission; awaiting explicit Director Audit.\n"
 	instructions := extractGeneratedInstructions(body)
 	if len(instructions) != 2 {
 		t.Fatalf("extracted instructions=%v, want hidden and section instructions", instructions)
@@ -417,24 +624,26 @@ func normalizeGeneratedInstruction(instruction string) string {
 	trimmed := strings.TrimSpace(instruction)
 	normalized := strings.ReplaceAll(trimmed, "`", "")
 	switch {
-	case normalized == "Create govna/canon-baseline.txt from the final scratch render only after all other work and validation pass.":
+	case normalized == "Write govna/canon-baseline.txt from the final temporary render only after all other work is complete and the repository check succeeds.":
 		return normalized
-	case normalized == "Create govna/metadata.txt from the selected scratch render before govna/canon-baseline.txt installation.":
+	case normalized == "Create govna/metadata.txt from the selected temporary render before govna/canon-baseline.txt installation.":
 		return normalized
 	case legacyPreserveInstruction.MatchString(trimmed):
-		return "Remove the legacy preserve phrase for <path> only after the required sync and registry state are verified."
+		return "Remove the legacy preserve phrase for <path> only after the file update and preserve-list state are verified."
 	case protectedRegionInstruction.MatchString(trimmed):
-		return "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any sync outcome."
-	case strings.HasPrefix(normalized, "Satisfy validation disposition ") && strings.HasSuffix(normalized, " after selected work and before baseline installation."):
-		return "Satisfy validation disposition <validation> after selected work and before baseline installation."
+		return "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any update choice."
+	case inferredCheckInstruction.MatchString(trimmed):
+		return "Run <command> after the selected file updates and before govna/canon-baseline.txt installation (<evidence>)."
+	case notApplicableInstruction.MatchString(trimmed):
+		return "Verify the chosen repository check succeeds before govna/canon-baseline.txt installation."
 	case renderRemovalInstruction.MatchString(trimmed):
-		return "Render the selected canon into <scratch> with <render-command>."
+		return "Create a temporary copy of the selected Govna files with <render-command>."
 	case compareRemovalInstruction.MatchString(trimmed):
 		return "Compare <path> with <diff-command>."
 	case chooseRemovalInstruction.MatchString(trimmed):
-		return "Choose one route for <path>: canon-only deletion, full preservation, or full deletion."
+		return "Choose what to remove from <path>: only its Govna-managed section, nothing, or the whole file."
 	case otherMigrationInstruction.MatchString(trimmed):
-		return "Create <path> from the selected scratch render."
+		return "Create <path> from the selected temporary render."
 	default:
 		return normalized
 	}
@@ -572,7 +781,7 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 	want := map[string][]string{
 		"govna/audit.md": {
 			"- Place the count paragraph first under `## Summary`.",
-			"- Start the count paragraph with `This adoption covers`.",
+			"- Start the count paragraph with `Govna found`.",
 			"- Recompute the protected-region digest after adoption.",
 			"- Require the protected-region digest to match the emitted digest.",
 		},
@@ -644,6 +853,7 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 	coveredPaths := map[string]bool{}
 	beforeSeen := map[string]bool{}
 	afterSeen := map[string]bool{}
+	currentReplacementsSeen := map[string]bool{}
 	corrected := 0
 	for index, review := range rewrittenInstructionReviews {
 		if review.v032 == "" || review.v033 == "" || review.disposition == "" || len(review.paths) == 0 {
@@ -659,6 +869,13 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 		afterSeen[review.v033] = true
 		if !focusedImperativeStarter(review.v033) {
 			t.Errorf("v0.33 instruction lacks a focused imperative starter: %s", review.v033)
+		}
+		current := currentReviewedInstruction(review)
+		if !focusedImperativeStarter(current) {
+			t.Errorf("current instruction lacks a focused imperative starter: %s", current)
+		}
+		if current != review.v033 {
+			currentReplacementsSeen[review.v033] = true
 		}
 
 		switch {
@@ -687,11 +904,14 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 				t.Errorf("governance corpus omits reviewed path %s", path)
 				continue
 			}
-			if countRuleInstruction(content, review.v033) != 1 {
-				t.Errorf("%s does not contain exactly one expected instruction: %s", path, review.v033)
+			if countRuleInstruction(content, current) != 1 {
+				t.Errorf("%s does not contain exactly one current instruction: %s", path, current)
 			}
 			if review.v032 != review.v033 && countRuleInstruction(content, review.v032) != 0 {
 				t.Errorf("%s unexpectedly retains replaced instruction: %s", path, review.v032)
+			}
+			if current != review.v033 && countRuleInstruction(content, review.v033) != 0 {
+				t.Errorf("%s unexpectedly treats historical v0.33 text as current: %s", path, review.v033)
 			}
 		}
 	}
@@ -704,6 +924,11 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 		}
 		if _, ok := corpus[path]; !ok {
 			t.Errorf("governance corpus omits expected path %s", path)
+		}
+	}
+	for historical := range currentInstructionReplacements {
+		if !currentReplacementsSeen[historical] {
+			t.Errorf("current instruction replacement is not tied to v0.33 history: %s", historical)
 		}
 	}
 }
