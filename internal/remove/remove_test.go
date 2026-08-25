@@ -61,10 +61,10 @@ func TestRemovalFreshAndIdempotent(t *testing.T) {
 	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if stdout.String() != "Wrote govna/ac1-govna-rm-v0.36.0.md for review.\n" {
+	if stdout.String() != "Wrote govna/ac1-govna-rm-v0.36.1.md for review.\n" {
 		t.Fatalf("stdout=%q", stdout.String())
 	}
-	path := filepath.Join(root, "govna", "ac1-govna-rm-v0.36.0.md")
+	path := filepath.Join(root, "govna", "ac1-govna-rm-v0.36.1.md")
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestRemovalFreshAndIdempotent(t *testing.T) {
 	if !emission.VerifyGuardedBody(before, emission.RemovalMarkerPrefix) {
 		t.Fatal("invalid marker")
 	}
-	markerPrefix := "<!-- govna-rm: emitted-by govna executable v9.8.7 with embedded canon v0.36.0 sha256:"
+	markerPrefix := "<!-- govna-rm: emitted-by govna executable v9.8.7 with embedded canon v0.36.1 sha256:"
 	if !strings.HasPrefix(string(before), markerPrefix) {
 		t.Fatalf("unexpected marker: %s", before)
 	}
@@ -113,7 +113,7 @@ func TestRemovalFreshAndIdempotent(t *testing.T) {
 	if !strings.HasPrefix(string(upgraded), markerPrefix) || bytes.Equal(upgraded, legacy) || strings.Contains(string(upgraded), "awaiting Director review") {
 		t.Fatalf("legacy marker not upgraded: %s", upgraded)
 	}
-	matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.36.0.md"))
+	matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.36.1.md"))
 	if err != nil || len(matches) != 1 || matches[0] != path {
 		t.Fatalf("same-canon upgrade changed stub identity: matches=%v err=%v", matches, err)
 	}
@@ -122,7 +122,7 @@ func TestRemovalFreshAndIdempotent(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 1 || stderr.String() != "rm: govna/ac1-govna-rm-v0.36.0.md has been edited since last emission — delete or rename the emitted file before re-running\n" {
+	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 1 || stderr.String() != "rm: govna/ac1-govna-rm-v0.36.1.md has been edited since last emission — delete or rename the emitted file before re-running\n" {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }
@@ -154,13 +154,16 @@ func TestRemovalClassificationAndTraversal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := classify(root, files, map[string]bool{"build.sh": true}, "govna/ac1-govna-rm-v0.36.0.md")
+	a, err := classify(root, files, map[string]bool{"build.sh": true}, "govna/ac1-govna-rm-v0.36.1.md")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertRoute(t, a.InScope, "CLAUDE.md", "delete symlink")
 	assertRoute(t, a.OutOfScope, "build.sh", "keep")
 	assertRoute(t, a.OutOfScope, "custom.md", "keep")
+	assertRoute(t, a.OutOfScope, "plan.md", "keep")
+	assertRouteReason(t, a.OutOfScope, "plan.md", "a repository-owned planning file that Govna never manages")
+	assertRouteReason(t, a.OutOfScope, "custom.md", "repository-owned file with no matching entry in Govna's current canon")
 	assertRoute(t, a.OutOfScope, "linked-dir", "keep")
 	assertRoute(t, a.OutOfScope, "local.pipe", "keep")
 	assertRoute(t, a.Review, "README.md", "hybrid")
@@ -176,10 +179,10 @@ func TestRemovalClassificationAndTraversal(t *testing.T) {
 }
 
 func TestRemovalGolden(t *testing.T) {
-	a := Assessment{InScope: []Route{{"CLAUDE.md", "delete symlink", "govna compatibility link"}, {"govna/roles.md", "delete file", "matches the current Govna file exactly"}}, OutOfScope: []Route{{"custom.md", "keep", "repository-owned file not managed by Govna"}, {"plan.md", "keep", "repository-owned file not managed by Govna"}}, Review: []Route{{"README.md", "hybrid", "contains both Govna-managed and repository-owned content"}, {"govna/metadata.txt", "ambiguity", "Govna-managed file has local edits"}}}
+	a := Assessment{InScope: []Route{{"CLAUDE.md", "delete symlink", "govna compatibility link"}, {"govna/roles.md", "delete file", "matches the current Govna file exactly"}}, OutOfScope: []Route{{"custom.md", "keep", "repository-owned file with no matching entry in Govna's current canon"}, {"plan.md", "keep", "a repository-owned planning file that Govna never manages"}}, Review: []Route{{"README.md", "hybrid", "contains both Govna-managed and repository-owned content"}, {"govna/metadata.txt", "ambiguity", "Govna-managed file has local edits"}}}
 	control := Route{"govna/preserve.txt", "delete control state last", "preserve decisions applied before registry removal"}
 	a.ControlState = &control
-	got := buildAC("govna/ac7-govna-rm-v0.36.0.md", testProgramVersion, canon.Version, canon.Code, "Go", a)
+	got := buildAC("govna/ac7-govna-rm-v0.36.1.md", testProgramVersion, canon.Version, canon.Code, "Go", a)
 	want, err := os.ReadFile("testdata/removal-golden.md")
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +201,7 @@ func TestRemovalInstructionBranches(t *testing.T) {
 		InScope: []Route{{"CLAUDE.md", "delete symlink", "govna compatibility link"}},
 		Review:  []Route{{"README.md", "hybrid", "contains both Govna-managed and repository-owned content"}},
 	}
-	body := buildAC("govna/ac7-govna-rm-v0.36.0.md", testProgramVersion, canon.Version, canon.Code, "Go", withRouting)
+	body := buildAC("govna/ac7-govna-rm-v0.36.1.md", testProgramVersion, canon.Version, canon.Code, "Go", withRouting)
 	ordered := []string{
 		"- Create a temporary copy of the selected Govna files with `govna render --flavor code --stack Go <scratch>`.",
 		"- Preserve every file under Routing Decisions until the Director resolves it.",
@@ -214,7 +217,7 @@ func TestRemovalInstructionBranches(t *testing.T) {
 		position = next
 	}
 	for _, want := range []string{
-		"Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.36.0).",
+		"Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.36.1).",
 		"This AC removes Govna-managed content without deleting repository-owned content.",
 		"Files needing a choice stay unchanged until the Director decides what to do.",
 		"1. `README.md`: contains both Govna-managed and repository-owned content.\n   - Compare `README.md` with `diff -ru <scratch>/README.md README.md`.\n   - Choose what to remove from `README.md`: only its Govna-managed section, nothing, or the whole file.",
@@ -234,7 +237,7 @@ func TestRemovalInstructionBranches(t *testing.T) {
 	}
 
 	withoutRouting := buildAC(
-		"govna/ac8-govna-rm-v0.36.0.md",
+		"govna/ac8-govna-rm-v0.36.1.md",
 		testProgramVersion,
 		canon.Version,
 		canon.Doc,
@@ -274,7 +277,7 @@ func TestRemovalFlavorOverride(t *testing.T) {
 	if code := Run([]string{"--flavor", "doc", "--repo-name", "widget"}, &out, &err, root, testProgramVersion); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, err.String())
 	}
-	data, _ := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-rm-v0.36.0.md"))
+	data, _ := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-rm-v0.36.1.md"))
 	if !strings.Contains(string(data), "govna render --flavor doc <scratch>") {
 		t.Fatalf("stub=%s", data)
 	}
@@ -288,6 +291,19 @@ func assertRoute(t *testing.T, routes []Route, path, kind string) {
 		}
 	}
 	t.Fatalf("missing %s %s in %#v", path, kind, routes)
+}
+
+func assertRouteReason(t *testing.T, routes []Route, path, reason string) {
+	t.Helper()
+	for _, r := range routes {
+		if r.Path == path {
+			if r.Reason != reason {
+				t.Fatalf("%s reason=%q want=%q", path, r.Reason, reason)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing %s in %#v", path, routes)
 }
 
 func legacyGuardedBody(prefix, version string, body []byte) []byte {

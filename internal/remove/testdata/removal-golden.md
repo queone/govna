@@ -2,7 +2,7 @@
 
 ## Summary
 
-Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.36.0). This AC removes Govna-managed content without deleting repository-owned content. Files needing a choice stay unchanged until the Director decides what to do.
+Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.36.1). This AC removes Govna-managed content without deleting repository-owned content. Files needing a choice stay unchanged until the Director decides what to do.
 
 ### Removal Instructions
 
@@ -28,8 +28,8 @@ Govna executable v9.8.7 created this removal plan from its embedded governance f
 
 ## Out Of Scope
 
-- `custom.md` — keep; repository-owned file not managed by Govna.
-- `plan.md` — keep; repository-owned file not managed by Govna.
+- `custom.md` — keep; repository-owned file with no matching entry in Govna's current canon.
+- `plan.md` — keep; a repository-owned planning file that Govna never manages.
 
 ## Migration findings
 

@@ -203,7 +203,7 @@ func classify(root string, files []canon.File, preserve map[string]bool, eligibl
 			return out, fmt.Errorf("inspect %s: %w", path, err)
 		}
 		if path == "plan.md" || path == "arch.md" {
-			out.OutOfScope = append(out.OutOfScope, Route{path, "keep", "repository-owned file not managed by Govna"})
+			out.OutOfScope = append(out.OutOfScope, Route{path, "keep", "a repository-owned planning file that Govna never manages"})
 			continue
 		}
 		if preserve[path] {
@@ -285,7 +285,7 @@ func targetOnly(root string, current map[string][]byte, eligible string) ([]Rout
 			if _, ok := current[rel]; ok {
 				continue
 			}
-			routes = append(routes, Route{rel, "keep", "repository-owned file not managed by Govna"})
+			routes = append(routes, Route{rel, "keep", "repository-owned file with no matching entry in Govna's current canon"})
 		}
 		return nil
 	}

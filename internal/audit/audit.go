@@ -18,6 +18,7 @@ import (
 	"github.com/queone/govna/internal/canon"
 	"github.com/queone/govna/internal/emission"
 	"github.com/queone/govna/internal/repository"
+	"github.com/queone/govna/internal/usererr"
 )
 
 const baselinePath = "govna/canon-baseline.txt"
@@ -30,22 +31,19 @@ type Config struct {
 	invocation              string
 }
 
-func userMessageErrorf(format string, args ...any) error {
-	return fmt.Errorf(format, args...)
-}
-
 type FileResult struct {
-	Path                  string   `json:"relpath"`
-	Classification        string   `json:"classification"`
-	Diff                  string   `json:"diff,omitempty"`
-	PriorCommits          []string `json:"commits,omitempty"`
-	PreserveEntries       []string `json:"preserve_entries,omitempty"`
-	LegacyPreserveMarkers []string `json:"legacy_preserve_markers,omitempty"`
-	CanonReference        string   `json:"canon_ref,omitempty"`
-	CompareCommand        string   `json:"compare_command,omitempty"`
-	Boundary              string   `json:"boundary,omitempty"`
-	protectedHash         string
-	forceSync             bool
+	Path                    string   `json:"relpath"`
+	Classification          string   `json:"classification"`
+	EffectiveClassification string   `json:"effective_classification,omitempty"`
+	Diff                    string   `json:"diff,omitempty"`
+	PriorCommits            []string `json:"commits,omitempty"`
+	PreserveEntries         []string `json:"preserve_entries,omitempty"`
+	LegacyPreserveMarkers   []string `json:"legacy_preserve_markers,omitempty"`
+	CanonReference          string   `json:"canon_ref,omitempty"`
+	CompareCommand          string   `json:"compare_command,omitempty"`
+	Boundary                string   `json:"boundary,omitempty"`
+	protectedHash           string
+	forceSync               bool
 }
 
 type Header struct {
@@ -80,6 +78,7 @@ const (
 type validationOutcome struct {
 	kind     validationOutcomeKind
 	evidence string
+	reason   string
 }
 
 type baseline struct {
@@ -111,7 +110,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 	if !clean {
 		path, reused, err := emission.AuditPath(cwd, "v"+canon.Version, nil)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			fmt.Fprintf(stderr, "audit: %v\n", err)
 			return 1
 		}
 		full := filepath.Join(cwd, filepath.FromSlash(path))
@@ -199,7 +198,7 @@ func parse(args []string) (Config, error) {
 func inspect(cfg Config, root string) (Report, bool, error) {
 	var report Report
 	if repository.IsSource(root) {
-		return report, false, fmt.Errorf("target %s looks like a govna checkout — audit is for adopted repos, not the govna source", root)
+		return report, false, fmt.Errorf("an audit AC cannot be created inside the Govna source checkout at %s; run this command from the target repository", root)
 	}
 	if err := repository.RequireAdopted(root); err != nil {
 		return report, false, err
@@ -306,6 +305,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		if (path == "AGENTS.md" || path == "govna/ac-template.md") && fr.Classification != "match" && fr.Classification != "expected-divergence" {
 			fr.PreserveEntries = nil
 			fr.forceSync = true
+			fr.EffectiveClassification = "force-sync"
 		}
 		fr.CompareCommand = comparisonDescription(fr, path)
 		report.Files = append(report.Files, fr)
@@ -404,7 +404,7 @@ func checkCoherence(files map[string][]byte) error {
 	for _, rule := range coherenceRules {
 		content, ok := files[rule.Path]
 		if !ok || !bytes.Contains(content, []byte(rule.Contains)) {
-			return userMessageErrorf("Govna's embedded files disagree with each other: %s must contain %q; report this to the Govna maintainer", rule.Path, rule.Contains)
+			return usererr.Errorf("embedded Govna files disagree with each other: %s must contain %q; report this to the Govna maintainer", rule.Path, rule.Contains)
 		}
 	}
 	return nil
@@ -700,31 +700,51 @@ func comparisonDescription(f FileResult, path string) string {
 func actionable(c string) bool {
 	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon"
 }
+
+type classificationInfo struct{ singular, plural, meaning string }
+
+// classificationOrder fixes the rendering order for plainTally; classificationInfos is the
+// single source of truth for plainTally and classificationMeaning, plus the synthetic
+// "force-sync" entry used for a file whose Classification is overridden by forceSync.
+var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "force-sync"}
+
+var classificationInfos = map[string]classificationInfo{
+	"match":               {"file needs no update", "files need no update", "the file already needs no Govna update"},
+	"expected-divergence": {"expected local difference", "expected local differences", "the repository is expected to keep its own version of this file"},
+	"preserve":            {"file kept by Director choice", "files kept by Director choice", "the preserve list says to keep the repository's version"},
+	"ambiguity":           {"file needs a Director choice", "files need a Director choice", "Govna cannot safely choose between updating and keeping the file"},
+	"clear-sync":          {"file is safe to update", "files are safe to update", "the file still matches the previously installed Govna version and is safe to update"},
+	"missing-in-target":   {"missing Govna file", "missing Govna files", "a file from current Govna rules is missing from the repository"},
+	"target-has-no-canon": {"Govna-linked extra file", "Govna-linked extra files", "the file is absent from the selected current canon but specific repository evidence connects it to Govna"},
+	"migration-required":  {"missing required control file", "missing required control files", "a required Govna control file is missing and must be added through the AC"},
+	"force-sync":          {"file always synced regardless of local edits", "files always synced regardless of local edits", "this file's governed structure always syncs to canon, regardless of local edits or the preserve list"},
+}
+
+// tallyKey resolves the classificationInfos key for a file, overriding Classification with the
+// synthetic "force-sync" entry whenever forceSync is set so a governance-critical file can never
+// render as its underlying (possibly stale) Classification in generated text or the CLI summary.
+func tallyKey(f FileResult) string {
+	if f.forceSync {
+		return "force-sync"
+	}
+	return f.Classification
+}
+
 func plainTally(files []FileResult) string {
-	order := []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required"}
 	count := map[string]int{}
 	for _, file := range files {
-		count[file.Classification]++
-	}
-	labels := map[string][2]string{
-		"match":               {"file needs no update", "files need no update"},
-		"expected-divergence": {"expected local difference", "expected local differences"},
-		"preserve":            {"file kept by Director choice", "files kept by Director choice"},
-		"ambiguity":           {"file needs a Director choice", "files need a Director choice"},
-		"clear-sync":          {"file is safe to update", "files are safe to update"},
-		"missing-in-target":   {"missing Govna file", "missing Govna files"},
-		"target-has-no-canon": {"Govna-linked extra file", "Govna-linked extra files"},
-		"migration-required":  {"missing required control file", "missing required control files"},
+		count[tallyKey(file)]++
 	}
 	var parts []string
-	for _, classification := range order {
+	for _, classification := range classificationOrder {
 		value := count[classification]
 		if value == 0 {
 			continue
 		}
-		label := labels[classification][1]
+		info := classificationInfos[classification]
+		label := info.plural
 		if value == 1 {
-			label = labels[classification][0]
+			label = info.singular
 		}
 		parts = append(parts, fmt.Sprintf("%d %s", value, label))
 	}
@@ -735,17 +755,7 @@ func plainTally(files []FileResult) string {
 }
 
 func classificationMeaning(classification string) string {
-	meanings := map[string]string{
-		"match":               "the file already needs no Govna update",
-		"missing-in-target":   "a file from current Govna rules is missing from the repository",
-		"expected-divergence": "the repository is expected to keep its own version of this file",
-		"preserve":            "the preserve list says to keep the repository's version",
-		"clear-sync":          "the file still matches the previously installed Govna version and is safe to update",
-		"ambiguity":           "Govna cannot safely choose between updating and keeping the file",
-		"target-has-no-canon": "the file is absent from the selected current canon but specific repository evidence connects it to Govna",
-		"migration-required":  "a required Govna control file is missing and must be added through the AC",
-	}
-	return meanings[classification]
+	return classificationInfos[classification].meaning
 }
 
 func buildAC(report Report, path string, validation validationOutcome) string {
@@ -782,7 +792,8 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 			return
 		}
 		for _, f := range files {
-			fmt.Fprintf(&b, "- `%s` — `%s`: %s.\n", f.Path, f.Classification, classificationMeaning(f.Classification))
+			key := tallyKey(f)
+			fmt.Fprintf(&b, "- `%s` — `%s`: %s.\n", f.Path, key, classificationMeaning(key))
 		}
 		b.WriteString("\n")
 	}
@@ -856,7 +867,10 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Run `./build.sh` after the selected file updates and before `govna/canon-baseline.txt` installation (selected from exact AGENTS.md declarations).\n\n", at)
 		at++
 	} else {
-		reason := strings.TrimSpace(strings.TrimPrefix(validation.evidence, "`Not applicable`"))
+		reason := validation.reason
+		if reason == "" {
+			reason = "no reason recorded"
+		}
 		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation (%s).\n\n", at, reason)
 		at++
 	}
@@ -879,7 +893,7 @@ func validationDisposition(root string, report Report) validationOutcome {
 		}
 	}
 	if !baselineUpdate {
-		return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` because no baseline migration is present"}
+		return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` because no baseline migration is present", reason: "no baseline migration is present"}
 	}
 	agents, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
 	first := regexp.MustCompile(`(?m)^- Run `+"`"+`([^`+"`"+`\n]+)`+"`"+` as the first validation command(?:\s|\.|$)[^\n]*$`).FindAllSubmatch(agents, -1)
@@ -895,7 +909,7 @@ func validationDisposition(root string, report Report) validationOutcome {
 		release, _ := os.ReadFile(filepath.Join(root, "govna", "release.md"))
 		const declaration = "DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command."
 		if bytes.Contains(release, []byte(declaration)) {
-			return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` inferred from exact DOC governance evidence"}
+			return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` inferred from exact DOC governance evidence", reason: "inferred from exact DOC governance evidence"}
 		}
 	}
 	return validationOutcome{kind: validationUnresolved}
