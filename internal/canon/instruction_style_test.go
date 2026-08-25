@@ -1,6 +1,7 @@
 package canon
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -156,6 +157,354 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 
 	{"Grep the repository for all references when renaming or moving a file.", "Grep the repository for all references when renaming or moving a file.", editingRewrittenPaths, reviewClean},
 	{"Update every reference in the same pass.", "Update every reference in the same pass.", editingRewrittenPaths, reviewClean},
+}
+
+type generatedInstructionTemplate struct {
+	id   string
+	text string
+}
+
+var generatedInstructionManifest = []generatedInstructionTemplate{
+	{"I01", "Verify AGENTS.md reflects the repository's actual practices."},
+	{"I02", "Verify govna/roles.md reflects the repository's delivery model (Operator + Director)."},
+	{"I03", "Verify CLAUDE.md is a symlink to AGENTS.md."},
+	{"I04", "Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md."},
+	{"I05", "Resolve every routing decision in chat."},
+	{"I06", "Leave this emitted stub unchanged."},
+	{"I07", "Render canon into a scratch directory."},
+	{"I08", "Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition."},
+	{"I09", "Apply every resolved outcome within the authorized content boundaries."},
+	{"I10", "Install govna/canon-baseline.txt last."},
+	{"I11", "Remove the legacy preserve phrase for <path> only after the required sync and registry state are verified."},
+	{"I12", "Create govna/canon-baseline.txt from the final scratch render only after all other work and validation pass."},
+	{"I13", "Create govna/metadata.txt from the selected scratch render before govna/canon-baseline.txt installation."},
+	{"I14", "Create <path> from the selected scratch render."},
+	{"I15", "Verify every resolved sync target except govna/canon-baseline.txt against rendered canon and every resolved preserve target against govna/preserve.txt."},
+	{"I16", "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any sync outcome."},
+	{"I17", "Satisfy validation disposition <validation> after selected work and before baseline installation."},
+	{"I18", "Verify the final adoption step installed govna/canon-baseline.txt from the same scratch render."},
+	{"I19", "Render the selected canon into <scratch> with <render-command>."},
+	{"I20", "Preserve every routing-pending path until its route is resolved."},
+	{"I21", "Apply each in-scope route and each Director-resolved review route."},
+	{"I22", "Apply each in-scope route."},
+	{"I23", "Compare <path> with <diff-command>."},
+	{"I24", "Choose one route for <path>: canon-only deletion, full preservation, or full deletion."},
+	{"I25", "Verify every resolved removal target under ## In Scope is absent."},
+	{"I26", "Verify every routing-pending path matches its Director-resolved route."},
+	{"I27", "Verify every preserve-registry decision is applied before the final removal of govna/preserve.txt."},
+}
+
+var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)\b|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)\b`)
+
+var (
+	legacyPreserveInstruction  = regexp.MustCompile("^Remove the legacy preserve phrase for `[^`]+` only after the required sync and registry state are verified\\.$")
+	protectedRegionInstruction = regexp.MustCompile("^Preserve the protected region in `[^`]+` from `[^`]+` through EOF with SHA-256 `[^`]+` for any sync outcome\\.$")
+	renderRemovalInstruction   = regexp.MustCompile("^Render the selected canon into `<scratch>` with `govna render --flavor (?:doc|code(?: --stack [^`]+)?) <scratch>`\\.$")
+	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff -ru <scratch>/[^`]+ [^`]+`\\.$")
+	chooseRemovalInstruction   = regexp.MustCompile("^Choose one route for `[^`]+`: canon-only deletion, full preservation, or full deletion\\.$")
+	otherMigrationInstruction  = regexp.MustCompile("^Create `[^`]+` from the selected scratch render\\.$")
+)
+
+var generatedProseStarters = func() map[string]bool {
+	words := strings.Fields("Add Adopt Allow Apply Ask Avoid Begin Capture Change Check Choose Classify Compare Complete Confirm Continue Create Define Delete Detect Do Draft Edit Emit End Ensure Extricate Fail Follow Format Infer Install Keep Leave Limit Make Mark Move Omit Pass Place Prefer Preserve Prevent Prohibit Record Refresh Reject Remove Render Replace Require Reserve Resolve Restore Return Reuse Review Route Run Satisfy Scan Set Skip Split Start State Stop Synchronize Treat Update Use Validate Verify Wait Write Implement")
+	starters := make(map[string]bool, len(words))
+	for _, word := range words {
+		starters[word] = true
+	}
+	return starters
+}()
+
+func TestGeneratedInstructionManifest(t *testing.T) {
+	if len(generatedInstructionManifest) != 27 {
+		t.Fatalf("generated instruction manifest has %d entries, want 27", len(generatedInstructionManifest))
+	}
+	seenText := map[string]string{}
+	for index, instruction := range generatedInstructionManifest {
+		wantID := fmt.Sprintf("I%02d", index+1)
+		if instruction.id != wantID {
+			t.Errorf("generated instruction ID %q at index %d, want %q", instruction.id, index, wantID)
+		}
+		if instruction.text == "" {
+			t.Errorf("generated instruction %s is empty", instruction.id)
+			continue
+		}
+		if prior, exists := seenText[instruction.text]; exists {
+			t.Errorf("generated instruction %s duplicates %s: %s", instruction.id, prior, instruction.text)
+		}
+		seenText[instruction.text] = instruction.id
+		if normalized := normalizeGeneratedInstruction(instruction.text); normalized != instruction.text {
+			t.Errorf("manifest instruction %s is not normalized: %q -> %q", instruction.id, instruction.text, normalized)
+		}
+		if err := validateGeneratedInstruction(instruction.text); err != nil {
+			t.Errorf("generated instruction %s is invalid: %v", instruction.id, err)
+		}
+	}
+}
+
+func TestGeneratedInstructionStarters(t *testing.T) {
+	for _, text := range []string{
+		"Director reads AGENTS.md.",
+		"Removed files no longer exist.",
+		"Every preserve decision is applied.",
+		"When a path is synced, preserve its tail.",
+		"Never assume generated prose is valid.",
+		"Always run the command.",
+		"CLAUDE.md remains a regular file.",
+	} {
+		if generatedImperativeStarter(text) {
+			t.Errorf("accepted invalid generated instruction starter: %s", text)
+		}
+	}
+	seen := map[string]bool{}
+	for _, instruction := range generatedInstructionManifest {
+		starter := firstInstructionWord(instruction.text)
+		if seen[starter] {
+			continue
+		}
+		seen[starter] = true
+		if !generatedImperativeStarter(instruction.text) {
+			t.Errorf("rejected manifest starter %s: %s", starter, instruction.text)
+		}
+	}
+}
+
+func TestGeneratedInstructionAtomicity(t *testing.T) {
+	for _, text := range []string{
+		"Verify the path and Remove the legacy phrase.",
+		"Verify the path; Remove the legacy phrase.",
+		"Verify the path. Remove the legacy phrase.",
+		"Verify the path then Remove the legacy phrase.",
+		"Compare the path before choosing its route.",
+		"Verify the path after applying the route.",
+	} {
+		if !generatedSecondAction.MatchString(text) {
+			t.Errorf("did not reject generated compound action: %s", text)
+		}
+		if err := validateGeneratedInstruction(text); err == nil {
+			t.Errorf("generated instruction gate accepted compound action: %s", text)
+		}
+	}
+	for _, instruction := range generatedInstructionManifest {
+		if generatedSecondAction.MatchString(instruction.text) {
+			t.Errorf("rejected atomic manifest instruction %s: %s", instruction.id, instruction.text)
+		}
+	}
+}
+
+func TestGeneratedGoldenInstructionGate(t *testing.T) {
+	expected := map[string]map[string]int{
+		"internal/apply/testdata/fresh-code-golden.md": {"I01": 1, "I02": 1, "I03": 1},
+		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1, "I02": 1, "I03": 1},
+		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
+		"internal/audit/testdata/actionable-golden.md": {
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1,
+		},
+		"internal/remove/testdata/removal-golden.md": {
+			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
+		},
+	}
+	manifest := generatedManifestByText(t)
+	root := filepath.Join("..", "..")
+	for path, want := range expected {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]int{}
+		for _, instruction := range extractGeneratedInstructions(string(content)) {
+			if err := validateGeneratedInstruction(instruction); err != nil {
+				t.Errorf("%s: %v", path, err)
+				continue
+			}
+			normalized := normalizeGeneratedInstruction(instruction)
+			got[manifest[normalized]]++
+		}
+		if !equalInstructionCounts(got, want) {
+			t.Errorf("%s instruction occurrences=%v want=%v", path, got, want)
+		}
+	}
+}
+
+func TestGeneratedInstructionDocumentation(t *testing.T) {
+	expectations := map[string][]string{
+		"README.md": {
+			"executable version separately from the embedded canon version",
+			"stub filenames remain keyed by canon version",
+			"legacy canon-only marker upgrades in place",
+			"semantic instruction gate",
+		},
+		"arch.md": {
+			"executable and embedded-canon versions separately",
+			"canon-version-keyed AC stub",
+			"legacy canon-only marker upgrades at the same path and AC number",
+			"same dual-axis and legacy-upgrade behavior",
+		},
+	}
+	root := filepath.Join("..", "..")
+	for path, required := range expectations {
+		content, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, phrase := range required {
+			if !strings.Contains(string(content), phrase) {
+				t.Errorf("%s omits generated-emission documentation %q", path, phrase)
+			}
+		}
+	}
+}
+
+func TestGeneratedInstructionExtractionRejectsHiddenImperative(t *testing.T) {
+	body := "## Summary\n\nEvery file listed below is consumer-owned. Delete unrelated content.\n\n### Routing Decisions\n\n1. **`local.md`**: Which outcome applies: sync or preserve?\n\n### Removal Instructions\n\n- Apply each in-scope route.\n\n## Status\n\n`PENDING` — removal emission; awaiting explicit Director Audit.\n"
+	instructions := extractGeneratedInstructions(body)
+	if len(instructions) != 2 {
+		t.Fatalf("extracted instructions=%v, want hidden and section instructions", instructions)
+	}
+	valid, invalid := 0, 0
+	for _, instruction := range instructions {
+		if err := validateGeneratedInstruction(instruction); err != nil {
+			invalid++
+		} else {
+			valid++
+		}
+	}
+	if valid != 1 || invalid != 1 {
+		t.Fatalf("hidden imperative disposition valid=%d invalid=%d instructions=%v", valid, invalid, instructions)
+	}
+}
+
+func validateGeneratedInstruction(instruction string) error {
+	normalized := normalizeGeneratedInstruction(instruction)
+	semantic := strings.ReplaceAll(strings.TrimSpace(normalized), "`", "")
+	if !generatedImperativeStarter(semantic) {
+		return fmt.Errorf("generated instruction lacks an allowed imperative starter: %s", instruction)
+	}
+	if generatedSecondAction.MatchString(semantic) {
+		return fmt.Errorf("generated instruction contains a second action: %s", instruction)
+	}
+	for _, expected := range generatedInstructionManifest {
+		if normalized == expected.text {
+			return nil
+		}
+	}
+	return fmt.Errorf("generated instruction is outside the settled manifest: %s", instruction)
+}
+
+func generatedImperativeStarter(instruction string) bool {
+	starter := firstInstructionWord(instruction)
+	for _, expected := range generatedInstructionManifest {
+		if starter == firstInstructionWord(expected.text) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstInstructionWord(instruction string) string {
+	fields := strings.Fields(strings.TrimSpace(instruction))
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Trim(fields[0], "`*_.,:;!?")
+}
+
+func normalizeGeneratedInstruction(instruction string) string {
+	trimmed := strings.TrimSpace(instruction)
+	normalized := strings.ReplaceAll(trimmed, "`", "")
+	switch {
+	case normalized == "Create govna/canon-baseline.txt from the final scratch render only after all other work and validation pass.":
+		return normalized
+	case normalized == "Create govna/metadata.txt from the selected scratch render before govna/canon-baseline.txt installation.":
+		return normalized
+	case legacyPreserveInstruction.MatchString(trimmed):
+		return "Remove the legacy preserve phrase for <path> only after the required sync and registry state are verified."
+	case protectedRegionInstruction.MatchString(trimmed):
+		return "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any sync outcome."
+	case strings.HasPrefix(normalized, "Satisfy validation disposition ") && strings.HasSuffix(normalized, " after selected work and before baseline installation."):
+		return "Satisfy validation disposition <validation> after selected work and before baseline installation."
+	case renderRemovalInstruction.MatchString(trimmed):
+		return "Render the selected canon into <scratch> with <render-command>."
+	case compareRemovalInstruction.MatchString(trimmed):
+		return "Compare <path> with <diff-command>."
+	case chooseRemovalInstruction.MatchString(trimmed):
+		return "Choose one route for <path>: canon-only deletion, full preservation, or full deletion."
+	case otherMigrationInstruction.MatchString(trimmed):
+		return "Create <path> from the selected scratch render."
+	default:
+		return normalized
+	}
+}
+
+func extractGeneratedInstructions(content string) []string {
+	section := ""
+	var instructions []string
+	for line := range strings.SplitSeq(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") || strings.HasPrefix(trimmed, "### ") {
+			section = trimmed
+			continue
+		}
+		if strings.HasPrefix(trimmed, "**AT") {
+			if _, instruction, ok := strings.Cut(trimmed, " — "); ok {
+				instructions = append(instructions, instruction)
+			}
+			continue
+		}
+		if after, ok := strings.CutPrefix(trimmed, "- "); ok {
+			instruction := after
+			if instruction == "None." {
+				continue
+			}
+			if section == "### Adoption Instructions" || section == "### Removal Instructions" || section == "## Migration findings" || section == "### Routing Decisions" && strings.HasPrefix(line, "   - ") {
+				instructions = append(instructions, instruction)
+			}
+			continue
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "<!--") || strings.HasPrefix(trimmed, "`") || trimmed[0] >= '0' && trimmed[0] <= '9' {
+			continue
+		}
+		for _, sentence := range splitGeneratedSentences(trimmed) {
+			if generatedProseStarters[firstInstructionWord(sentence)] {
+				instructions = append(instructions, sentence)
+			}
+		}
+	}
+	return instructions
+}
+
+func splitGeneratedSentences(line string) []string {
+	replacer := strings.NewReplacer(". ", ".\n", "? ", "?\n", "! ", "!\n")
+	var sentences []string
+	for sentence := range strings.SplitSeq(replacer.Replace(line), "\n") {
+		if trimmed := strings.TrimSpace(sentence); trimmed != "" {
+			sentences = append(sentences, trimmed)
+		}
+	}
+	return sentences
+}
+
+func generatedManifestByText(t *testing.T) map[string]string {
+	t.Helper()
+	manifest := make(map[string]string, len(generatedInstructionManifest))
+	for _, instruction := range generatedInstructionManifest {
+		if _, exists := manifest[instruction.text]; exists {
+			t.Fatalf("duplicate generated instruction: %s", instruction.text)
+		}
+		manifest[instruction.text] = instruction.id
+	}
+	return manifest
+}
+
+func equalInstructionCounts(got, want map[string]int) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for id, count := range want {
+		if got[id] != count {
+			return false
+		}
+	}
+	return true
 }
 
 func TestInstructionStyleAtomicityGate(t *testing.T) {

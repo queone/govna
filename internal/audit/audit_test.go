@@ -2,7 +2,9 @@ package audit
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/queone/govna/internal/canon"
+	"github.com/queone/govna/internal/emission"
 )
+
+const testProgramVersion = "9.8.7"
 
 func fixture(t *testing.T) string {
 	t.Helper()
@@ -50,7 +55,7 @@ func git(t *testing.T, root string, args ...string) {
 func TestAuditCleanAndJSON(t *testing.T) {
 	root := fixture(t)
 	var stdout, stderr bytes.Buffer
-	if code := Run(nil, &stdout, &stderr, root); code != 0 || stderr.Len() != 0 {
+	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	want, err := os.ReadFile("testdata/clean-golden.txt")
@@ -62,7 +67,7 @@ func TestAuditCleanAndJSON(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"--json"}, &stdout, &stderr, root); code != 0 || stderr.Len() != 0 {
+	if code := Run([]string{"--json"}, &stdout, &stderr, root, testProgramVersion); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 	var report Report
@@ -84,7 +89,7 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"--repo-name", "widget"}, &stdout, &stderr, root); code != 0 {
+	if code := Run([]string{"--repo-name", "widget"}, &stdout, &stderr, root, testProgramVersion); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 	if !strings.HasPrefix(stdout.String(), "wrote govna/ac1-audit-v0.33.0.md") {
@@ -98,17 +103,61 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 	if !strings.Contains(string(body), "## Summary") || !strings.Contains(string(body), "`README.md` — `ambiguity`") {
 		t.Fatalf("bad stub: %s", body)
 	}
+	markerPrefix := "<!-- audit: emitted-by govna executable v9.8.7 with embedded canon v0.33.0 sha256:"
+	if !strings.HasPrefix(string(body), markerPrefix) {
+		t.Fatalf("bad marker: %s", body)
+	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(nil, &stdout, &stderr, root); code != 0 {
+	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 0 {
 		t.Fatalf("idempotent code=%d stderr=%q", code, stderr.String())
 	}
-	if err := os.WriteFile(stub, append(body, []byte("edited\n")...), 0o644); err != nil {
+	rerunBody, err := os.ReadFile(stub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(body, rerunBody) {
+		t.Fatal("unchanged audit rerun rewrote body")
+	}
+	_, rawBody, ok := strings.Cut(string(body), "\n")
+	if !ok {
+		t.Fatal("guarded body has no marker line")
+	}
+	legacyBody := strings.Replace(
+		rawBody,
+		"Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.",
+		"Install and verify `govna/canon-baseline.txt` from the same scratch render as the final adoption step.",
+		1,
+	)
+	if legacyBody == rawBody {
+		t.Fatal("failed to construct legacy audit body")
+	}
+	legacy := legacyGuardedBody(emission.AuditMarkerPrefix, "v"+canon.Version, []byte(legacyBody))
+	if err := os.WriteFile(stub, legacy, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(nil, &stdout, &stderr, root); code != 1 || !strings.Contains(stderr.String(), "has been edited") {
+	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 0 {
+		t.Fatalf("legacy upgrade code=%d stderr=%q", code, stderr.String())
+	}
+	upgraded, err := os.ReadFile(stub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(upgraded), markerPrefix) || bytes.Equal(upgraded, legacy) || strings.Contains(string(upgraded), "Install and verify") {
+		t.Fatalf("legacy marker not upgraded: %s", upgraded)
+	}
+	matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.33.0.md"))
+	if err != nil || len(matches) != 1 || matches[0] != stub {
+		t.Fatalf("same-canon upgrade changed stub identity: matches=%v err=%v", matches, err)
+	}
+	if err := os.WriteFile(stub, append(upgraded, []byte("edited\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 1 || !strings.Contains(stderr.String(), "has been edited") {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }
@@ -194,13 +243,13 @@ func TestMissingFormatFileKeepsClassificationAndForcesSync(t *testing.T) {
 func TestAuditArgumentsAndPreconditions(t *testing.T) {
 	for _, args := range [][]string{{"extra"}, {"--diff-lines", "0"}, {"--flavor", "bad"}, {"--stack", ""}} {
 		var out, err bytes.Buffer
-		if code := Run(args, &out, &err, t.TempDir()); code != 2 {
+		if code := Run(args, &out, &err, t.TempDir(), testProgramVersion); code != 2 {
 			t.Fatalf("args=%v code=%d stderr=%q", args, code, err.String())
 		}
 	}
 	root := t.TempDir()
 	var out, err bytes.Buffer
-	if code := Run(nil, &out, &err, root); code != 1 || !strings.Contains(err.String(), "AGENTS.md") {
+	if code := Run(nil, &out, &err, root, testProgramVersion); code != 1 || !strings.Contains(err.String(), "AGENTS.md") {
 		t.Fatalf("code=%d stderr=%q", code, err.String())
 	}
 }
@@ -316,13 +365,56 @@ func TestEmittedSummaryAndFlavorInstructions(t *testing.T) {
 	if !strings.Contains(body, wantSummary) {
 		t.Fatalf("summary=%s", body)
 	}
-	reachability := "Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes."
+	reachability := "Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition."
 	if !strings.Contains(body, reachability) {
 		t.Fatalf("CODE instruction missing: %s", body)
 	}
 	report.Header.Flavor = "doc"
 	if doc := buildAC(report, "govna/ac1-audit-v0.33.0.md", "`Not applicable`"); strings.Contains(doc, reachability) {
 		t.Fatalf("DOC contains CODE instruction: %s", doc)
+	}
+}
+
+func TestGeneratedInstructionBranches(t *testing.T) {
+	report := Report{
+		Header: Header{Flavor: "code", RepoName: "widget"},
+		Files: []FileResult{
+			{Path: "AGENTS.md", Classification: "clear-sync", Boundary: "## Project Rules", protectedHash: "abc123", LegacyPreserveMarkers: []string{"legacy"}},
+			{Path: baselinePath, Classification: "migration-required"},
+			{Path: "govna/metadata.txt", Classification: "migration-required"},
+			{Path: "govna/other.md", Classification: "migration-required"},
+			{Path: "local.md", Classification: "ambiguity"},
+		},
+	}
+	body := buildAC(report, "govna/ac1-audit-v0.33.0.md", "`./build.sh`")
+	for _, want := range []string{
+		"- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition.",
+		"- Apply every resolved outcome within the authorized content boundaries.",
+		"- Remove the legacy preserve phrase for `AGENTS.md` only after the required sync and registry state are verified.",
+		"- Create `govna/canon-baseline.txt` from the final scratch render only after all other work and validation pass.",
+		"- Create `govna/metadata.txt` from the selected scratch render before `govna/canon-baseline.txt` installation.",
+		"- Create `govna/other.md` from the selected scratch render.",
+		"Preserve the protected region in `AGENTS.md` from `## Project Rules` through EOF with SHA-256 `abc123` for any sync outcome.",
+		"Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.",
+		"`PENDING` — audit emission; awaiting explicit Director Audit.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("audit body omits %q", want)
+		}
+	}
+	legacyIndex := strings.Index(body, "Remove the legacy preserve phrase")
+	routingIndex := strings.Index(body, "### Routing Decisions")
+	if legacyIndex < 0 || routingIndex < 0 || legacyIndex > routingIndex {
+		t.Errorf("legacy instruction is not under Adoption Instructions before routing: %s", body)
+	}
+	for _, invalid := range []string{"When `AGENTS.md` is synced", "Install and verify", "Resolve the legacy preserve phrase", "before applying changes"} {
+		if strings.Contains(body, invalid) {
+			t.Errorf("audit body retains invalid text %q", invalid)
+		}
+	}
+	report.Header.Flavor = "doc"
+	if doc := buildAC(report, "govna/ac1-audit-v0.33.0.md", "`Not applicable`"); strings.Contains(doc, "selected CODE stack") {
+		t.Errorf("DOC body contains CODE reachability instruction: %s", doc)
 	}
 }
 
@@ -335,6 +427,11 @@ func reportFile(t *testing.T, report Report, path string) FileResult {
 	}
 	t.Fatalf("report omits %s", path)
 	return FileResult{}
+}
+
+func legacyGuardedBody(prefix, version string, body []byte) []byte {
+	hash := sha256.Sum256(body)
+	return []byte(fmt.Sprintf("%s%s sha256:%x -->\n%s", prefix, version, hash, body))
 }
 
 func TestAuditInvocationPreservesOptionOrder(t *testing.T) {

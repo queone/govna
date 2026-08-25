@@ -26,8 +26,8 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 - Resolve every routing decision in chat.
 - Leave this emitted stub unchanged.
 - Render canon into a scratch directory.
-- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes.
-- Apply every resolved outcome without changing unrelated content.
+- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition.
+- Apply every resolved outcome within the authorized content boundaries.
 - Install `govna/canon-baseline.txt` last.
 
 ### Routing Decisions
@@ -48,7 +48,7 @@ This audit adoption synchronizes deterministic canon changes for `widget`. Audit
 
 **AT2** [Automated] [Pre-release gate] — Satisfy validation disposition `./build.sh` inferred from exact AGENTS.md declarations after selected work and before baseline installation.
 
-**AT3** [Automated] [Pre-release gate] — Install and verify `govna/canon-baseline.txt` from the same scratch render as the final adoption step.
+**AT3** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.
 
 ## Status
 

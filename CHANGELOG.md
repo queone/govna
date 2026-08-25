@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.7.4 | AC13: correct generated governance emission |
 | 0.7.3 | AC12: correct rewritten instruction style |
 | 0.7.2 | AC11: enforce atomic canon instructions |
 | 0.7.1 | AC10: correct audit baseline classification and AC emission |

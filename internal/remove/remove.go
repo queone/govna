@@ -24,7 +24,7 @@ type Assessment struct {
 	ControlState                *Route
 }
 
-func Run(args []string, stdout, stderr io.Writer, cwd string) int {
+func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) int {
 	cfg, err := parse(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -106,8 +106,8 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 		fmt.Fprintf(stderr, "rm: %v\n", err)
 		return 1
 	}
-	body := []byte(buildAC(stub, version, flavor, stack, assessment))
-	content := emission.GuardedBody(emission.RemovalMarkerPrefix, version, body)
+	body := []byte(buildAC(stub, programVersion, canon.Version, flavor, stack, assessment))
+	content := emission.GuardedBody(emission.RemovalMarkerPrefix, programVersion, canon.Version, body)
 	if reused && bytes.Equal(existing, content) {
 		fmt.Fprintf(stdout, "wrote %s\n", stub)
 		return 0
@@ -300,7 +300,7 @@ func sortRoutes(routes []Route) {
 	sort.Slice(routes, func(i, j int) bool { return routes[i].Path < routes[j].Path })
 }
 
-func buildAC(stub, version string, flavor canon.Flavor, stack string, a Assessment) string {
+func buildAC(stub, programVersion, canonVersion string, flavor canon.Flavor, stack string, a Assessment) string {
 	number := ""
 	base := filepath.Base(stub)
 	if rest, ok := strings.CutPrefix(base, "ac"); ok {
@@ -309,17 +309,24 @@ func buildAC(stub, version string, flavor canon.Flavor, stack string, a Assessme
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%s Govna Removal from %s\n\n## Summary\n\nExtricate govna canon from this consumer repo without deleting consumer-owned content. Emitted by `govna rm` against canon %s. Implement only after the Director resolves the routing decisions below.\n\nCompare each routing-pending file yourself before choosing how to route it. Do not auto-delete routing-pending files until the Director chooses their routing.\n\n### Routing Decisions\n\n", number, version, version)
+	fmt.Fprintf(&b, "# AC%s Govna Removal from v%s\n\n## Summary\n\nThis removal AC was emitted by govna executable v%s with embedded canon v%s. It removes Govna canon from this consumer repository without deleting consumer-owned content. Director-resolved routing protects every review path.\n\n### Removal Instructions\n\n", number, canonVersion, programVersion, canonVersion)
+	recipe := "govna render --flavor " + strings.ToLower(string(flavor))
+	if flavor == canon.Code {
+		recipe += " --stack " + stack
+	}
+	recipe += " <scratch>"
+	if len(a.Review) == 0 {
+		b.WriteString("- Apply each in-scope route.\n")
+	} else {
+		fmt.Fprintf(&b, "- Render the selected canon into `<scratch>` with `%s`.\n", recipe)
+		b.WriteString("- Preserve every routing-pending path until its route is resolved.\n- Resolve every routing decision in chat.\n- Apply each in-scope route and each Director-resolved review route.\n")
+	}
+	b.WriteString("\n### Routing Decisions\n\n")
 	if len(a.Review) == 0 {
 		b.WriteString("`None` — no review items.\n")
 	} else {
-		recipe := "govna render --flavor " + strings.ToLower(string(flavor))
-		if flavor == canon.Code {
-			recipe += " --stack " + stack
-		}
-		recipe += " <scratch>"
 		for i, r := range a.Review {
-			fmt.Fprintf(&b, "%d. `%s` is %s. Compare with: `%s && diff -ru <scratch>/%s %s`. Choose: delete canon-shape only, keep entirely, or delete entirely.\n", i+1, r.Path, r.Reason, recipe, r.Path, r.Path)
+			fmt.Fprintf(&b, "%d. `%s` is %s.\n   - Compare `%s` with `diff -ru <scratch>/%s %s`.\n   - Choose one route for `%s`: canon-only deletion, full preservation, or full deletion.\n", i+1, r.Path, r.Reason, r.Path, r.Path, r.Path, r.Path)
 		}
 	}
 	b.WriteString("\n## In Scope\n\n")
@@ -329,11 +336,11 @@ func buildAC(stub, version string, flavor canon.Flavor, stack string, a Assessme
 	}
 	b.WriteString("\n## Out Of Scope\n\n")
 	writeRoutes(&b, a.OutOfScope)
-	b.WriteString("\n## Migration findings\n\n- None. Apply only the Director-resolved removal routes.\n\n## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Removed files listed under `## In Scope` no longer exist.\n\n**AT2** [Manual] [Pre-release gate] — Director confirms every routing-pending file under `### Routing Decisions` was routed exactly as decided.\n")
+	b.WriteString("\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Automated] [Pre-release gate] — Verify every resolved removal target under `## In Scope` is absent.\n\n**AT2** [Manual] [Pre-release gate] — Verify every routing-pending path matches its Director-resolved route.\n")
 	if a.ControlState != nil {
-		b.WriteString("\n**AT3** [Automated] [Pre-release gate] — Every preserve-registry decision is applied and verified before `govna/preserve.txt` is deleted as the final control-state removal.\n")
+		b.WriteString("\n**AT3** [Automated] [Pre-release gate] — Verify every preserve-registry decision is applied before the final removal of `govna/preserve.txt`.\n")
 	}
-	b.WriteString("\n## Status\n\n`PENDING` — Emitted by `govna rm`; awaiting Director review.\n")
+	b.WriteString("\n## Status\n\n`PENDING` — removal emission; awaiting explicit Director Audit.\n")
 	return b.String()
 }
 

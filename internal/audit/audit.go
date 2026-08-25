@@ -78,7 +78,7 @@ var shaRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var nameReferenceRE = regexp.MustCompile(`(?:^|[[:space:]'"])(govna/[A-Za-z0-9._/-]+|AGENTS\.md|CHANGELOG\.md|README\.md|arch\.md|plan\.md)(?:$|[[:space:]'"),.:;])`)
 var adoptionCommitRE = regexp.MustCompile(`(?i)(govna|^govern[a-z]*)`)
 
-func Run(args []string, stdout, stderr io.Writer, cwd string) int {
+func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) int {
 	cfg, err := parse(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -103,7 +103,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 				return 1
 			}
 		}
-		body := emission.AuditBody("v"+canon.Version, []byte(buildAC(report, path, validationDisposition(cwd, report))))
+		body := emission.AuditBody(programVersion, canon.Version, []byte(buildAC(report, path, validationDisposition(cwd, report))))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			fmt.Fprintf(stderr, "audit: %v\n", err)
 			return 1
@@ -741,9 +741,15 @@ func buildAC(report Report, path, validation string) string {
 	writeGroup("Review", review)
 	b.WriteString("### Adoption Instructions\n\n- Resolve every routing decision in chat.\n- Leave this emitted stub unchanged.\n- Render canon into a scratch directory.\n")
 	if report.Header.Flavor == "code" {
-		b.WriteString("- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render before applying changes.\n")
+		b.WriteString("- Verify every direct-sync and canon-backed migration path exists in the selected CODE stack scratch render as a precondition.\n")
 	}
-	b.WriteString("- Apply every resolved outcome without changing unrelated content.\n- Install `govna/canon-baseline.txt` last.\n\n")
+	b.WriteString("- Apply every resolved outcome within the authorized content boundaries.\n- Install `govna/canon-baseline.txt` last.\n")
+	for _, f := range report.Files {
+		if len(f.LegacyPreserveMarkers) > 0 && f.Classification == "clear-sync" {
+			fmt.Fprintf(&b, "- Remove the legacy preserve phrase for `%s` only after the required sync and registry state are verified.\n", f.Path)
+		}
+	}
+	b.WriteString("\n")
 	if len(review) > 0 {
 		b.WriteString("### Routing Decisions\n\n")
 		for i, f := range review {
@@ -754,11 +760,6 @@ func buildAC(report Report, path, validation string) string {
 			}
 		}
 		b.WriteString("\n")
-	}
-	for _, f := range report.Files {
-		if len(f.LegacyPreserveMarkers) > 0 && f.Classification == "clear-sync" {
-			fmt.Fprintf(&b, "- Resolve the legacy preserve phrase for `%s` by removing it only after the required sync and registry state are verified.\n", f.Path)
-		}
 	}
 	b.WriteString("## Out Of Scope\n\n")
 	if len(preserve) == 0 {
@@ -778,7 +779,7 @@ func buildAC(report Report, path, validation string) string {
 			case baselinePath:
 				b.WriteString("- Create `govna/canon-baseline.txt` from the final scratch render only after all other work and validation pass.\n")
 			case "govna/metadata.txt":
-				b.WriteString("- Create `govna/metadata.txt` from the selected scratch render before installing `govna/canon-baseline.txt`.\n")
+				b.WriteString("- Create `govna/metadata.txt` from the selected scratch render before `govna/canon-baseline.txt` installation.\n")
 			default:
 				fmt.Fprintf(&b, "- Create `%s` from the selected scratch render.\n", f.Path)
 			}
@@ -789,13 +790,13 @@ func buildAC(report Report, path, validation string) string {
 	at := 2
 	for _, f := range append(sync, review...) {
 		if f.protectedHash != "" {
-			fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — When `%s` is synced, preserve the protected region from `%s` through EOF with SHA-256 `%s`.\n\n", at, f.Path, f.Boundary, f.protectedHash)
+			fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Preserve the protected region in `%s` from `%s` through EOF with SHA-256 `%s` for any sync outcome.\n\n", at, f.Path, f.Boundary, f.protectedHash)
 			at++
 		}
 	}
 	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Satisfy validation disposition %s after selected work and before baseline installation.\n\n", at, validation)
 	at++
-	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Install and verify `govna/canon-baseline.txt` from the same scratch render as the final adoption step.\n\n## Status\n\n`PENDING` — audit emission; awaiting explicit Director Audit.\n", at)
+	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final adoption step installed `govna/canon-baseline.txt` from the same scratch render.\n\n## Status\n\n`PENDING` — audit emission; awaiting explicit Director Audit.\n", at)
 	return b.String()
 }
 

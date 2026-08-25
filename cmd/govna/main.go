@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/render"
 )
 
-const programVersion = "0.7.3"
+const programVersion = "0.7.4"
 const canonVersion = "0.33.0"
 const sourceRepo = "github.com/queone/govna"
 
@@ -71,7 +71,7 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 			fmt.Fprintf(stderr, "audit: get cwd: %v\n", err)
 			return 1
 		}
-		return audit.Run(args[1:], stdout, stderr, cwd)
+		return audit.Run(args[1:], stdout, stderr, cwd, programVersion)
 	case "apply":
 		if len(args) == 2 && isHelp(args[1]) {
 			fmt.Fprint(stderr, applyHelp())
@@ -82,7 +82,7 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 			fmt.Fprintf(stderr, "apply: get cwd: %v\n", err)
 			return 1
 		}
-		return apply.Run(args[1:], stdout, stderr, cwd, nil)
+		return apply.Run(args[1:], stdout, stderr, cwd, programVersion, nil)
 	case "rm":
 		if len(args) == 2 && isHelp(args[1]) {
 			fmt.Fprint(stderr, remove.Help())
@@ -93,7 +93,7 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 			fmt.Fprintf(stderr, "rm: get cwd: %v\n", err)
 			return 1
 		}
-		return remove.Run(args[1:], stdout, stderr, cwd)
+		return remove.Run(args[1:], stdout, stderr, cwd, programVersion)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n", args[0])
 		fmt.Fprint(stderr, usageText(env))

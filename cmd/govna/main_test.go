@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -133,6 +134,72 @@ func TestRenderAliasesOperational(t *testing.T) {
 		if code != 0 || stderr != "" || stdout != filepath.Join(cwd, target)+"\n" {
 			t.Fatalf("%s: stdout=%q stderr=%q code=%d", command, stdout, stderr, code)
 		}
+	}
+}
+
+func TestTopLevelGeneratedVersionAxes(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	stdout, stderr, code := execute("apply", "--flavor", "doc")
+	if code != 0 {
+		t.Fatalf("apply code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	applyBody, err := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-apply.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantApply := fmt.Sprintf("govna executable v%s applied embedded canon v%s (DOC overlay)", programVersion, canonVersion)
+	if !strings.Contains(string(applyBody), wantApply) {
+		t.Fatalf("apply body omits top-level version axes: %s", applyBody)
+	}
+
+	gitMainTest(t, root, "init", "-q")
+	gitMainTest(t, root, "config", "user.email", "fixture@example.invalid")
+	gitMainTest(t, root, "config", "user.name", "Fixture")
+	gitMainTest(t, root, "add", ".")
+	gitMainTest(t, root, "commit", "-qm", "govna apply")
+	if err := os.Remove(filepath.Join(root, "govna", "roles.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code = execute("audit")
+	if code != 0 {
+		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.33.0.md"))
+	if err != nil || len(auditMatches) != 1 {
+		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
+	}
+	assertGeneratedMarkerAxes(t, auditMatches[0], "<!-- audit: emitted-by govna ")
+
+	stdout, stderr, code = execute("rm")
+	if code != 0 {
+		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.33.0.md"))
+	if err != nil || len(removalMatches) != 1 {
+		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
+	}
+	assertGeneratedMarkerAxes(t, removalMatches[0], "<!-- govna-rm: emitted-by govna ")
+}
+
+func assertGeneratedMarkerAxes(t *testing.T, path, markerPrefix string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("%sexecutable v%s with embedded canon v%s sha256:", markerPrefix, programVersion, canonVersion)
+	if !strings.HasPrefix(string(content), want) {
+		t.Fatalf("%s marker omits top-level version axes: %s", path, content)
+	}
+}
+
+func gitMainTest(t *testing.T, root string, args ...string) {
+	t.Helper()
+	commandArgs := append([]string{"-C", root}, args...)
+	if output, err := exec.Command("git", commandArgs...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", commandArgs, err, output)
 	}
 }
 

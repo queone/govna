@@ -25,7 +25,7 @@ type assessment struct {
 	existingArtifacts []string
 }
 
-func Run(args []string, stdout, stderr io.Writer, cwd string, command Command) int {
+func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, command Command) int {
 	cfg, err := parse(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -158,7 +158,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string, command Command) i
 		return fail(stderr, err)
 	}
 	rel := fmt.Sprintf("govna/ac%d-govna-apply.md", n)
-	body := adoption(n, name, string(flavor), outcomes, symlink)
+	body := adoption(n, name, string(flavor), programVersion, outcomes, symlink)
 	if err := os.WriteFile(filepath.Join(cwd, rel), []byte(body), 0o644); err != nil {
 		return fail(stderr, err)
 	}
@@ -326,9 +326,9 @@ func merge(old, fresh, b string) (string, bool) {
 	}
 	return fresh[:a+1] + old[z+1:], true
 }
-func adoption(n int, name, flavor string, out []Outcome, symlink string) string {
+func adoption(n int, name, flavor, programVersion string, out []Outcome, symlink string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%d Govna Apply\n\nApplied govna v%s governance template (%s overlay) to %s.\n\n## Summary\n\nApplied govna v%s governance template (%s overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.\n\n## In Scope\n\nFiles written by govna apply:\n\n", n, canon.Version, flavor, name, canon.Version, flavor)
+	fmt.Fprintf(&b, "# AC%d Govna Apply\n\ngovna executable v%s applied embedded canon v%s (%s overlay) to %s.\n\n## Summary\n\ngovna executable v%s applied embedded canon v%s (%s overlay). Every file listed below is consumer-owned.\n\n## In Scope\n\nFiles written by govna apply:\n\n", n, programVersion, canon.Version, flavor, name, programVersion, canon.Version, flavor)
 	for _, o := range out {
 		fmt.Fprintf(&b, "- `%s` (%s)\n", o.Path, o.Label)
 	}
@@ -337,13 +337,13 @@ func adoption(n int, name, flavor string, out []Outcome, symlink string) string 
 	} else {
 		b.WriteString("- `CLAUDE.md` (existing regular file preserved — not a symlink, see warning)\n")
 	}
-	b.WriteString("\n## Out Of Scope\n\n- All applied files are consumer-owned and can be freely modified\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Manual] [Pre-release gate] — Director reads AGENTS.md and confirms it reflects this repo's actual practices; adjust any section that doesn't.\n\n**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repo's delivery model (Operator + Director).\n\n")
+	b.WriteString("\n## Out Of Scope\n\n- All applied files are consumer-owned and can be freely modified\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.\n\n**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).\n\n")
 	if symlink == "created" {
 		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n")
 	} else {
-		b.WriteString("**AT3** [Manual] [Pre-release gate] — CLAUDE.md exists as a regular file, not a symlink to AGENTS.md; this apply left it untouched.\n\n")
+		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md.\n\n")
 	}
-	b.WriteString("## Status\n\n`PENDING` — review applied governance and adapt to repo needs.\n")
+	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
 	return b.String()
 }
 func exists(p string) bool          { _, e := os.Lstat(p); return e == nil }

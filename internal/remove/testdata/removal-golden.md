@@ -2,14 +2,23 @@
 
 ## Summary
 
-Extricate govna canon from this consumer repo without deleting consumer-owned content. Emitted by `govna rm` against canon v0.33.0. Implement only after the Director resolves the routing decisions below.
+This removal AC was emitted by govna executable v9.8.7 with embedded canon v0.33.0. It removes Govna canon from this consumer repository without deleting consumer-owned content. Director-resolved routing protects every review path.
 
-Compare each routing-pending file yourself before choosing how to route it. Do not auto-delete routing-pending files until the Director chooses their routing.
+### Removal Instructions
+
+- Render the selected canon into `<scratch>` with `govna render --flavor code --stack Go <scratch>`.
+- Preserve every routing-pending path until its route is resolved.
+- Resolve every routing decision in chat.
+- Apply each in-scope route and each Director-resolved review route.
 
 ### Routing Decisions
 
-1. `README.md` is mixed canon-shape and consumer content. Compare with: `govna render --flavor code --stack Go <scratch> && diff -ru <scratch>/README.md README.md`. Choose: delete canon-shape only, keep entirely, or delete entirely.
-2. `govna/metadata.txt` is consumer-edited canon file. Compare with: `govna render --flavor code --stack Go <scratch> && diff -ru <scratch>/govna/metadata.txt govna/metadata.txt`. Choose: delete canon-shape only, keep entirely, or delete entirely.
+1. `README.md` is mixed canon-shape and consumer content.
+   - Compare `README.md` with `diff -ru <scratch>/README.md README.md`.
+   - Choose one route for `README.md`: canon-only deletion, full preservation, or full deletion.
+2. `govna/metadata.txt` is consumer-edited canon file.
+   - Compare `govna/metadata.txt` with `diff -ru <scratch>/govna/metadata.txt govna/metadata.txt`.
+   - Choose one route for `govna/metadata.txt`: canon-only deletion, full preservation, or full deletion.
 
 ## In Scope
 
@@ -24,16 +33,16 @@ Compare each routing-pending file yourself before choosing how to route it. Do n
 
 ## Migration findings
 
-- None. Apply only the Director-resolved removal routes.
+- None.
 
 ## Acceptance Tests
 
-**AT1** [Automated] [Pre-release gate] — Removed files listed under `## In Scope` no longer exist.
+**AT1** [Automated] [Pre-release gate] — Verify every resolved removal target under `## In Scope` is absent.
 
-**AT2** [Manual] [Pre-release gate] — Director confirms every routing-pending file under `### Routing Decisions` was routed exactly as decided.
+**AT2** [Manual] [Pre-release gate] — Verify every routing-pending path matches its Director-resolved route.
 
-**AT3** [Automated] [Pre-release gate] — Every preserve-registry decision is applied and verified before `govna/preserve.txt` is deleted as the final control-state removal.
+**AT3** [Automated] [Pre-release gate] — Verify every preserve-registry decision is applied before the final removal of `govna/preserve.txt`.
 
 ## Status
 
-`PENDING` — Emitted by `govna rm`; awaiting Director review.
+`PENDING` — removal emission; awaiting explicit Director Audit.

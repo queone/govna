@@ -1,10 +1,10 @@
 # AC2 Govna Apply
 
-Applied govna v0.33.0 governance template (CODE overlay) to widget.
+govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay) to widget.
 
 ## Summary
 
-Applied govna v0.33.0 governance template (CODE overlay). All files below are now consumer-owned — modify freely to fit the repo's needs.
+govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay). Every file listed below is consumer-owned.
 
 ## In Scope
 
@@ -42,12 +42,12 @@ Files written by govna apply:
 
 ## Acceptance Tests
 
-**AT1** [Manual] [Pre-release gate] — Director reads AGENTS.md and confirms it reflects this repo's actual practices; adjust any section that doesn't.
+**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.
 
-**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repo's delivery model (Operator + Director).
+**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).
 
-**AT3** [Manual] [Pre-release gate] — CLAUDE.md exists as a regular file, not a symlink to AGENTS.md; this apply left it untouched.
+**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md.
 
 ## Status
 
-`PENDING` — review applied governance and adapt to repo needs.
+`PENDING` — apply emission; awaiting explicit Director Audit.

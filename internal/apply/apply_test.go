@@ -8,11 +8,39 @@ import (
 	"testing"
 )
 
+const testProgramVersion = "9.8.7"
+
 func runAt(t *testing.T, d string, args ...string) (string, string, int) {
 	t.Helper()
 	var out, err bytes.Buffer
-	code := Run(args, &out, &err, d, func(string, ...string) ([]byte, error) { return nil, nil })
+	code := Run(args, &out, &err, d, testProgramVersion, func(string, ...string) ([]byte, error) { return nil, nil })
 	return out.String(), err.String(), code
+}
+
+func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
+	created := adoption(7, "widget", "CODE", testProgramVersion, nil, "created")
+	for _, want := range []string{
+		"govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay) to widget.",
+		"govna executable v9.8.7 applied embedded canon v0.33.0 (CODE overlay). Every file listed below is consumer-owned.",
+		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
+		"**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).",
+		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.",
+		"`PENDING` — apply emission; awaiting explicit Director Audit.",
+	} {
+		if !strings.Contains(created, want) {
+			t.Errorf("created adoption omits %q", want)
+		}
+	}
+	for _, invalid := range []string{"Applied govna v0.33.0", "Director reads", "review applied governance"} {
+		if strings.Contains(created, invalid) {
+			t.Errorf("created adoption retains invalid text %q", invalid)
+		}
+	}
+	preserved := adoption(8, "widget", "CODE", testProgramVersion, nil, "preserved")
+	want := "**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md."
+	if !strings.Contains(preserved, want) {
+		t.Errorf("preserved adoption omits %q", want)
+	}
 }
 func TestFreshAndReapply(t *testing.T) {
 	d := filepath.Join(t.TempDir(), "widget")
@@ -147,7 +175,7 @@ func TestGitMain(t *testing.T) {
 	d := t.TempDir()
 	calls := ""
 	var out, err bytes.Buffer
-	code := Run([]string{"-f", "doc", "-g"}, &out, &err, d, func(name string, args ...string) ([]byte, error) {
+	code := Run([]string{"-f", "doc", "-g"}, &out, &err, d, testProgramVersion, func(name string, args ...string) ([]byte, error) {
 		calls = name + " " + strings.Join(args, " ")
 		return nil, nil
 	})
@@ -158,7 +186,7 @@ func TestGitMain(t *testing.T) {
 func TestParseErrors(t *testing.T) {
 	for _, args := range [][]string{{"x"}, {"-f"}, {"-f", "bad"}, {"-s", " "}, {"-m"}} {
 		var out, err bytes.Buffer
-		if Run(args, &out, &err, t.TempDir(), nil) != 2 {
+		if Run(args, &out, &err, t.TempDir(), testProgramVersion, nil) != 2 {
 			t.Fatalf("accepted %v", args)
 		}
 	}

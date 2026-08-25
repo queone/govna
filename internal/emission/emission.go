@@ -52,10 +52,19 @@ func AuditPath(root, version string, command func(string, ...string) ([]byte, er
 	return path, reused, err
 }
 
-// GuardedBody wraps body with a deterministic marker and body hash.
-func GuardedBody(prefix, version string, body []byte) []byte {
+// GuardedBody wraps body with deterministic executable and canon provenance.
+func GuardedBody(prefix, programVersion, canonVersion string, body []byte) []byte {
+	provenance := fmt.Sprintf(
+		"executable v%s with embedded canon v%s",
+		strings.TrimPrefix(programVersion, "v"),
+		strings.TrimPrefix(canonVersion, "v"),
+	)
+	return guardedBody(prefix, provenance, body)
+}
+
+func guardedBody(prefix, provenance string, body []byte) []byte {
 	hash := sha256.Sum256(body)
-	marker := fmt.Sprintf("%s%s sha256:%x -->\n", prefix, version, hash)
+	marker := fmt.Sprintf("%s%s sha256:%x -->\n", prefix, provenance, hash)
 	return append([]byte(marker), body...)
 }
 
@@ -75,8 +84,8 @@ func VerifyGuardedBody(content []byte, prefix string) bool {
 }
 
 // AuditBody wraps body with a deterministic edit-detection marker.
-func AuditBody(version string, body []byte) []byte {
-	return GuardedBody(AuditMarkerPrefix, "v"+strings.TrimPrefix(version, "v"), body)
+func AuditBody(programVersion, canonVersion string, body []byte) []byte {
+	return GuardedBody(AuditMarkerPrefix, programVersion, canonVersion, body)
 }
 
 // VerifyAuditBody reports whether a generated audit stub remains unedited.

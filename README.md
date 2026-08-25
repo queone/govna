@@ -85,6 +85,8 @@ Run `govna <command> -h` for command-specific flags.
 
 Run `govna apply` from the target repository or empty directory. Govna detects the repository shape, resolves omitted parameters, writes the selected canon, and emits an adoption AC for review.
 
+The adoption AC records the Govna executable version separately from the embedded canon version, so executable provenance is never confused with the governance content version.
+
 ```bash
 govna apply
 ```
@@ -115,6 +117,8 @@ govna audit
 
 Audit validates the repository’s metadata, canon baseline, and optional preserve registry. It classifies drift and emits one guarded routing AC only when it finds actionable work. It does not apply routing decisions or modify existing governed content.
 
+Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and embedded-canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
+
 Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
 
 ### `rm`
@@ -126,6 +130,8 @@ govna rm
 ```
 
 The command classifies paths for deletion, preservation, or Director review and emits a guarded cleanup AC. It does not execute any route or delete repository content.
+
+Removal stubs use the same canon-keyed path and dual-axis guarded-marker model as audit stubs.
 
 ### `render`
 
@@ -165,6 +171,8 @@ CODE repositories have first-class stack contracts for Go, Rust, Terraform, and 
 ## Design
 
 Govna is implemented as a standard-library-only Go module. Its templates are embedded in the executable, so rendering and adoption require no runtime package, network service, submodule, or template checkout.
+
+Canonical builds apply a semantic instruction gate to generated apply, audit, and removal AC fixtures. The gate validates positive imperative starters, atomic actions, the settled normalized instruction inventory, and expected emitter branches independently of byte-exact golden comparisons.
 
 Command output is deterministic and terminal color is gated by TTY capability, `NO_COLOR`, `TERM=dumb`, and 256-color support. The generated build scripts are self-contained and remain compatible with their documented stack environments.
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,9 +34,12 @@ func TestAuditGuard(t *testing.T) {
 	if err != nil || reused || path != "govna/ac1-audit-v0.29.0.md" {
 		t.Fatalf("path=%q reused=%v err=%v", path, reused, err)
 	}
-	body := AuditBody("v0.29.0", []byte("body\n"))
+	body := AuditBody("9.8.7", "0.29.0", []byte("body\n"))
 	if !VerifyAuditBody(body) || VerifyAuditBody(append(body, 'x')) {
 		t.Fatal("audit marker verification failed")
+	}
+	if !strings.HasPrefix(string(body), "<!-- audit: emitted-by govna executable v9.8.7 with embedded canon v0.29.0 sha256:") {
+		t.Fatalf("unexpected audit marker: %s", body)
 	}
 	os.WriteFile(filepath.Join(d, filepath.FromSlash(path)), body, 0644)
 	got, reused, err := AuditPath(d, "v0.29.0", cmd)
@@ -52,9 +56,12 @@ func TestRemovalGuardAndAmbiguity(t *testing.T) {
 	if err != nil || reused || path != "govna/ac1-govna-rm-v0.29.0.md" {
 		t.Fatalf("path=%q reused=%v err=%v", path, reused, err)
 	}
-	body := GuardedBody(RemovalMarkerPrefix, "v0.29.0", []byte("body\n"))
+	body := GuardedBody(RemovalMarkerPrefix, "9.8.7", "0.29.0", []byte("body\n"))
 	if !VerifyGuardedBody(body, RemovalMarkerPrefix) || VerifyGuardedBody(append(body, 'x'), RemovalMarkerPrefix) {
 		t.Fatal("removal marker verification failed")
+	}
+	if !strings.HasPrefix(string(body), "<!-- govna-rm: emitted-by govna executable v9.8.7 with embedded canon v0.29.0 sha256:") {
+		t.Fatalf("unexpected removal marker: %s", body)
 	}
 	os.WriteFile(filepath.Join(d, "govna", "ac1-govna-rm-v0.29.0.md"), body, 0644)
 	os.WriteFile(filepath.Join(d, "govna", "ac2-govna-rm-v0.29.0.md"), body, 0644)
@@ -62,5 +69,18 @@ func TestRemovalGuardAndAmbiguity(t *testing.T) {
 	want := "multiple emitted AC stubs for govna-rm v0.29.0: [govna/ac1-govna-rm-v0.29.0.md govna/ac2-govna-rm-v0.29.0.md]"
 	if err == nil || err.Error() != want {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestLegacyGuardedBodiesRemainValid(t *testing.T) {
+	body := []byte("legacy body\n")
+	for _, prefix := range []string{AuditMarkerPrefix, RemovalMarkerPrefix} {
+		legacy := guardedBody(prefix, "v0.29.0", body)
+		if !VerifyGuardedBody(legacy, prefix) {
+			t.Errorf("valid legacy marker rejected for %q", prefix)
+		}
+		if VerifyGuardedBody(append(legacy, 'x'), prefix) {
+			t.Errorf("edited legacy body accepted for %q", prefix)
+		}
 	}
 }
