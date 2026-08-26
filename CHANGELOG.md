@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.8.0 | AC18: clarify Govna's programming and publishing efficiency purpose |
 | 0.7.8 | AC17: Fix contradictory audit output and expose force-sync in JSON |
 | 0.7.7 | AC16: make Govna explanations easier to understand |
 | 0.7.6 | AC15: gate audit validation on stack manifest reachability |

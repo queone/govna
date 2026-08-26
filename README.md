@@ -6,9 +6,11 @@ Govna carries a versioned set of governance files inside one Go executable. That
 
 ## Why
 
-AI-assisted development works better when the collaboration contract is explicit, versioned, and reproducible instead of being reconstructed from transient session context.
+Govna exists to make programming and publishing ceremonies—the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release—more effective and efficient. By making those checkpoints explicit and reusable, Directors and Operators spend less time reconstructing or renegotiating process from transient session context and more time delivering the change.
 
-Govna gives human Directors and agent Operators a shared, file-based contract for authorization, scope, review, implementation, and release decisions. Repositories remain self-contained after adoption, and the generated governance can be adapted to local needs.
+Beyond saving coordination time, the contract keeps decision-bearing choices with the human Director while giving the agent Operator clear authority for settled mechanical work. Bounded scope and testable acceptance criteria reduce ambiguity, scope drift, and missed paths; recorded decisions improve continuity across sessions; and deterministic canon plus auditing make the workflow reproducible and governance drift detectable.
+
+Because the generated governance is file-based, adopted repositories remain self-contained, inspectable, and adaptable to local needs.
 
 ## What Govna Provides
 
@@ -179,6 +181,8 @@ Command output is deterministic and terminal color is gated by TTY capability, `
 See [`arch.md`](arch.md) for the component and data-flow overview.
 
 ## Language for AI-Assisted Coding
+
+Efficient programming ceremonies depend partly on how quickly an Operator can understand, change, and verify the code. Language and stack choices therefore affect workflow efficiency, not just implementation style.
 
 Stack choice (`apply`'s `-s, --stack`) is a Director decision, but Operator readability is a real input, distinct from human readability — and it splits into two axes that don't always agree.
 

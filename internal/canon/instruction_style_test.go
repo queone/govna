@@ -557,6 +557,107 @@ func TestManualACTitleAndSummaryScenario(t *testing.T) {
 	}
 }
 
+func TestEfficiencyPurposeSourceCoverage(t *testing.T) {
+	for _, path := range []string{
+		"govna/operator-contract-rationale.md",
+		"internal/canon/assets/overlays/code/files/govna/operator-contract-rationale.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/operator-contract-rationale.md.tmpl",
+	} {
+		content := readSourceForLanguageTest(t, path)
+		if count := strings.Count(content, efficiencyPurposeDefinition); count != 1 {
+			t.Errorf("%s purpose definition count=%d, want 1", path, count)
+		}
+		if count := strings.Count(content, efficiencyGateBoundary); count != 1 {
+			t.Errorf("%s gate-boundary count=%d, want 1", path, count)
+		}
+	}
+
+	checks := map[string][]string{
+		"README.md": {
+			"make programming and publishing ceremonies",
+			"Efficient programming ceremonies depend partly on how quickly an Operator can understand, change, and verify the code. Language and stack choices therefore affect workflow efficiency, not just implementation style.",
+		},
+		"plan.md": {
+			"Make recurring programming and publishing ceremonies more effective and efficient by preserving Director-owned choices and automating settled mechanics.",
+		},
+		"arch.md": {
+			"Govna automates deterministic mechanics and surfaces decision-bearing choices to the Director.",
+		},
+		"govna/README.md": {
+			"the contract makes programming and publishing ceremonies more effective and efficient",
+		},
+		"internal/canon/assets/overlays/code/files/govna/README.md.tmpl": {
+			"the contract makes programming and publishing ceremonies more effective and efficient",
+		},
+		"internal/canon/assets/overlays/doc/files/govna/README.md.tmpl": {
+			"the contract makes publishing ceremonies more effective and efficient",
+		},
+		"internal/canon/assets/overlays/code/files/README.md.tmpl": {
+			"Govna makes recurring programming ceremonies more effective and efficient",
+		},
+		"internal/canon/assets/overlays/doc/files/README.md.tmpl": {
+			"Govna makes recurring publishing ceremonies more effective and efficient",
+		},
+		"govna/development-cycle.md": {
+			"The lifecycle makes recurring programming checkpoints and their settled context reusable across phases and sessions.",
+		},
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl": {
+			"The lifecycle makes recurring programming checkpoints and their settled context reusable across phases and sessions.",
+		},
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl": {
+			"The lifecycle makes recurring publishing checkpoints and their settled context reusable across phases and sessions.",
+		},
+		"govna/ac-template.md": {
+			"An AC records settled intent, scope, and proof once so later review, implementation, and verification can reuse the same context instead of reconstructing it.",
+		},
+		"internal/canon/assets/overlays/code/files/govna/ac-template.md.tmpl": {
+			"An AC records settled intent, scope, and proof once so later review, implementation, and verification can reuse the same context instead of reconstructing it.",
+		},
+		"internal/canon/assets/overlays/doc/files/govna/ac-template.md.tmpl": {
+			"An AC records settled intent, scope, and proof once so later review, editing, and verification can reuse the same context instead of reconstructing it.",
+		},
+	}
+	for path, required := range checks {
+		content := readSourceForLanguageTest(t, path)
+		for _, fragment := range required {
+			if strings.Count(content, fragment) != 1 {
+				t.Errorf("%s requires one occurrence of %q", path, fragment)
+			}
+		}
+	}
+
+	for _, path := range []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	} {
+		if content := readSourceForLanguageTest(t, path); strings.Contains(content, "programming and publishing ceremonies") {
+			t.Errorf("%s carries purpose rationale into the imperative rule contract", path)
+		}
+	}
+}
+
+func TestEfficiencyPurposePreservesLanguageRanking(t *testing.T) {
+	readme := readSourceForLanguageTest(t, "README.md")
+	last := -1
+	for _, marker := range []string{
+		"| 1    | Go",
+		"| 2    | TypeScript (strict)",
+		"| 3    | Rust",
+		"| 4    | Python",
+		"| 5    | JavaScript",
+		"| 6    | Java / C#",
+		"| 7    | C",
+		"| 8    | C++",
+	} {
+		index := strings.Index(readme, marker)
+		if index <= last {
+			t.Fatalf("README language ranking omits or reorders %q", marker)
+		}
+		last = index
+	}
+}
+
 func readSourceForLanguageTest(t *testing.T, path string) string {
 	t.Helper()
 	content, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(path)))

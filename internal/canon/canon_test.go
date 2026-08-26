@@ -10,6 +10,11 @@ import (
 	"testing"
 )
 
+const (
+	efficiencyPurposeDefinition = "Govna exists to make programming and publishing ceremonies—the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release—more effective and efficient."
+	efficiencyGateBoundary      = "Efficiency does not weaken authorization, review, verification, or release gates."
+)
+
 func TestRenderVariants(t *testing.T) {
 	for _, stack := range []string{"Go", "Rust", "Swift", "Terraform", "Node", "Python", "Java"} {
 		t.Run(stack, func(t *testing.T) {
@@ -38,6 +43,66 @@ func TestRenderVariants(t *testing.T) {
 	assertFiles(t, doc, "DOC", "")
 }
 
+func TestEfficiencyPurposeRenders(t *testing.T) {
+	variants := []struct {
+		name         string
+		config       Config
+		requirements map[string]string
+	}{
+		{
+			name:   "DOC",
+			config: Config{Flavor: Doc, RepoName: "handbook"},
+			requirements: map[string]string{
+				"README.md":              "Govna makes recurring publishing ceremonies more effective and efficient",
+				"govna/README.md":        "the contract makes publishing ceremonies more effective and efficient",
+				"govna/ac-template.md":   "An AC records settled intent, scope, and proof once so later review, editing, and verification can reuse the same context instead of reconstructing it.",
+				"govna/editing-cycle.md": "The lifecycle makes recurring publishing checkpoints and their settled context reusable across phases and sessions.",
+			},
+		},
+	}
+	for _, stack := range Stacks() {
+		modulePath := ""
+		if stack == "Go" {
+			modulePath = "example.com/widget"
+		}
+		variants = append(variants, struct {
+			name         string
+			config       Config
+			requirements map[string]string
+		}{
+			name:   stack,
+			config: Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: modulePath},
+			requirements: map[string]string{
+				"README.md":                  "Govna makes recurring programming ceremonies more effective and efficient",
+				"govna/README.md":            "the contract makes programming and publishing ceremonies more effective and efficient",
+				"govna/ac-template.md":       "An AC records settled intent, scope, and proof once so later review, implementation, and verification can reuse the same context instead of reconstructing it.",
+				"govna/development-cycle.md": "The lifecycle makes recurring programming checkpoints and their settled context reusable across phases and sessions.",
+			},
+		})
+	}
+
+	for _, variant := range variants {
+		t.Run(variant.name, func(t *testing.T) {
+			files, err := Render(variant.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rationale := fileText(t, files, "govna/operator-contract-rationale.md")
+			if count := strings.Count(rationale, efficiencyPurposeDefinition); count != 1 {
+				t.Errorf("contract purpose definition count=%d, want 1", count)
+			}
+			if count := strings.Count(rationale, efficiencyGateBoundary); count != 1 {
+				t.Errorf("efficiency gate boundary count=%d, want 1", count)
+			}
+			for path, required := range variant.requirements {
+				if content := fileText(t, files, path); !strings.Contains(content, required) {
+					t.Errorf("%s omits purpose reminder %q", path, required)
+				}
+			}
+		})
+	}
+}
+
 func assertFiles(t *testing.T, files []File, flavor, stack string) {
 	t.Helper()
 	previous := ""
@@ -50,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.36.1\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.37.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {

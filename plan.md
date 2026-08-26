@@ -2,7 +2,7 @@
 
 ## Product Direction
 
-Maintain govna as deterministic, dependency-free governance tooling with package-owned behavior tests and self-contained product tooling.
+Maintain govna as deterministic, dependency-free governance tooling with package-owned behavior tests and self-contained product tooling. Make recurring programming and publishing ceremonies more effective and efficient by preserving Director-owned choices and automating settled mechanics.
 
 ## Ideas To Explore
 

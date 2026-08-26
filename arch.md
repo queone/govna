@@ -4,6 +4,8 @@
 
 Add, compare, inspect, and remove Govna governance files predictably in CODE and DOC repositories. The versioned governance files built into Govna are its canon.
 
+Govna automates deterministic mechanics and surfaces decision-bearing choices to the Director. This separation makes recurring programming and publishing ceremonies more effective and efficient without weakening authorization, review, verification, or release gates.
+
 ## System Summary
 
 One dependency-free Go module handles the complete workflow. It selects the CODE or DOC file set, writes embedded files, compares adopted repositories, prepares removal plans, and validates Govna itself.

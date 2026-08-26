@@ -4,7 +4,7 @@
 
 Govna found 2 files ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.
 
-This AC updates `widget` to Govna's embedded governance files (canon v0.36.1). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
+This AC updates `widget` to Govna's embedded governance files (canon v0.37.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
 
 ## In Scope
 
