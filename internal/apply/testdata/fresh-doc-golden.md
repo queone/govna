@@ -1,15 +1,16 @@
 # AC1 Review Files Added by Govna
 
-Govna executable v9.8.7 added its embedded governance files (canon v0.37.0) for the DOC repository handbook.
+Govna executable v9.8.7 added its embedded governance files (canon v0.38.0) for the DOC repository handbook.
 
 ## Summary
 
-Govna executable v9.8.7 added its embedded governance files (canon v0.37.0). The list below records whether each file was written, merged, or preserved.
+Govna executable v9.8.7 added its embedded governance files (canon v0.38.0). The list below records whether each file was written, merged, or preserved.
 
 ## In Scope
 
 Files Govna processed:
 
+- `.gitignore` (written)
 - `AGENTS.md` (written)
 - `CHANGELOG.md` (written)
 - `README.md` (written)

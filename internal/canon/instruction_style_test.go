@@ -183,7 +183,7 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I08", "Confirm each file selected for update exists in the selected CODE render."},
 	{"I09", "Apply each Director choice only to its authorized file region."},
 	{"I10", "Write govna/canon-baseline.txt as the final file update."},
-	{"I11", "Remove the legacy preserve phrase for <path> only after the file update and preserve-list state are verified."},
+	{"I11", "Install <replacement> before retired-source routing for <path>."},
 	{"I12", "Write govna/canon-baseline.txt from the final temporary render only after all other work is complete and the repository check succeeds."},
 	{"I13", "Create govna/metadata.txt from the selected temporary render before govna/canon-baseline.txt installation."},
 	{"I14", "Create <path> from the selected temporary render."},
@@ -202,12 +202,40 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I27", "Verify every keep-local choice is applied before the final removal of govna/preserve.txt."},
 	{"I28", "Choose the repository check in chat."},
 	{"I29", "Verify the chosen repository check succeeds before govna/canon-baseline.txt installation."},
+	{"I30", "Convert <phrases> into govna/preserve.txt for a conversion choice on <path>."},
+	{"I31", "Verify every applicable marker-only AT for <path> before legacy-phrase cleanup."},
+	{"I32", "Remove <phrases> from CHANGELOG.md after marker-only verification for <path>."},
+	{"I33", "Convert <phrases> into govna/preserve.txt for a preserve choice on <path>."},
+	{"I34", "Verify every applicable resolved-route AT for <path> before legacy-phrase cleanup."},
+	{"I35", "Remove <phrases> from CHANGELOG.md after resolved-state verification for <path>."},
+	{"I36", "Verify <path> remains byte-identical with SHA-256 <hash> for every marker-only choice."},
+	{"I37", "Verify <path> remains absent for every marker-only choice."},
+	{"I38", "Verify <path> occurs exactly once in govna/preserve.txt when its marker-only action is convert."},
+	{"I39", "Verify <path> remains in govna/preserve.txt when its marker-only action is remove."},
+	{"I40", "Verify <path> remains absent from govna/preserve.txt when its marker-only action is remove."},
+	{"I41", "Verify every exact legacy phrase in <phrases> is absent from the Unreleased CHANGELOG Summary after the marker-only choice for <path>."},
+	{"I42", "Verify <path> matches its applicable rendered canon region when its resolved action is sync."},
+	{"I43", "Verify <path> is absent from govna/preserve.txt when its resolved action is sync."},
+	{"I44", "Verify <path> remains present when its resolved action is preserve."},
+	{"I45", "Verify <path> occurs exactly once in govna/preserve.txt when its resolved action is preserve."},
+	{"I46", "Verify <path> is absent when its resolved action is delete."},
+	{"I47", "Verify <path> is absent from govna/preserve.txt when its resolved action is delete."},
+	{"I48", "Verify the Director response names a migration destination for <path> when its resolved action is migrate."},
+	{"I49", "Verify <path> is absent unless the Director explicitly preserves it when its resolved action is migrate."},
+	{"I50", "Verify any canon-backed migration destination for <path> matches its applicable rendered canon region."},
+	{"I51", "Verify any repository-owned migration destination for <path> matches the Director-stated result."},
+	{"I52", "Verify <path> is absent from govna/preserve.txt when its resolved action is a canon-backed migration."},
+	{"I53", "Verify <replacement> matches its applicable rendered canon region before retired-source routing for <path>."},
+	{"I54", "Verify legacy-phrase cleanup for <path> starts only after every applicable target-state and registry-state AT passes."},
+	{"I55", "Verify every exact legacy phrase in <phrases> is absent from the Unreleased CHANGELOG Summary after the resolved action for <path>."},
+	{"I56", "Verify every applicable direct-update AT for <path> before legacy-phrase cleanup."},
+	{"I57", "Verify the Unreleased CHANGELOG Summary changes only through exact removal of <phrases> for <path>."},
+	{"I58", "Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for <path>."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
 
 var (
-	legacyPreserveInstruction  = regexp.MustCompile("^Remove the legacy preserve phrase for `[^`]+` only after the file update and preserve-list state are verified\\.$")
 	protectedRegionInstruction = regexp.MustCompile("^Preserve the protected region in `[^`]+` from `[^`]+` through EOF with SHA-256 `[^`]+` for any update choice\\.$")
 	inferredCheckInstruction   = regexp.MustCompile("^Run `[^`]+` after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
 	notApplicableInstruction   = regexp.MustCompile("^Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
@@ -216,6 +244,42 @@ var (
 	chooseRemovalInstruction   = regexp.MustCompile("^Choose what to remove from `[^`]+`: only its Govna-managed section, nothing, or the whole file\\.$")
 	otherMigrationInstruction  = regexp.MustCompile("^Create `[^`]+` from the selected temporary render\\.$")
 )
+
+var generatedDynamicInstructions = []struct {
+	pattern    *regexp.Regexp
+	normalized string
+}{
+	{regexp.MustCompile("^Install `[^`]+` before retired-source routing for `[^`]+`\\.$"), "Install <replacement> before retired-source routing for <path>."},
+	{regexp.MustCompile("^Convert .+ into `govna/preserve\\.txt` for a conversion choice on `[^`]+`\\.$"), "Convert <phrases> into govna/preserve.txt for a conversion choice on <path>."},
+	{regexp.MustCompile("^Verify every applicable marker-only AT for `[^`]+` before legacy-phrase cleanup\\.$"), "Verify every applicable marker-only AT for <path> before legacy-phrase cleanup."},
+	{regexp.MustCompile("^Remove .+ from `CHANGELOG\\.md` after marker-only verification for `[^`]+`\\.$"), "Remove <phrases> from CHANGELOG.md after marker-only verification for <path>."},
+	{regexp.MustCompile("^Convert .+ into `govna/preserve\\.txt` for a preserve choice on `[^`]+`\\.$"), "Convert <phrases> into govna/preserve.txt for a preserve choice on <path>."},
+	{regexp.MustCompile("^Verify every applicable resolved-route AT for `[^`]+` before legacy-phrase cleanup\\.$"), "Verify every applicable resolved-route AT for <path> before legacy-phrase cleanup."},
+	{regexp.MustCompile("^Remove .+ from `CHANGELOG\\.md` after resolved-state verification for `[^`]+`\\.$"), "Remove <phrases> from CHANGELOG.md after resolved-state verification for <path>."},
+	{regexp.MustCompile("^Verify `[^`]+` remains byte-identical with SHA-256 `[^`]+` for every marker-only choice\\.$"), "Verify <path> remains byte-identical with SHA-256 <hash> for every marker-only choice."},
+	{regexp.MustCompile("^Verify `[^`]+` remains absent for every marker-only choice\\.$"), "Verify <path> remains absent for every marker-only choice."},
+	{regexp.MustCompile("^Verify `[^`]+` occurs exactly once in `govna/preserve\\.txt` when its marker-only action is convert\\.$"), "Verify <path> occurs exactly once in govna/preserve.txt when its marker-only action is convert."},
+	{regexp.MustCompile("^Verify `[^`]+` remains in `govna/preserve\\.txt` when its marker-only action is remove\\.$"), "Verify <path> remains in govna/preserve.txt when its marker-only action is remove."},
+	{regexp.MustCompile("^Verify `[^`]+` remains absent from `govna/preserve\\.txt` when its marker-only action is remove\\.$"), "Verify <path> remains absent from govna/preserve.txt when its marker-only action is remove."},
+	{regexp.MustCompile("^Verify every exact legacy phrase in .+ is absent from the Unreleased CHANGELOG Summary after the marker-only choice for `[^`]+`\\.$"), "Verify every exact legacy phrase in <phrases> is absent from the Unreleased CHANGELOG Summary after the marker-only choice for <path>."},
+	{regexp.MustCompile("^Verify `[^`]+` matches its applicable rendered canon region when its resolved action is sync\\.$"), "Verify <path> matches its applicable rendered canon region when its resolved action is sync."},
+	{regexp.MustCompile("^Verify `[^`]+` is absent from `govna/preserve\\.txt` when its resolved action is sync\\.$"), "Verify <path> is absent from govna/preserve.txt when its resolved action is sync."},
+	{regexp.MustCompile("^Verify `[^`]+` remains present when its resolved action is preserve\\.$"), "Verify <path> remains present when its resolved action is preserve."},
+	{regexp.MustCompile("^Verify `[^`]+` occurs exactly once in `govna/preserve\\.txt` when its resolved action is preserve\\.$"), "Verify <path> occurs exactly once in govna/preserve.txt when its resolved action is preserve."},
+	{regexp.MustCompile("^Verify `[^`]+` is absent when its resolved action is delete\\.$"), "Verify <path> is absent when its resolved action is delete."},
+	{regexp.MustCompile("^Verify `[^`]+` is absent from `govna/preserve\\.txt` when its resolved action is delete\\.$"), "Verify <path> is absent from govna/preserve.txt when its resolved action is delete."},
+	{regexp.MustCompile("^Verify the Director response names a migration destination for `[^`]+` when its resolved action is migrate\\.$"), "Verify the Director response names a migration destination for <path> when its resolved action is migrate."},
+	{regexp.MustCompile("^Verify `[^`]+` is absent unless the Director explicitly preserves it when its resolved action is migrate\\.$"), "Verify <path> is absent unless the Director explicitly preserves it when its resolved action is migrate."},
+	{regexp.MustCompile("^Verify any canon-backed migration destination for `[^`]+` matches its applicable rendered canon region\\.$"), "Verify any canon-backed migration destination for <path> matches its applicable rendered canon region."},
+	{regexp.MustCompile("^Verify any repository-owned migration destination for `[^`]+` matches the Director-stated result\\.$"), "Verify any repository-owned migration destination for <path> matches the Director-stated result."},
+	{regexp.MustCompile("^Verify `[^`]+` is absent from `govna/preserve\\.txt` when its resolved action is a canon-backed migration\\.$"), "Verify <path> is absent from govna/preserve.txt when its resolved action is a canon-backed migration."},
+	{regexp.MustCompile("^Verify `[^`]+` matches its applicable rendered canon region before retired-source routing for `[^`]+`\\.$"), "Verify <replacement> matches its applicable rendered canon region before retired-source routing for <path>."},
+	{regexp.MustCompile("^Verify legacy-phrase cleanup for `[^`]+` starts only after every applicable target-state and registry-state AT passes\\.$"), "Verify legacy-phrase cleanup for <path> starts only after every applicable target-state and registry-state AT passes."},
+	{regexp.MustCompile("^Verify every exact legacy phrase in .+ is absent from the Unreleased CHANGELOG Summary after the resolved action for `[^`]+`\\.$"), "Verify every exact legacy phrase in <phrases> is absent from the Unreleased CHANGELOG Summary after the resolved action for <path>."},
+	{regexp.MustCompile("^Verify every applicable direct-update AT for `[^`]+` before legacy-phrase cleanup\\.$"), "Verify every applicable direct-update AT for <path> before legacy-phrase cleanup."},
+	{regexp.MustCompile("^Verify the Unreleased CHANGELOG Summary changes only through exact removal of .+ for `[^`]+`\\.$"), "Verify the Unreleased CHANGELOG Summary changes only through exact removal of <phrases> for <path>."},
+	{regexp.MustCompile("^Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for `[^`]+`\\.$"), "Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for <path>."},
+}
 
 var generatedProseStarters = func() map[string]bool {
 	words := strings.Fields("Add Adopt Allow Apply Ask Avoid Begin Capture Change Check Choose Classify Compare Complete Confirm Continue Create Define Delete Detect Do Draft Edit Emit End Ensure Extricate Fail Follow Format Infer Install Keep Leave Limit Make Mark Move Omit Pass Place Prefer Preserve Prevent Prohibit Record Refresh Reject Remove Render Replace Require Reserve Resolve Restore Return Reuse Review Route Run Satisfy Scan Set Skip Split Start State Stop Synchronize Treat Update Use Validate Verify Wait Write Implement")
@@ -227,8 +291,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 29 {
-		t.Fatalf("generated instruction manifest has %d entries, want 29", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 58 {
+		t.Fatalf("generated instruction manifest has %d entries, want 58", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -249,6 +313,26 @@ func TestGeneratedInstructionManifest(t *testing.T) {
 		}
 		if err := validateGeneratedInstruction(instruction.text); err != nil {
 			t.Errorf("generated instruction %s is invalid: %v", instruction.id, err)
+		}
+	}
+}
+
+func TestGeneratedDynamicInstructionManifestCoverage(t *testing.T) {
+	if len(generatedDynamicInstructions) != 30 {
+		t.Fatalf("dynamic generated instruction normalizers=%d, want 30", len(generatedDynamicInstructions))
+	}
+	manifest := generatedManifestByText(t)
+	seen := map[string]bool{}
+	for _, candidate := range generatedDynamicInstructions {
+		if candidate.pattern == nil || candidate.normalized == "" {
+			t.Fatalf("incomplete dynamic generated instruction normalizer: %+v", candidate)
+		}
+		if seen[candidate.normalized] {
+			t.Errorf("duplicate dynamic generated instruction normalization: %s", candidate.normalized)
+		}
+		seen[candidate.normalized] = true
+		if manifest[candidate.normalized] == "" {
+			t.Errorf("dynamic generated instruction is outside the manifest: %s", candidate.normalized)
 		}
 	}
 }
@@ -310,9 +394,11 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1,
+			"I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
 		},
 		"internal/audit/testdata/unresolved-validation-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I28": 1, "I29": 1,
+			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
 		},
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
@@ -723,14 +809,17 @@ func firstInstructionWord(instruction string) string {
 
 func normalizeGeneratedInstruction(instruction string) string {
 	trimmed := strings.TrimSpace(instruction)
+	for _, candidate := range generatedDynamicInstructions {
+		if candidate.pattern.MatchString(trimmed) {
+			return candidate.normalized
+		}
+	}
 	normalized := strings.ReplaceAll(trimmed, "`", "")
 	switch {
 	case normalized == "Write govna/canon-baseline.txt from the final temporary render only after all other work is complete and the repository check succeeds.":
 		return normalized
 	case normalized == "Create govna/metadata.txt from the selected temporary render before govna/canon-baseline.txt installation.":
 		return normalized
-	case legacyPreserveInstruction.MatchString(trimmed):
-		return "Remove the legacy preserve phrase for <path> only after the file update and preserve-list state are verified."
 	case protectedRegionInstruction.MatchString(trimmed):
 		return "Preserve the protected region in <path> from <boundary> through EOF with SHA-256 <hash> for any update choice."
 	case inferredCheckInstruction.MatchString(trimmed):

@@ -44,6 +44,9 @@ type FileResult struct {
 	Boundary                string   `json:"boundary,omitempty"`
 	protectedHash           string
 	forceSync               bool
+	legacyOnly              bool
+	targetHash              string
+	targetPresent           bool
 }
 
 type Header struct {
@@ -87,9 +90,15 @@ type baseline struct {
 }
 type baselineEntry struct{ Scope, Hash string }
 type version struct{ Major, Minor, Patch uint64 }
-type coherenceRule struct{ Path, Contains string }
+type coherenceRule struct {
+	Reference string
+	Targets   []string
+}
 
-var coherenceRules []coherenceRule
+var coherenceRules = []coherenceRule{{
+	Reference: "govna/roles.md",
+	Targets:   []string{"govna/build-release.md", "govna/release.md"},
+}}
 
 var semverRE = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 var shaRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -297,17 +306,26 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 				}
 			}
 		}
+		formatNeedsSync := (path == "AGENTS.md" || path == "govna/ac-template.md") && fr.Classification != "match" && fr.Classification != "expected-divergence"
 		if markers := legacy[path]; len(markers) > 0 {
 			fr.LegacyPreserveMarkers = markers
+			fr.legacyOnly = !actionable(fr.Classification) && !formatNeedsSync
 			fr.Classification = "ambiguity"
+			if fr.legacyOnly {
+				captureTargetState(root, path, &fr)
+			}
 			delete(legacy, path)
 		}
-		if (path == "AGENTS.md" || path == "govna/ac-template.md") && fr.Classification != "match" && fr.Classification != "expected-divergence" {
+		if formatNeedsSync {
 			fr.PreserveEntries = nil
 			fr.forceSync = true
 			fr.EffectiveClassification = "force-sync"
 		}
-		fr.CompareCommand = comparisonDescription(fr, path)
+		if fr.legacyOnly {
+			fr.CompareCommand = "review exact legacy preserve phrase for " + path
+		} else {
+			fr.CompareCommand = comparisonDescription(fr, path)
+		}
 		report.Files = append(report.Files, fr)
 	}
 	if !basePresent {
@@ -316,17 +334,41 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
 	}
 	for path, evidence := range targetOnly(root, canonMap, prior, flavor, name) {
-		fr := FileResult{Path: path, Classification: "target-has-no-canon", CanonReference: evidence, CompareCommand: "review " + path + " because it is not in the selected embedded Govna files"}
+		classification := "target-has-no-canon"
+		if preserve[path] {
+			classification = "preserve"
+		}
+		fr := FileResult{Path: path, Classification: classification, CanonReference: evidence, CompareCommand: "review " + path + " because it is not in the selected embedded Govna files"}
+		if preserve[path] {
+			fr.PreserveEntries = []string{path}
+		}
 		data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		fr.Diff = diffText(nil, data, path, cfg.DiffLines)
 		if markers := legacy[path]; len(markers) > 0 {
 			fr.LegacyPreserveMarkers = markers
+			if preserve[path] {
+				fr.Classification = "ambiguity"
+				fr.legacyOnly = true
+				captureTargetState(root, path, &fr)
+			} else {
+				fr.Classification = "target-has-no-canon"
+			}
 			delete(legacy, path)
 		}
 		report.Files = append(report.Files, fr)
 	}
 	for path, markers := range legacy {
-		report.Files = append(report.Files, FileResult{Path: path, Classification: "ambiguity", LegacyPreserveMarkers: markers})
+		fr := FileResult{Path: path, Classification: "ambiguity", LegacyPreserveMarkers: markers, legacyOnly: true}
+		if preserve[path] {
+			fr.PreserveEntries = []string{path}
+		}
+		data, present, _ := readOptional(filepath.Join(root, filepath.FromSlash(path)))
+		fr.targetPresent = present
+		if present {
+			hash := sha256.Sum256(data)
+			fr.targetHash = fmt.Sprintf("%x", hash)
+		}
+		report.Files = append(report.Files, fr)
 	}
 	sort.Slice(report.Files, func(i, j int) bool { return report.Files[i].Path < report.Files[j].Path })
 	clean := true
@@ -402,9 +444,28 @@ func less(a, b version) bool {
 
 func checkCoherence(files map[string][]byte) error {
 	for _, rule := range coherenceRules {
-		content, ok := files[rule.Path]
-		if !ok || !bytes.Contains(content, []byte(rule.Contains)) {
-			return usererr.Errorf("embedded Govna files disagree with each other: %s must contain %q; report this to the Govna maintainer", rule.Path, rule.Contains)
+		content, ok := files[rule.Reference]
+		if !ok {
+			return usererr.Errorf("embedded Govna files disagree with each other: %s is missing; report this to the Govna maintainer", rule.Reference)
+		}
+		present := ""
+		for _, target := range rule.Targets {
+			_, exists := files[target]
+			referenced := bytes.Contains(content, []byte(target))
+			if exists {
+				if present != "" {
+					return usererr.Errorf("embedded Govna files disagree with each other: %s has more than one release document; report this to the Govna maintainer", rule.Reference)
+				}
+				present = target
+				if !referenced {
+					return usererr.Errorf("embedded Govna files disagree with each other: %s must reference %s; report this to the Govna maintainer", rule.Reference, target)
+				}
+			} else if referenced {
+				return usererr.Errorf("embedded Govna files disagree with each other: %s references missing %s; report this to the Govna maintainer", rule.Reference, target)
+			}
+		}
+		if present == "" {
+			return usererr.Errorf("embedded Govna files disagree with each other: %s has no release document; report this to the Govna maintainer", rule.Reference)
 		}
 	}
 	return nil
@@ -685,6 +746,16 @@ func readOptional(path string) ([]byte, bool, error) {
 	}
 	return data, err == nil, err
 }
+
+func captureTargetState(root, path string, file *FileResult) {
+	data, present, _ := readOptional(filepath.Join(root, filepath.FromSlash(path)))
+	file.targetPresent = present
+	if present {
+		hash := sha256.Sum256(data)
+		file.targetHash = fmt.Sprintf("%x", hash)
+	}
+}
+
 func comparisonDescription(f FileResult, path string) string {
 	switch f.Classification {
 	case "match":
@@ -758,6 +829,96 @@ func classificationMeaning(classification string) string {
 	return classificationInfos[classification].meaning
 }
 
+func replacementMissingPath(file FileResult) string {
+	const marker = "replacement missing: "
+	_, replacement, ok := strings.Cut(file.CanonReference, marker)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(replacement)
+}
+
+func markerOnly(file FileResult) bool {
+	return len(file.LegacyPreserveMarkers) > 0 && file.legacyOnly
+}
+
+func quotedList(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, "`"+value+"`")
+	}
+	switch len(quoted) {
+	case 0:
+		return ""
+	case 1:
+		return quoted[0]
+	case 2:
+		return quoted[0] + " and " + quoted[1]
+	default:
+		return strings.Join(quoted[:len(quoted)-1], ", ") + ", and " + quoted[len(quoted)-1]
+	}
+}
+
+func writeAT(b *strings.Builder, number *int, format string, args ...any) {
+	fmt.Fprintf(b, "**AT%d** [Automated] [Pre-release gate] — ", *number)
+	fmt.Fprintf(b, format, args...)
+	b.WriteString("\n\n")
+	(*number)++
+}
+
+func writeLegacyOrderingAT(b *strings.Builder, number *int, path string) {
+	writeAT(b, number, "Verify legacy-phrase cleanup for `%s` starts only after every applicable target-state and registry-state AT passes.", path)
+}
+
+func writeLegacyPreservationATs(b *strings.Builder, number *int, path, phrases string) {
+	writeAT(b, number, "Verify the Unreleased CHANGELOG Summary changes only through exact removal of %s for `%s`.", phrases, path)
+	writeAT(b, number, "Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for `%s`.", path)
+}
+
+func writeRouteATs(b *strings.Builder, number *int, file FileResult) {
+	path := file.Path
+	phrases := quotedList(file.LegacyPreserveMarkers)
+	if replacement := replacementMissingPath(file); replacement != "" {
+		writeAT(b, number, "Verify `%s` matches its applicable rendered canon region before retired-source routing for `%s`.", replacement, path)
+	}
+	if markerOnly(file) {
+		if file.targetPresent {
+			writeAT(b, number, "Verify `%s` remains byte-identical with SHA-256 `%s` for every marker-only choice.", path, file.targetHash)
+		} else {
+			writeAT(b, number, "Verify `%s` remains absent for every marker-only choice.", path)
+		}
+		writeAT(b, number, "Verify `%s` occurs exactly once in `govna/preserve.txt` when its marker-only action is convert.", path)
+		if len(file.PreserveEntries) > 0 {
+			writeAT(b, number, "Verify `%s` remains in `govna/preserve.txt` when its marker-only action is remove.", path)
+		} else {
+			writeAT(b, number, "Verify `%s` remains absent from `govna/preserve.txt` when its marker-only action is remove.", path)
+		}
+		writeLegacyOrderingAT(b, number, path)
+		writeLegacyPreservationATs(b, number, path, phrases)
+		writeAT(b, number, "Verify every exact legacy phrase in %s is absent from the Unreleased CHANGELOG Summary after the marker-only choice for `%s`.", phrases, path)
+		return
+	}
+
+	if file.Classification == "ambiguity" {
+		writeAT(b, number, "Verify `%s` matches its applicable rendered canon region when its resolved action is sync.", path)
+		writeAT(b, number, "Verify `%s` is absent from `govna/preserve.txt` when its resolved action is sync.", path)
+	}
+	writeAT(b, number, "Verify `%s` remains present when its resolved action is preserve.", path)
+	writeAT(b, number, "Verify `%s` occurs exactly once in `govna/preserve.txt` when its resolved action is preserve.", path)
+	writeAT(b, number, "Verify `%s` is absent when its resolved action is delete.", path)
+	writeAT(b, number, "Verify `%s` is absent from `govna/preserve.txt` when its resolved action is delete.", path)
+	writeAT(b, number, "Verify the Director response names a migration destination for `%s` when its resolved action is migrate.", path)
+	writeAT(b, number, "Verify `%s` is absent unless the Director explicitly preserves it when its resolved action is migrate.", path)
+	writeAT(b, number, "Verify any canon-backed migration destination for `%s` matches its applicable rendered canon region.", path)
+	writeAT(b, number, "Verify any repository-owned migration destination for `%s` matches the Director-stated result.", path)
+	writeAT(b, number, "Verify `%s` is absent from `govna/preserve.txt` when its resolved action is a canon-backed migration.", path)
+	if len(file.LegacyPreserveMarkers) > 0 {
+		writeLegacyOrderingAT(b, number, path)
+		writeLegacyPreservationATs(b, number, path, phrases)
+		writeAT(b, number, "Verify every exact legacy phrase in %s is absent from the Unreleased CHANGELOG Summary after the resolved action for `%s`.", phrases, path)
+	}
+}
+
 func buildAC(report Report, path string, validation validationOutcome) string {
 	base := filepath.Base(path)
 	number := ""
@@ -793,7 +954,11 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 		for _, f := range files {
 			key := tallyKey(f)
-			fmt.Fprintf(&b, "- `%s` — `%s`: %s.\n", f.Path, key, classificationMeaning(key))
+			meaning := classificationMeaning(key)
+			if markerOnly(f) {
+				meaning = "the Director must choose whether to convert the exact legacy phrase or remove only that phrase"
+			}
+			fmt.Fprintf(&b, "- `%s` — `%s`: %s.\n", f.Path, key, meaning)
 		}
 		b.WriteString("\n")
 	}
@@ -805,19 +970,45 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		b.WriteString("- Confirm each file selected for update exists in the selected CODE render.\n")
 	}
 	b.WriteString("- Apply each Director choice only to its authorized file region.\n- Write `govna/canon-baseline.txt` as the final file update.\n")
-	for _, f := range report.Files {
-		if len(f.LegacyPreserveMarkers) > 0 && f.Classification == "clear-sync" {
-			fmt.Fprintf(&b, "- Remove the legacy preserve phrase for `%s` only after the file update and preserve-list state are verified.\n", f.Path)
+	for _, f := range sync {
+		if len(f.LegacyPreserveMarkers) == 0 {
+			continue
 		}
+		phrases := quotedList(f.LegacyPreserveMarkers)
+		fmt.Fprintf(&b, "- Verify every applicable direct-update AT for `%s` before legacy-phrase cleanup.\n", f.Path)
+		fmt.Fprintf(&b, "- Remove %s from `CHANGELOG.md` after resolved-state verification for `%s`.\n", phrases, f.Path)
+	}
+	for _, f := range review {
+		if replacement := replacementMissingPath(f); replacement != "" {
+			fmt.Fprintf(&b, "- Install `%s` before retired-source routing for `%s`.\n", replacement, f.Path)
+		}
+		if len(f.LegacyPreserveMarkers) == 0 {
+			continue
+		}
+		phrases := quotedList(f.LegacyPreserveMarkers)
+		if markerOnly(f) {
+			fmt.Fprintf(&b, "- Convert %s into `govna/preserve.txt` for a conversion choice on `%s`.\n", phrases, f.Path)
+			fmt.Fprintf(&b, "- Verify every applicable marker-only AT for `%s` before legacy-phrase cleanup.\n", f.Path)
+			fmt.Fprintf(&b, "- Remove %s from `CHANGELOG.md` after marker-only verification for `%s`.\n", phrases, f.Path)
+			continue
+		}
+		fmt.Fprintf(&b, "- Convert %s into `govna/preserve.txt` for a preserve choice on `%s`.\n", phrases, f.Path)
+		fmt.Fprintf(&b, "- Verify every applicable resolved-route AT for `%s` before legacy-phrase cleanup.\n", f.Path)
+		fmt.Fprintf(&b, "- Remove %s from `CHANGELOG.md` after resolved-state verification for `%s`.\n", phrases, f.Path)
 	}
 	b.WriteString("\n")
 	if len(review) > 0 || validation.kind == validationUnresolved {
 		b.WriteString("### Routing Decisions\n\n")
 		for i, f := range review {
-			if strings.Contains(f.CanonReference, "replacement missing:") {
-				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record while its replacement is missing: restore the replacement, move its content (migrate), or keep it local (preserve)?\n", i+1, f.Path)
-			} else {
-				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record: update (sync), keep local (preserve), move content (migrate), or remove (delete)?\n", i+1, f.Path)
+			switch {
+			case markerOnly(f):
+				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record for %s: convert the exact legacy phrase into `govna/preserve.txt`, or remove only the phrase?\n", i+1, f.Path, quotedList(f.LegacyPreserveMarkers))
+			case replacementMissingPath(f) != "":
+				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record after installing `%s`: keep local (preserve), move content to a destination named in the response (migrate), or remove (delete)?\n", i+1, f.Path, replacementMissingPath(f))
+			case f.Classification == "target-has-no-canon":
+				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record: keep local (preserve), move content to a destination named in the response (migrate), or remove (delete)?\n", i+1, f.Path)
+			default:
+				fmt.Fprintf(&b, "%d. **`%s`**: Which action should Govna record: update (sync), keep local (preserve), move content to a destination named in the response (migrate), or remove (delete)?\n", i+1, f.Path)
 			}
 		}
 		if validation.kind == validationUnresolved {
@@ -857,6 +1048,19 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 			fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Preserve the protected region in `%s` from `%s` through EOF with SHA-256 `%s` for any update choice.\n\n", at, f.Path, f.Boundary, f.protectedHash)
 			at++
 		}
+	}
+	for _, f := range sync {
+		if len(f.LegacyPreserveMarkers) == 0 {
+			continue
+		}
+		writeAT(&b, &at, "Verify `%s` matches its applicable rendered canon region when its resolved action is sync.", f.Path)
+		writeAT(&b, &at, "Verify `%s` is absent from `govna/preserve.txt` when its resolved action is sync.", f.Path)
+		writeLegacyOrderingAT(&b, &at, f.Path)
+		writeLegacyPreservationATs(&b, &at, f.Path, quotedList(f.LegacyPreserveMarkers))
+		writeAT(&b, &at, "Verify every exact legacy phrase in %s is absent from the Unreleased CHANGELOG Summary after the resolved action for `%s`.", quotedList(f.LegacyPreserveMarkers), f.Path)
+	}
+	for _, f := range review {
+		writeRouteATs(&b, &at, f)
 	}
 	if validation.kind == validationUnresolved {
 		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Choose the repository check in chat.\n\n", at)

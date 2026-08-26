@@ -12,9 +12,9 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.37.0"
+const Version = "0.38.0"
 
-//go:embed assets
+//go:embed all:assets
 var assets embed.FS
 
 type Flavor string

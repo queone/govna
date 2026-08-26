@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.37.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.38.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -235,7 +235,7 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 		{"govna/canon-cycle.md", []string{"assets/overlays/code/files/govna/canon-cycle.md.tmpl", "assets/overlays/doc/files/govna/canon-cycle.md.tmpl"}},
 		{"govna/development-cycle.md", []string{"assets/overlays/code/files/govna/development-cycle.md.tmpl"}},
 		{"govna/operator-contract-rationale.md", []string{"assets/overlays/code/files/govna/operator-contract-rationale.md.tmpl", "assets/overlays/doc/files/govna/operator-contract-rationale.md.tmpl"}},
-		{"govna/roles.md", []string{"assets/overlays/code/files/govna/roles.md.tmpl", "assets/overlays/doc/files/govna/roles.md.tmpl"}},
+		{"govna/roles.md", []string{"assets/overlays/code/files/govna/roles.md.tmpl"}},
 	} {
 		want, err := os.ReadFile(filepath.Join(root, tc.authority))
 		if err != nil {
@@ -250,6 +250,18 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 				t.Errorf("%s does not mirror %s", asset, tc.authority)
 			}
 		}
+	}
+	roles, err := os.ReadFile(filepath.Join(root, "govna", "roles.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDocRoles := strings.Replace(string(roles), "`govna/build-release.md`", "`govna/release.md`", 1)
+	docRoles, err := fs.ReadFile(assets, "assets/overlays/doc/files/govna/roles.md.tmpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(docRoles) != wantDocRoles {
+		t.Error("DOC roles differ from authority beyond the release-document path")
 	}
 	agents, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
 	if err != nil {
@@ -297,6 +309,22 @@ func TestAuditValidationContract(t *testing.T) {
 			"- Emit an unresolved repository check as the final numbered routing decision.",
 			"- Emit one manual resolution AT for an unresolved repository check.",
 			"- Emit one automated verification AT for an unresolved repository check.",
+			"- Classify an existing target-only path named in the preserve registry as `preserve`.",
+			"- Keep that preserved target-only path visible in audit and JSON results.",
+			"- Omit another routing question for that preserved target-only path.",
+			"- Offer only these outcomes for a canon-backed ambiguity: sync, preserve, explicitly named migration, delete.",
+			"- Offer only these outcomes for an ordinary `target-has-no-canon` item: preserve, explicitly named migration, delete.",
+			"- Install an exact current-canon replacement before retired-source routing.",
+			"- Omit restore as a routing outcome.",
+			"- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.",
+			"- Preserve unrelated CHANGELOG Summary text and historical rows.",
+			"- Emit a conditional named-destination check for each offered migration outcome.",
+			"- Emit a replacement-before-retired-source check for each replacement-missing route.",
+			"- Emit an exact-phrase absence check for each legacy-phrase route.",
+			"- Emit an unrelated-Summary preservation check for each legacy-phrase route.",
+			"- Emit an outside-Summary preservation check for each legacy-phrase route.",
+			"- Keep every emitted routing check atomic.",
+			"- Keep emitted AT numbering stable across identical reports.",
 			"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
 		} {
 			if strings.Count(string(content), required) != 1 {
@@ -314,6 +342,94 @@ func TestAuditValidationContract(t *testing.T) {
 				t.Errorf("%s retains superseded claim %q", path, removed)
 			}
 		}
+	}
+}
+
+func TestImmutableAuditACVerificationContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	}
+	required := []string{
+		"- Confirm each settled decision landed verbatim in the AC.",
+		"- Treat a Director-resolved routing decision recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
+		"- Apply each resolved routing action while leaving the emitted AC stub unchanged.",
+		"- Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.",
+		"- Install each missing canon-backed replacement before retired-source routing.",
+		"- Remove each exact legacy phrase only after verifying its resolved target and registry state.",
+	}
+	for _, path := range paths {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range required {
+			if count := strings.Count(string(content), rule); count != 1 {
+				t.Errorf("%s rule count=%d, want 1 for %q", path, count, rule)
+			}
+		}
+	}
+}
+
+func TestFlavorSpecificRolesAndDotfiles(t *testing.T) {
+	type variant struct {
+		name      string
+		config    Config
+		release   string
+		absent    string
+		stackLine string
+	}
+	variants := []variant{{
+		name:    "DOC",
+		config:  Config{Flavor: Doc, RepoName: "handbook"},
+		release: "`govna/release.md`",
+		absent:  "`govna/build-release.md`",
+	}}
+	stackLines := map[string]string{
+		"Go":        "go.work",
+		"Rust":      "/target/",
+		"Swift":     "/.build/",
+		"Terraform": ".terraform/",
+	}
+	for _, stack := range Stacks() {
+		modulePath := ""
+		if stack == "Go" {
+			modulePath = "example.com/widget"
+		}
+		variants = append(variants, variant{
+			name:      stack,
+			config:    Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: modulePath},
+			release:   "`govna/build-release.md`",
+			absent:    "`govna/release.md`",
+			stackLine: stackLines[stack],
+		})
+	}
+
+	for _, variant := range variants {
+		t.Run(variant.name, func(t *testing.T) {
+			files, err := Render(variant.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			roles := fileText(t, files, "govna/roles.md")
+			if !strings.Contains(roles, variant.release) || strings.Contains(roles, variant.absent) {
+				t.Errorf("roles release references are not flavor-safe: %s", roles)
+			}
+			ignore := fileText(t, files, ".gitignore")
+			for _, common := range []string{".DS_Store", "Thumbs.db", "*.swp", ".idea/", ".vscode/"} {
+				if !strings.Contains(ignore, common) {
+					t.Errorf(".gitignore omits common entry %q", common)
+				}
+			}
+			if variant.stackLine != "" && !strings.Contains(ignore, variant.stackLine) {
+				t.Errorf(".gitignore omits %s entry %q", variant.name, variant.stackLine)
+			}
+			if strings.Contains(ignore, "{{") {
+				t.Errorf(".gitignore retains a template placeholder: %s", ignore)
+			}
+		})
 	}
 }
 
