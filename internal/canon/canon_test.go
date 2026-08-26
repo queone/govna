@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.38.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.39.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -302,9 +302,12 @@ func TestAuditValidationContract(t *testing.T) {
 		for _, required := range []string{
 			"- Require the selected CODE stack's recognized root manifest before inferring `./build.sh`.",
 			"- Ignore unrelated manifests, other prose, governance documents, executables, CI files, and flavor defaults.",
-			"- Start the count paragraph with `Govna found`.",
+			"- Name each emitted adoption AC `# AC<N> Adopt Govna Governance Files v<CANON_VERSION>`.",
+			"- Place the repository paragraph first under `## Summary`.",
 			"- Start the repository paragraph with `This AC updates`.",
 			"- Follow it with `The result label (classification)`.",
+			"- Place the count paragraph after the repository paragraph.",
+			"- Start the count paragraph with `Govna found`.",
 			"- Confirm each file selected for update exists in the selected CODE render.",
 			"- Emit an unresolved repository check as the final numbered routing decision.",
 			"- Emit one manual resolution AT for an unresolved repository check.",

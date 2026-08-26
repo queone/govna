@@ -943,9 +943,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%s Review Govna File Updates\n\n## Summary\n\n", number)
-	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
-	fmt.Fprintf(&b, "This AC updates `%s` to Govna's embedded governance files (canon v%s). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.\n\n## In Scope\n\n", report.Header.RepoName, canon.Version)
+	fmt.Fprintf(&b, "# AC%s Adopt Govna Governance Files v%s\n\n## Summary\n\n", number, canon.Version)
+	fmt.Fprintf(&b, "This AC updates `%s` to Govna's embedded governance files (canon v%s). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.\n\n", report.Header.RepoName, canon.Version)
+	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n## In Scope\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
 	writeGroup := func(title string, files []FileResult) {
 		fmt.Fprintf(&b, "### %s\n\n", title)
 		if len(files) == 0 {

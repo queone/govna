@@ -143,10 +143,12 @@ Effective implementation scope is the narrow rule that permits a directly affect
 
 ### Emitted AC instruction and phase shape
 
-- Place the count paragraph first under `## Summary`.
-- Start the count paragraph with `Govna found`.
+- Name each emitted adoption AC `# AC<N> Adopt Govna Governance Files v<CANON_VERSION>`.
+- Place the repository paragraph first under `## Summary`.
 - Start the repository paragraph with `This AC updates`.
 - Follow it with `The result label (classification)`.
+- Place the count paragraph after the repository paragraph.
+- Start the count paragraph with `Govna found`.
 - Keep the count and Summary paragraphs descriptive.
 - Confirm each file selected for update exists in the selected CODE render.
 - Place that CODE-render check and all routing procedure under `### Adoption Instructions`.

@@ -1,10 +1,10 @@
-# AC7 Review Govna File Updates
+# AC7 Adopt Govna Governance Files v0.39.0
 
 ## Summary
 
-Govna found 2 files ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.
+This AC updates `widget` to Govna's embedded governance files (canon v0.39.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
 
-This AC updates `widget` to Govna's embedded governance files (canon v0.38.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
+Govna found 2 files ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.
 
 ## In Scope
 

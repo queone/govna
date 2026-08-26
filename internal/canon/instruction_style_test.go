@@ -157,6 +157,7 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 }
 
 var currentInstructionReplacements = map[string]string{
+	"Place the count paragraph first under `## Summary`.":    "Place the repository paragraph first under `## Summary`.",
 	"Start the count paragraph with `This adoption covers`.": "Start the count paragraph with `Govna found`.",
 }
 
@@ -529,10 +530,12 @@ func TestScopedPlainLanguageReplacements(t *testing.T) {
 		path, legacy, current string
 	}
 	checks := []replacement{
+		{"govna/audit.md", "Place the count paragraph first under `## Summary`.", "Place the repository paragraph first under `## Summary`."},
 		{"govna/audit.md", "Start the count paragraph with `This adoption covers`.", "Start the count paragraph with `Govna found`."},
 		{"govna/audit.md", "Start the Summary sentences with `This audit adoption synchronizes`", "Start the repository paragraph with `This AC updates`."},
 		{"govna/audit.md", "Audit surfaced", "Follow it with `The result label (classification)`."},
-		{"internal/audit/audit.go", " Audit v", "Review Govna File Updates"},
+		{"internal/audit/audit.go", " Audit v", "Adopt Govna Governance Files v%s"},
+		{"internal/audit/audit.go", "Review Govna File Updates", "Adopt Govna Governance Files v%s"},
 		{"internal/audit/audit.go", "This adoption covers", "Govna found %s, %s, %s, and %s."},
 		{"internal/audit/audit.go", "This audit adoption synchronizes", "This AC updates"},
 		{"internal/audit/audit.go", "Per-file inspection uses rendered canon", "The result label (classification) beside each path explains why Govna can update it"},
@@ -970,7 +973,9 @@ func TestCompoundActionDetection(t *testing.T) {
 func TestAtomicInstructionCorrections(t *testing.T) {
 	want := map[string][]string{
 		"govna/audit.md": {
-			"- Place the count paragraph first under `## Summary`.",
+			"- Name each emitted adoption AC `# AC<N> Adopt Govna Governance Files v<CANON_VERSION>`.",
+			"- Place the repository paragraph first under `## Summary`.",
+			"- Place the count paragraph after the repository paragraph.",
 			"- Start the count paragraph with `Govna found`.",
 			"- Recompute the protected-region digest after adoption.",
 			"- Require the protected-region digest to match the emitted digest.",
