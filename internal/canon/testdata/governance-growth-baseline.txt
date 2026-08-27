@@ -9,14 +9,14 @@ overlays/code/files/govna/ac-template.md.tmpl	69	10
 overlays/code/files/govna/audit.md.tmpl	252	107
 overlays/code/files/govna/build-release.md.tmpl	125	34
 overlays/code/files/govna/canon-cycle.md.tmpl	58	19
-overlays/code/files/govna/code-stacks.md.tmpl	82	64
+overlays/code/files/govna/code-stacks.md.tmpl	87	69
 overlays/code/files/govna/development-cycle.md.tmpl	64	29
 overlays/code/files/govna/development-guidelines.md.tmpl	87	51
 overlays/code/files/govna/metadata.txt	4	0
 overlays/code/files/govna/operator-contract-rationale.md.tmpl	49	0
 overlays/code/files/govna/roles.md.tmpl	94	58
 overlays/code/files/plan.md.tmpl	9	0
-overlays/code/stacks/go/build.sh.tmpl	1398	0
+overlays/code/stacks/go/build.sh.tmpl	1490	0
 overlays/code/stacks/rust/build.sh.tmpl	1511	0
 overlays/code/stacks/rust/tests/build_cli.sh.tmpl	647	0
 overlays/code/stacks/swift/build.sh.tmpl	891	0

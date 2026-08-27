@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.8.4 | AC22: make canonical Go builds atomic and signal-safe |
 | 0.8.3 | AC21: ignore non-command Go directories during builds |
 | 0.8.2 | AC20: make audit ACs lead with their adoption outcome |
 | 0.8.1 | AC19: make rendered canon and audit routes executable |

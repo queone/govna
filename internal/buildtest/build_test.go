@@ -1,6 +1,7 @@
 package buildtest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,7 +10,9 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func repoRoot(t *testing.T) string {
@@ -55,14 +58,16 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{"Building and validating", "prep: running pre-check build", "prep: running post-check build"} {
+	for _, marker := range []string{"Validate compiled utility versions", "Install validated utilities", "prep: running pre-check build", "prep: running post-check build"} {
 		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
 			t.Fatalf("root/rendered Go build scripts lack shared marker %q", marker)
 		}
 	}
 	for _, marker := range []string{
-		"for d in cmd/*/; do\n      [ -f \"${d}main.go\" ] || continue\n      install_targets+=(\"$(basename \"$d\")\")\n    done",
-		"sorted_list=$(printf '%s\\n' \"${install_targets[@]}\" | LC_ALL=C sort)",
+		"for d in cmd/*/; do\n    [ -f \"${d}main.go\" ] || continue\n    discovered_targets+=(\"$(basename \"$d\")\")\n  done",
+		"discovered_list=$(printf '%s\\n' \"${discovered_targets[@]}\" | LC_ALL=C sort)",
+		"_install_validated_utility()",
+		"trap '_build_signal_exit 143' TERM",
 	} {
 		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
 			t.Fatalf("root/rendered Go target discovery lacks shared marker %q", marker)
@@ -81,7 +86,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 	if err := closure.validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, helper := range []string{"_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_is_strict_stable_semver"} {
+	for _, helper := range []string{"_build_signal_exit", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver"} {
 		if closure.definitions[helper] != 1 {
 			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
 		}
@@ -98,6 +103,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_ensure_staticcheck",
 		"_extract_program_version",
 		"_go_quote",
+		"_install_validated_utility",
 		"_is_blank",
 		"_is_strict_stable_semver",
 		"_join_comma_space",
@@ -268,15 +274,23 @@ test)
   done
   [ -n "$cover" ]
   printf '%s\n' 'mode: set' 'example.com/widget/internal/domain/domain.go:1.1,1.2 1 1' >"$cover"
+  if [ "${FAKE_TEST_FAIL:-}" = 1 ]; then
+    printf 'injected test failure\n' >&2
+    exit 8
+  fi
   ;;
 tool)
   [ "$2" = cover ]
+  if [ "${FAKE_COVER_FAIL:-}" = 1 ]; then
+    printf 'injected coverage failure\n' >&2
+    exit 8
+  fi
   printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
   ;;
 install)
-  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.0' ]
+  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.1' ]
   mkdir -p "$FAKE_GOPATH/bin"
-  printf '%s\n' '#!/bin/bash' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
+  printf '%s\n' '#!/bin/bash' 'printf '\''staticcheck %s\n'\'' "$*" >>"$FAKE_TRACE"' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
   chmod +x "$FAKE_GOPATH/bin/staticcheck"
   ;;
 build)
@@ -299,6 +313,10 @@ build)
   ./cmd/zeta) utility=zeta; version=2.0.0 ;;
   *) printf 'unexpected fake go build target: %s\n' "$target" >&2; exit 2 ;;
   esac
+  if [ "${FAKE_BUILD_FAIL_TARGET:-}" = "$utility" ]; then
+    printf 'injected build failure for %s\n' "$utility" >&2
+    exit 9
+  fi
   reported_version="$version"
   if [ "${FAKE_BAD_VERSION_TARGET:-}" = "$utility" ]; then
     reported_version=9.9.9
@@ -307,6 +325,7 @@ build)
   cat >"$output" <<EOF
 #!/bin/bash
 if [ "\${1:-}" = --version ]; then
+  if [ -n "\${FAKE_TRACE:-}" ]; then printf 'version $utility\n' >>"\${FAKE_TRACE}"; fi
   printf '$utility $reported_version\n'
   exit 0
 fi
@@ -321,6 +340,14 @@ EOF
 esac
 `
 	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGo), 0o755)
+	fakeMv := "#!/bin/bash\nprintf 'mv %s\\n' \"$*\" >>\"$FAKE_TRACE\"\nif [ \"${FAKE_MV_FAIL:-}\" = 1 ]; then printf 'injected install failure\\n' >&2; exit 9; fi\nexec /bin/mv \"$@\"\n"
+	writeBuildFixture(t, filepath.Join(fakeBin, "mv"), []byte(fakeMv), 0o755)
+	realMktemp, err := exec.LookPath("mktemp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeMktemp := fmt.Sprintf("#!/bin/bash\nprintf 'mktemp %%s\\n' \"$*\" >>\"$FAKE_TRACE\"\nexec %q \"$@\"\n", realMktemp)
+	writeBuildFixture(t, filepath.Join(fakeBin, "mktemp"), []byte(fakeMktemp), 0o755)
 	if err := os.MkdirAll(filepath.Join(gopath, "bin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -361,6 +388,46 @@ esac
 	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget,./cmd/zeta" {
 		t.Fatalf("full-build utility order=%v trace:\n%s", got, traceBody)
 	}
+	buildOutputs := utilityBuildOutputs(traceBody)
+	if len(buildOutputs) != 3 {
+		t.Fatalf("full-build outputs=%v trace:\n%s", buildOutputs, traceBody)
+	}
+	ownedDir := filepath.Dir(buildOutputs[0])
+	if filepath.Dir(ownedDir) != tmpRoot || !strings.HasPrefix(filepath.Base(ownedDir), "govna-go-build.") {
+		t.Fatalf("full-build output is not in an invocation-owned directory: %s", buildOutputs[0])
+	}
+	seenOutputs := map[string]bool{}
+	for _, buildOutput := range buildOutputs {
+		if filepath.Dir(buildOutput) != ownedDir || seenOutputs[buildOutput] {
+			t.Fatalf("full-build output is outside shared unique staging: %v", buildOutputs)
+		}
+		seenOutputs[buildOutput] = true
+	}
+	if strings.Count(traceBody, "staticcheck ./...\n") != 1 {
+		t.Fatalf("full build did not invoke the pinned Staticcheck binary exactly once:\n%s", traceBody)
+	}
+	firstInstall := strings.Index(traceBody, "mv ")
+	if firstInstall < 0 {
+		t.Fatalf("full-build trace omits atomic installation:\n%s", traceBody)
+	}
+	installMoves := utilityInstallMoves(traceBody)
+	if len(installMoves) != 3 {
+		t.Fatalf("full-build install moves=%v trace:\n%s", installMoves, traceBody)
+	}
+	seenInstallSources := map[string]bool{}
+	for utility, move := range installMoves {
+		if filepath.Dir(move[0]) != filepath.Join(gopath, "bin") || filepath.Dir(move[1]) != filepath.Join(gopath, "bin") ||
+			!strings.HasPrefix(filepath.Base(move[0]), ".govna-install-"+utility+".") || filepath.Base(move[1]) != utility || seenInstallSources[move[0]] {
+			t.Fatalf("%s installation was not a unique adjacent atomic move: %v", utility, move)
+		}
+		seenInstallSources[move[0]] = true
+	}
+	for _, utility := range []string{"alpha", "widget", "zeta"} {
+		versionCheck := strings.Index(traceBody, "version "+utility+"\n")
+		if versionCheck < 0 || versionCheck > firstInstall {
+			t.Fatalf("%s version validation did not precede every installation:\n%s", utility, traceBody)
+		}
+	}
 	if _, statErr := os.Stat(filepath.Join(gopath, "bin", "shared")); !os.IsNotExist(statErr) {
 		t.Fatalf("shared package produced an installed utility: %v", statErr)
 	}
@@ -379,46 +446,315 @@ esac
 	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget,./cmd/zeta,./cmd/zeta" {
 		t.Fatalf("scoped utility order=%v trace:\n%s", got, traceBody)
 	}
-	if !strings.Contains(traceBody, "install honnef.co/go/tools/cmd/staticcheck@v0.8.0\n") {
+	if !strings.Contains(traceBody, "install honnef.co/go/tools/cmd/staticcheck@v0.8.1\n") {
 		t.Fatalf("go trace omits exact Staticcheck pin:\n%s", traceBody)
 	}
+	if strings.Count(traceBody, "staticcheck ./cmd/zeta\n") != 1 {
+		t.Fatalf("scoped build did not invoke the pinned Staticcheck binary exactly once:\n%s", traceBody)
+	}
+	installedBeforeFailures := map[string]string{}
 	for utility, version := range map[string]string{"alpha": "1.0.0", "widget": "1.2.3", "zeta": "2.0.0"} {
 		installed := filepath.Join(gopath, "bin", utility)
 		if versionOut, versionErr := exec.Command(installed, "--version").CombinedOutput(); versionErr != nil || string(versionOut) != utility+" "+version+"\n" {
 			t.Fatalf("installed %s version: %v: %q", utility, versionErr, versionOut)
 		}
+		installedBeforeFailures[utility] = string(mustRead(t, installed))
 	}
 
-	shared := exec.Command("/bin/bash", "./build.sh", "shared")
-	shared.Dir = dir
-	shared.Env = cmd.Env
-	sharedOut, sharedErr := shared.CombinedOutput()
-	if sharedErr == nil || !strings.Contains(string(sharedOut), "cmd/shared/main.go must declare a non-empty const programVersion string literal") {
-		t.Fatalf("rendered scoped non-command build: %v:\n%s", sharedErr, sharedOut)
+	traceBeforeRejected := string(mustRead(t, trace))
+	goModBeforeRejected := string(mustRead(t, filepath.Join(dir, "go.mod")))
+	for _, rejected := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"non-command directory", []string{"shared"}, "unknown target"},
+		{"unknown target", []string{"missing"}, "unknown target"},
+		{"duplicate target", []string{"zeta", "zeta"}, "duplicate target"},
+		{"path-containing target", []string{"../cmd/zeta"}, "invalid target"},
+	} {
+		t.Run(rejected.name, func(t *testing.T) {
+			invalid := exec.Command("/bin/bash", append([]string{"./build.sh"}, rejected.args...)...)
+			invalid.Dir = dir
+			invalid.Env = cmd.Env
+			invalidOut, invalidErr := invalid.CombinedOutput()
+			if invalidErr == nil || !strings.Contains(string(invalidOut), rejected.want) {
+				t.Fatalf("rejected selector result: %v:\n%s", invalidErr, invalidOut)
+			}
+			if after := string(mustRead(t, trace)); after != traceBeforeRejected {
+				t.Fatalf("rejected selector ran mutable build work:\n%s", after[len(traceBeforeRejected):])
+			}
+			if after := string(mustRead(t, filepath.Join(dir, "go.mod"))); after != goModBeforeRejected {
+				t.Fatal("rejected selector changed go.mod")
+			}
+			assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
+		})
 	}
 	if _, statErr := os.Stat(filepath.Join(gopath, "bin", "shared")); !os.IsNotExist(statErr) {
 		t.Fatalf("scoped shared package produced an installed utility: %v", statErr)
 	}
 
-	installedWidget := filepath.Join(gopath, "bin", "widget")
-	beforeFailure := string(mustRead(t, installedWidget))
-	invalid := exec.Command("/bin/bash", "./build.sh", "widget")
-	invalid.Dir = dir
-	invalid.Env = append(cmd.Env, "FAKE_BAD_VERSION_TARGET=widget")
-	invalidOut, invalidErr := invalid.CombinedOutput()
+	widgetMain := filepath.Join(dir, "cmd/widget/main.go")
+	validWidgetMain := mustRead(t, widgetMain)
+	writeBuildFixture(t, widgetMain, []byte("package main\n\nconst programVersion = \"invalid\"\n\nfunc main() {}\n"), 0o644)
+	traceBeforeDeclarationFailure := string(mustRead(t, trace))
+	declarationFailure := exec.Command("/bin/bash", "./build.sh")
+	declarationFailure.Dir = dir
+	declarationFailure.Env = cmd.Env
+	declarationOut, declarationErr := declarationFailure.CombinedOutput()
+	writeBuildFixture(t, widgetMain, validWidgetMain, 0o644)
+	if declarationErr == nil || !strings.Contains(string(declarationOut), "invalid utility version") {
+		t.Fatalf("rendered invalid declaration: %v:\n%s", declarationErr, declarationOut)
+	}
+	if after := string(mustRead(t, trace)); after != traceBeforeDeclarationFailure {
+		t.Fatalf("invalid declaration ran mutable build work:\n%s", after[len(traceBeforeDeclarationFailure):])
+	}
+	assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
+	for _, failure := range []struct {
+		name string
+		env  string
+		want string
+	}{
+		{"test", "FAKE_TEST_FAIL=1", "injected test failure"},
+		{"coverage", "FAKE_COVER_FAIL=1", "injected coverage failure"},
+		{"installation", "FAKE_MV_FAIL=1", "injected install failure"},
+	} {
+		t.Run(failure.name+" failure cleanup", func(t *testing.T) {
+			failed := exec.Command("/bin/bash", "./build.sh")
+			failed.Dir = dir
+			failed.Env = append(cmd.Env, failure.env)
+			failedOut, failedErr := failed.CombinedOutput()
+			if failedErr == nil || !strings.Contains(string(failedOut), failure.want) {
+				t.Fatalf("%s failure result: %v:\n%s", failure.name, failedErr, failedOut)
+			}
+			assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
+			assertNoGoBuildArtifacts(t, tmpRoot, gopath)
+		})
+	}
+
+	compileFailure := exec.Command("/bin/bash", "./build.sh")
+	compileFailure.Dir = dir
+	compileFailure.Env = append(cmd.Env, "FAKE_BUILD_FAIL_TARGET=widget")
+	compileOut, compileErr := compileFailure.CombinedOutput()
+	if compileErr == nil || !strings.Contains(string(compileOut), "injected build failure") {
+		t.Fatalf("rendered compilation failure: %v:\n%s", compileErr, compileOut)
+	}
+	assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
+
+	invalidVersion := exec.Command("/bin/bash", "./build.sh")
+	invalidVersion.Dir = dir
+	invalidVersion.Env = append(cmd.Env, "FAKE_BAD_VERSION_TARGET=widget")
+	invalidOut, invalidErr := invalidVersion.CombinedOutput()
 	if invalidErr == nil || !strings.Contains(string(invalidOut), "--version output") {
 		t.Fatalf("rendered invalid compiled version: %v:\n%s", invalidErr, invalidOut)
 	}
-	if afterFailure := string(mustRead(t, installedWidget)); afterFailure != beforeFailure {
-		t.Fatal("failed rendered validation replaced the installed utility")
+	assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
+	assertNoGoBuildArtifacts(t, tmpRoot, gopath)
+}
+
+func assertInstalledUtilitiesUnchanged(t *testing.T, gopath string, expected map[string]string) {
+	t.Helper()
+	for utility, want := range expected {
+		if got := string(mustRead(t, filepath.Join(gopath, "bin", utility))); got != want {
+			t.Fatalf("failed build replaced installed %s", utility)
+		}
 	}
-	for pattern, label := range map[string]string{
-		filepath.Join(tmpRoot, "govna-go-build.*"):       "owned build directories",
-		filepath.Join(gopath, "bin", ".govna-install-*"): "install temporaries",
-	} {
-		matches, globErr := filepath.Glob(pattern)
-		if globErr != nil || len(matches) != 0 {
-			t.Fatalf("%s=%v err=%v", label, matches, globErr)
+}
+
+func assertNoGoBuildArtifacts(t *testing.T, tmpRoot, gopath string) {
+	t.Helper()
+	var artifacts []string
+	if err := filepath.Walk(tmpRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		name := info.Name()
+		if strings.HasPrefix(name, "govna-go-build.") || strings.HasPrefix(name, "build-cover.") || strings.HasPrefix(name, "govna-version.") {
+			artifacts = append(artifacts, path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	installArtifacts, err := filepath.Glob(filepath.Join(gopath, "bin", ".govna-install-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts = append(artifacts, installArtifacts...)
+	if len(artifacts) != 0 {
+		t.Fatalf("owned build artifacts remain: %v", artifacts)
+	}
+}
+
+func TestGoBuildSignalsTerminateAndCleanOwnedArtifacts(t *testing.T) {
+	root := repoRoot(t)
+	scripts := map[string][]byte{
+		"root":     mustRead(t, filepath.Join(root, "build.sh")),
+		"rendered": mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")),
+	}
+	interruptions := []struct {
+		phase      string
+		signal     syscall.Signal
+		exitStatus int
+	}{
+		{"coverage", syscall.SIGHUP, 129},
+		{"version", syscall.SIGINT, 130},
+		{"install", syscall.SIGTERM, 143},
+	}
+	for scriptName, script := range scripts {
+		for _, interruption := range interruptions {
+			t.Run(scriptName+"_"+interruption.phase, func(t *testing.T) {
+				dir := t.TempDir()
+				writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+				writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+				writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\n\nconst programVersion = \"1.2.3\"\n\nfunc main() {}\n"), 0o644)
+				writeBuildFixture(t, filepath.Join(dir, "internal/domain/domain.go"), []byte("package domain\n"), 0o644)
+
+				fakeBin := filepath.Join(dir, "fakebin")
+				gopath := filepath.Join(dir, "gopath")
+				tmpRoot := filepath.Join(dir, "tmp")
+				ready := filepath.Join(dir, "ready")
+				for _, path := range []string{fakeBin, filepath.Join(gopath, "bin"), tmpRoot} {
+					if err := os.MkdirAll(path, 0o755); err != nil {
+						t.Fatal(err)
+					}
+				}
+				fakeGo := `#!/bin/bash
+set -euo pipefail
+pause_phase() {
+  [ "${PAUSE_PHASE:-}" = "$1" ] || return 0
+  : >"$READY_FILE"
+  while :; do /bin/sleep 1; done
+}
+case "$1" in
+list) printf '%s\n' 'example.com/widget' ;;
+env)
+  case "$2" in
+  GOPATH) printf '%s\n' "$FAKE_GOPATH" ;;
+  GOEXE) printf '\n' ;;
+  *) exit 2 ;;
+  esac
+  ;;
+mod) [ "$2" = tidy ] ;;
+fmt|fix|vet) ;;
+test)
+  cover=''
+  for arg in "$@"; do case "$arg" in -coverprofile=*) cover="${arg#-coverprofile=}" ;; esac; done
+  [ -n "$cover" ]
+  printf '%s\n' 'mode: set' 'example.com/widget/internal/domain/domain.go:1.1,1.2 1 1' >"$cover"
+  pause_phase coverage
+  ;;
+tool)
+  [ "$2" = cover ]
+  printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
+  ;;
+install)
+  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.1' ]
+  printf '%s\n' '#!/bin/bash' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
+  chmod 0755 "$FAKE_GOPATH/bin/staticcheck"
+  ;;
+build)
+  output=''
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then shift; output="$1"; fi
+    shift
+  done
+  [ -n "$output" ]
+  cat >"$output" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = --version ]; then
+  if [ "${PAUSE_PHASE:-}" = version ]; then
+    : >"$READY_FILE"
+    while :; do /bin/sleep 1; done
+  fi
+  printf 'widget 1.2.3\n'
+  exit 0
+fi
+exit 2
+EOF
+  chmod 0755 "$output"
+  ;;
+*) exit 2 ;;
+esac
+`
+				fakeChmod := `#!/bin/bash
+if [ "${PAUSE_PHASE:-}" = install ]; then
+  case "$*" in
+  *'.govna-install-'*)
+    : >"$READY_FILE"
+    while :; do /bin/sleep 1; done
+    ;;
+  esac
+fi
+exec /bin/chmod "$@"
+`
+				writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGo), 0o755)
+				writeBuildFixture(t, filepath.Join(fakeBin, "chmod"), []byte(fakeChmod), 0o755)
+
+				cmd := exec.Command("/bin/bash", "./build.sh", "widget")
+				cmd.Dir = dir
+				cmd.Env = append(os.Environ(),
+					"NO_COLOR=1",
+					"TERM=dumb",
+					"GOVNA_FORCE_TTY=0",
+					"FAKE_GOPATH="+gopath,
+					"PAUSE_PHASE="+interruption.phase,
+					"READY_FILE="+ready,
+					"TMPDIR="+tmpRoot,
+					"PATH="+fakeBin+":"+os.Getenv("PATH"),
+				)
+				cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+				var output bytes.Buffer
+				cmd.Stdout = &output
+				cmd.Stderr = &output
+				if err := cmd.Start(); err != nil {
+					t.Fatal(err)
+				}
+				waited := make(chan error, 1)
+				go func() { waited <- cmd.Wait() }()
+				deadline := time.Now().Add(5 * time.Second)
+				for {
+					if _, err := os.Stat(ready); err == nil {
+						break
+					} else if !os.IsNotExist(err) {
+						t.Fatal(err)
+					}
+					select {
+					case err := <-waited:
+						t.Fatalf("build exited before %s interruption: %v:\n%s", interruption.phase, err, output.String())
+					default:
+					}
+					if time.Now().After(deadline) {
+						_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+						<-waited
+						t.Fatalf("build did not reach %s interruption point:\n%s", interruption.phase, output.String())
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+				if err := syscall.Kill(-cmd.Process.Pid, interruption.signal); err != nil {
+					t.Fatal(err)
+				}
+				var runErr error
+				select {
+				case runErr = <-waited:
+				case <-time.After(5 * time.Second):
+					_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+					<-waited
+					t.Fatalf("build did not terminate after %s:\n%s", interruption.signal, output.String())
+				}
+				exitErr, ok := runErr.(*exec.ExitError)
+				if !ok {
+					t.Fatalf("signal result=%v, want exit %d:\n%s", runErr, interruption.exitStatus, output.String())
+				}
+				if exitErr.ExitCode() != interruption.exitStatus {
+					t.Fatalf("signal exit=%d, want %d:\n%s", exitErr.ExitCode(), interruption.exitStatus, output.String())
+				}
+				if strings.Contains(output.String(), "installed:") {
+					t.Fatalf("build continued through installation after signal:\n%s", output.String())
+				}
+				assertNoGoBuildArtifacts(t, tmpRoot, gopath)
+			})
 		}
 	}
 }
@@ -435,6 +771,38 @@ func utilityBuildTargets(trace string) []string {
 		}
 	}
 	return targets
+}
+
+func utilityBuildOutputs(trace string) []string {
+	outputs := []string{}
+	for line := range strings.SplitSeq(trace, "\n") {
+		if !strings.HasPrefix(line, "build ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		for index, field := range fields {
+			if field == "-o" && index+1 < len(fields) {
+				outputs = append(outputs, fields[index+1])
+				break
+			}
+		}
+	}
+	return outputs
+}
+
+func utilityInstallMoves(trace string) map[string][2]string {
+	moves := map[string][2]string{}
+	for line := range strings.SplitSeq(trace, "\n") {
+		if !strings.HasPrefix(line, "mv ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 4 || fields[1] != "-f" {
+			continue
+		}
+		moves[filepath.Base(fields[3])] = [2]string{fields[2], fields[3]}
+	}
+	return moves
 }
 
 func TestRenderedGoVersionHelpers(t *testing.T) {
@@ -686,6 +1054,31 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	}
 	if installedAfterFailure := string(mustRead(t, destination)); installedAfterFailure != installedBeforeFailure {
 		t.Fatal("failed root validation replaced the installed utility")
+	}
+	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 1.2.3\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, failure := range []struct {
+		name    string
+		command string
+	}{
+		{"staging copy", "cp"},
+		{"staging permission", "chmod"},
+		{"atomic rename", "mv"},
+	} {
+		t.Run(failure.name, func(t *testing.T) {
+			fixture := "source ./tooling.sh; _color_init; " + failure.command + "() { return 9; }; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"
+			if out, err := run(t, dir, "", "-c", fixture); err == nil {
+				t.Fatalf("injected %s failure accepted: %s", failure.name, out)
+			}
+			if got := string(mustRead(t, destination)); got != installedBeforeFailure {
+				t.Fatalf("%s failure replaced the installed utility", failure.name)
+			}
+			matches, err := filepath.Glob(filepath.Join(dir, "bin", ".govna-install-*"))
+			if err != nil || len(matches) != 0 {
+				t.Fatalf("%s staging files=%v err=%v", failure.name, matches, err)
+			}
+		})
 	}
 	if err := os.Remove(destination); err != nil {
 		t.Fatal(err)

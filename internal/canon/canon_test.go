@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.40.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.41.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -526,7 +526,7 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 			t.Errorf("rendered Go build helper %q count=%d", helper, strings.Count(goBuild, helper))
 		}
 	}
-	if !strings.Contains(goBuild, "honnef.co/go/tools/cmd/staticcheck@v0.8.0") || strings.Contains(goBuild, "staticcheck@v0.7.0") {
+	if !strings.Contains(goBuild, "honnef.co/go/tools/cmd/staticcheck@v0.8.1") || strings.Contains(goBuild, "staticcheck@v0.8.0") {
 		t.Fatal("rendered Go build does not use the repository-governed Staticcheck pin")
 	}
 	if !strings.Contains(goBuild, "validation-token options are unsupported for Go") {
