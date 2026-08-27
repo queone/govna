@@ -60,6 +60,14 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 			t.Fatalf("root/rendered Go build scripts lack shared marker %q", marker)
 		}
 	}
+	for _, marker := range []string{
+		"for d in cmd/*/; do\n      [ -f \"${d}main.go\" ] || continue\n      install_targets+=(\"$(basename \"$d\")\")\n    done",
+		"sorted_list=$(printf '%s\\n' \"${install_targets[@]}\" | LC_ALL=C sort)",
+	} {
+		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
+			t.Fatalf("root/rendered Go target discovery lacks shared marker %q", marker)
+		}
+	}
 	if !strings.Contains(string(a), "_validate_root_canon_version") || strings.Contains(string(b), "_validate_root_canon_version") {
 		t.Fatal("root-only canon-version boundary is incorrect")
 	}
@@ -218,13 +226,20 @@ func TestRenderedGoBuildExecutesWithoutNetwork(t *testing.T) {
 	script := mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
 	writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
 	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/alpha/main.go"), []byte("package main\n\nconst programVersion = \"1.0.0\"\n\nfunc main() {}\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\n\nconst programVersion = \"1.2.3\"\n\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/zeta/main.go"), []byte("package main\n\nconst programVersion = \"2.0.0\"\n\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/shared/shared.go"), []byte("package shared\n\nfunc Value() string { return \"shared\" }\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "internal/domain/domain.go"), []byte("package domain\n"), 0o644)
 
 	fakeBin := filepath.Join(dir, "fakebin")
 	gopath := filepath.Join(dir, "gopath")
+	tmpRoot := filepath.Join(dir, "tmp")
 	trace := filepath.Join(dir, "go.trace")
 	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	fakeGo := `#!/bin/bash
@@ -266,21 +281,33 @@ install)
   ;;
 build)
   output=''
+  target=''
   shift
   while [ "$#" -gt 0 ]; do
     if [ "$1" = -o ]; then
       shift
       output="$1"
-      break
+    else
+      target="$1"
     fi
     shift
   done
   [ -n "$output" ]
+  case "$target" in
+  ./cmd/alpha) utility=alpha; version=1.0.0 ;;
+  ./cmd/widget) utility=widget; version=1.2.3 ;;
+  ./cmd/zeta) utility=zeta; version=2.0.0 ;;
+  *) printf 'unexpected fake go build target: %s\n' "$target" >&2; exit 2 ;;
+  esac
+  reported_version="$version"
+  if [ "${FAKE_BAD_VERSION_TARGET:-}" = "$utility" ]; then
+    reported_version=9.9.9
+  fi
   mkdir -p "$(dirname "$output")"
-  cat >"$output" <<'EOF'
+  cat >"$output" <<EOF
 #!/bin/bash
-if [ "${1:-}" = --version ]; then
-  printf 'widget 1.2.3\n'
+if [ "\${1:-}" = --version ]; then
+  printf '$utility $reported_version\n'
   exit 0
 fi
 exit 2
@@ -306,6 +333,7 @@ esac
 		"GOVNA_FORCE_TTY=0",
 		"FAKE_GOPATH="+gopath,
 		"FAKE_TRACE="+trace,
+		"TMPDIR="+tmpRoot,
 		"PATH="+fakeBin+":"+os.Getenv("PATH"),
 	)
 	out, err := cmd.CombinedOutput()
@@ -313,32 +341,100 @@ esac
 		t.Fatalf("rendered build: %v:\n%s", err, out)
 	}
 	output := string(out)
-	for _, want := range []string{"domain coverage: 100.0%", `programVersion = "1.2.3"`, "installed:"} {
+	for _, want := range []string{"domain coverage: 100.0%", `programVersion = "1.0.0"`, `programVersion = "1.2.3"`, `programVersion = "2.0.0"`, "installed:"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("rendered build output omits %q:\n%s", want, output)
 		}
 	}
+	if strings.Contains(output, "cmd/shared: programVersion") {
+		t.Fatalf("rendered full build treated shared package as a utility:\n%s", output)
+	}
 	if strings.Contains(output, "command not found") {
 		t.Fatalf("rendered build has undefined command:\n%s", output)
 	}
-	scoped := exec.Command("/bin/bash", "./build.sh", "widget")
+	traceBody := string(mustRead(t, trace))
+	for _, validation := range []string{"fmt ./...\n", "fix ./...\n", "vet ./...\n"} {
+		if !strings.Contains(traceBody, validation) {
+			t.Fatalf("full build trace omits repository-wide validation %q:\n%s", validation, traceBody)
+		}
+	}
+	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget,./cmd/zeta" {
+		t.Fatalf("full-build utility order=%v trace:\n%s", got, traceBody)
+	}
+	if _, statErr := os.Stat(filepath.Join(gopath, "bin", "shared")); !os.IsNotExist(statErr) {
+		t.Fatalf("shared package produced an installed utility: %v", statErr)
+	}
+
+	scoped := exec.Command("/bin/bash", "./build.sh", "zeta")
 	scoped.Dir = dir
 	scoped.Env = cmd.Env
 	scopedOut, scopedErr := scoped.CombinedOutput()
 	if scopedErr != nil {
 		t.Fatalf("rendered scoped build: %v:\n%s", scopedErr, scopedOut)
 	}
-	if !strings.Contains(string(scopedOut), "Building specific utilities: widget") || strings.Contains(string(scopedOut), "command not found") {
+	if !strings.Contains(string(scopedOut), "Building specific utilities: zeta") || !strings.Contains(string(scopedOut), "cmd/zeta: programVersion") || strings.Contains(string(scopedOut), "cmd/alpha: programVersion") || strings.Contains(string(scopedOut), "cmd/widget: programVersion") || strings.Contains(string(scopedOut), "command not found") {
 		t.Fatalf("rendered scoped build output:\n%s", scopedOut)
 	}
-	traceBody := string(mustRead(t, trace))
+	traceBody = string(mustRead(t, trace))
+	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget,./cmd/zeta,./cmd/zeta" {
+		t.Fatalf("scoped utility order=%v trace:\n%s", got, traceBody)
+	}
 	if !strings.Contains(traceBody, "install honnef.co/go/tools/cmd/staticcheck@v0.8.0\n") {
 		t.Fatalf("go trace omits exact Staticcheck pin:\n%s", traceBody)
 	}
-	installed := filepath.Join(gopath, "bin", "widget")
-	if versionOut, versionErr := exec.Command(installed, "--version").CombinedOutput(); versionErr != nil || string(versionOut) != "widget 1.2.3\n" {
-		t.Fatalf("installed version: %v: %q", versionErr, versionOut)
+	for utility, version := range map[string]string{"alpha": "1.0.0", "widget": "1.2.3", "zeta": "2.0.0"} {
+		installed := filepath.Join(gopath, "bin", utility)
+		if versionOut, versionErr := exec.Command(installed, "--version").CombinedOutput(); versionErr != nil || string(versionOut) != utility+" "+version+"\n" {
+			t.Fatalf("installed %s version: %v: %q", utility, versionErr, versionOut)
+		}
 	}
+
+	shared := exec.Command("/bin/bash", "./build.sh", "shared")
+	shared.Dir = dir
+	shared.Env = cmd.Env
+	sharedOut, sharedErr := shared.CombinedOutput()
+	if sharedErr == nil || !strings.Contains(string(sharedOut), "cmd/shared/main.go must declare a non-empty const programVersion string literal") {
+		t.Fatalf("rendered scoped non-command build: %v:\n%s", sharedErr, sharedOut)
+	}
+	if _, statErr := os.Stat(filepath.Join(gopath, "bin", "shared")); !os.IsNotExist(statErr) {
+		t.Fatalf("scoped shared package produced an installed utility: %v", statErr)
+	}
+
+	installedWidget := filepath.Join(gopath, "bin", "widget")
+	beforeFailure := string(mustRead(t, installedWidget))
+	invalid := exec.Command("/bin/bash", "./build.sh", "widget")
+	invalid.Dir = dir
+	invalid.Env = append(cmd.Env, "FAKE_BAD_VERSION_TARGET=widget")
+	invalidOut, invalidErr := invalid.CombinedOutput()
+	if invalidErr == nil || !strings.Contains(string(invalidOut), "--version output") {
+		t.Fatalf("rendered invalid compiled version: %v:\n%s", invalidErr, invalidOut)
+	}
+	if afterFailure := string(mustRead(t, installedWidget)); afterFailure != beforeFailure {
+		t.Fatal("failed rendered validation replaced the installed utility")
+	}
+	for pattern, label := range map[string]string{
+		filepath.Join(tmpRoot, "govna-go-build.*"):       "owned build directories",
+		filepath.Join(gopath, "bin", ".govna-install-*"): "install temporaries",
+	} {
+		matches, globErr := filepath.Glob(pattern)
+		if globErr != nil || len(matches) != 0 {
+			t.Fatalf("%s=%v err=%v", label, matches, globErr)
+		}
+	}
+}
+
+func utilityBuildTargets(trace string) []string {
+	targets := []string{}
+	for line := range strings.SplitSeq(trace, "\n") {
+		if !strings.HasPrefix(line, "build ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 0 {
+			targets = append(targets, fields[len(fields)-1])
+		}
+	}
+	return targets
 }
 
 func TestRenderedGoVersionHelpers(t *testing.T) {
@@ -580,6 +676,16 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	}
 	if out, err := exec.Command(destination, "--version").CombinedOutput(); err != nil || string(out) != "widget 1.2.3\n" {
 		t.Fatalf("installed output: %v: %s", err, out)
+	}
+	installedBeforeFailure := string(mustRead(t, destination))
+	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 9.9.9\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"); err == nil || !strings.Contains(out, "--version output") {
+		t.Fatalf("invalid compiled version accepted: %v: %s", err, out)
+	}
+	if installedAfterFailure := string(mustRead(t, destination)); installedAfterFailure != installedBeforeFailure {
+		t.Fatal("failed root validation replaced the installed utility")
 	}
 	if err := os.Remove(destination); err != nil {
 		t.Fatal(err)

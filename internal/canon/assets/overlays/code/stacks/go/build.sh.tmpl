@@ -313,12 +313,12 @@ build_run() {
     printf '    %s\n' 'No issues found by staticcheck.'
   fi
 
-  # Install targets: every cmd/* dir (sorted) when no targets; else the named.
+  # Install targets: every cmd/* dir with a regular main.go when no targets; else the named.
   local install_targets=()
   if [ "${#targets[@]}" -eq 0 ]; then
     local d
     for d in cmd/*/; do
-      [ -d "$d" ] || continue
+      [ -f "${d}main.go" ] || continue
       install_targets+=("$(basename "$d")")
     done
     printf '\n%s\n' "$(yel7 '==> Building all utilities')"
