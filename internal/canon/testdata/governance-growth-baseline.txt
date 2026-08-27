@@ -1,4 +1,4 @@
-base/AGENTS.md	537	434
+base/AGENTS.md	538	435
 overlays/code/README.md	28	16
 overlays/code/files/.gitignore.tmpl	18	0
 overlays/code/files/CHANGELOG.md.tmpl	5	0
@@ -10,7 +10,7 @@ overlays/code/files/govna/audit.md.tmpl	252	107
 overlays/code/files/govna/build-release.md.tmpl	125	34
 overlays/code/files/govna/canon-cycle.md.tmpl	58	19
 overlays/code/files/govna/code-stacks.md.tmpl	87	69
-overlays/code/files/govna/development-cycle.md.tmpl	64	29
+overlays/code/files/govna/development-cycle.md.tmpl	65	30
 overlays/code/files/govna/development-guidelines.md.tmpl	87	51
 overlays/code/files/govna/metadata.txt	4	0
 overlays/code/files/govna/operator-contract-rationale.md.tmpl	49	0
@@ -23,7 +23,7 @@ overlays/code/stacks/swift/build.sh.tmpl	891	0
 overlays/code/stacks/terraform/build.sh.tmpl	954	0
 overlays/doc/README.md	28	16
 overlays/doc/files/.gitignore.tmpl	10	0
-overlays/doc/files/AGENTS.md.tmpl	493	406
+overlays/doc/files/AGENTS.md.tmpl	494	407
 overlays/doc/files/CHANGELOG.md.tmpl	5	0
 overlays/doc/files/README.md.tmpl	19	0
 overlays/doc/files/build.sh.tmpl	462	0
@@ -31,7 +31,7 @@ overlays/doc/files/govna/README.md.tmpl	15	5
 overlays/doc/files/govna/ac-template.md.tmpl	69	10
 overlays/doc/files/govna/audit.md.tmpl	252	107
 overlays/doc/files/govna/canon-cycle.md.tmpl	58	19
-overlays/doc/files/govna/editing-cycle.md.tmpl	61	27
+overlays/doc/files/govna/editing-cycle.md.tmpl	62	28
 overlays/doc/files/govna/editing-guidelines.md.tmpl	50	27
 overlays/doc/files/govna/metadata.txt	3	0
 overlays/doc/files/govna/operator-contract-rationale.md.tmpl	49	0

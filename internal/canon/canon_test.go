@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.41.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.42.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -452,6 +452,96 @@ func TestGovernanceScenarios(t *testing.T) {
 				t.Errorf("%s AGENTS lacks scenario marker %q", flavor, required)
 			}
 		}
+	}
+}
+
+func TestPhaseEligibleACRoutingRules(t *testing.T) {
+	rules := []string{
+		"- Apply an unnumbered Audit, Refine, Implement, Ratify, or Package instruction when exactly one AC can enter the requested action under its established lifecycle state.",
+		"- Require the AC number when multiple ACs can enter the requested action.",
+		"- Ask the Director for the AC number and last completed lifecycle action when eligibility cannot be established.",
+	}
+	retiredRules := []string{
+		"Apply an unnumbered action instruction to the sole AC under `govna/`.",
+		"Use an unnumbered phase instruction when one AC is under `govna/`.",
+		"Require the AC number when multiple ACs are present.",
+	}
+	assertRules := func(t *testing.T, path, content string) {
+		t.Helper()
+		for _, rule := range rules {
+			if count := strings.Count(content, rule); count != 1 {
+				t.Errorf("%s phase-routing rule count=%d, want 1: %s", path, count, rule)
+			}
+		}
+		for _, retired := range retiredRules {
+			if strings.Contains(content, retired) {
+				t.Errorf("%s retains broad file-count rule: %s", path, retired)
+			}
+		}
+	}
+	assertAGENTSRules := func(t *testing.T, path, content string) {
+		t.Helper()
+		assertRules(t, path, content)
+		const heading = "### Phase-Advancement Rules\n"
+		_, after, ok := strings.Cut(content, heading)
+		if !ok {
+			t.Errorf("%s omits Phase-Advancement Rules", path)
+			return
+		}
+		section := after
+		if end := strings.Index(section, "\n### "); end >= 0 {
+			section = section[:end]
+		}
+		if end := strings.Index(section, "\n## "); end >= 0 {
+			section = section[:end]
+		}
+		for _, rule := range rules {
+			if !strings.Contains(section, rule) {
+				t.Errorf("%s does not place phase-routing rule under Phase-Advancement Rules: %s", path, rule)
+			}
+		}
+	}
+
+	root := filepath.Join("..", "..")
+	for _, path := range []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertAGENTSRules(t, path, string(content))
+	}
+	for _, path := range []string{
+		"govna/development-cycle.md",
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRules(t, path, string(content))
+	}
+
+	for _, variant := range []struct {
+		name      string
+		config    Config
+		cyclePath string
+	}{
+		{name: "CODE", config: Config{Flavor: Code, RepoName: "widget", Stack: "Rust"}, cyclePath: "govna/development-cycle.md"},
+		{name: "DOC", config: Config{Flavor: Doc, RepoName: "handbook"}, cyclePath: "govna/editing-cycle.md"},
+	} {
+		t.Run(variant.name, func(t *testing.T) {
+			files, err := Render(variant.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertAGENTSRules(t, variant.name+" AGENTS.md", fileText(t, files, "AGENTS.md"))
+			assertRules(t, variant.name+" "+variant.cyclePath, fileText(t, files, variant.cyclePath))
+		})
 	}
 }
 
