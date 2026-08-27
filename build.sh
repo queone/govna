@@ -803,7 +803,7 @@ _lint_test_naming() {
 rel_usage() {
   printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message"'
   _emit_usage_line '-h, -?, --help' 'show this help'
-  printf '\n%s\n' 'Release message must be 80 characters or fewer.'
+  printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
 # rel_run TAG MESSAGE
@@ -953,6 +953,8 @@ Flags:
 
 Prints the canonical release command on success. Does not run the release
 itself — present the printed command for the director to run.
+
+Release message must be 80 bytes or fewer.
 EOF
 }
 
@@ -974,7 +976,7 @@ prep_run() {
   local mlen
   mlen=$(_byte_len "$message")
   if [ "$mlen" -gt 80 ]; then
-    printf 'prep: message must be 80 characters or fewer (got %d)\n' "$mlen" >&2
+    printf 'prep: message must be 80 bytes or fewer (got %d)\n' "$mlen" >&2
     return 1
   fi
 
@@ -1497,7 +1499,7 @@ rel_main() {
     return 2
   fi
   if [ "$(_byte_len "$message")" -gt 80 ]; then
-    printf 'release message must be 80 characters or fewer\n' >&2
+    printf 'release message must be 80 bytes or fewer\n' >&2
     return 2
   fi
 

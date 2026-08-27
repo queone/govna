@@ -45,8 +45,10 @@ type FileResult struct {
 	protectedHash           string
 	forceSync               bool
 	legacyOnly              bool
+	canonPresent            bool
 	targetHash              string
 	targetPresent           bool
+	targetInspected         bool
 }
 
 type Header struct {
@@ -116,6 +118,32 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
 		"Resume Refine after the Director resolves every blocking finding and decision.",
 		"Stop integrated audit adoption before Implement.",
+		"Authorize the bounded scratch-review procedure in `govna/audit.md` from the original explicit `govna audit` request.",
+		"Bind the scratch review to the resolved Govna executable and the emitted AC marker versions.",
+		"Remove the exact scratch directory before reporting Audit completion or a blocker.",
+		"End scratch-review authority when Audit ends.",
+		"Measure the projected complete pending release batch with one private provisional prefix-plus-summary string before another AC enters Implement.",
+		"Start another Implement only when the projected complete pending release batch can fit one compliant release message.",
+		"Recheck the complete pending release batch and exact release message before Package runs prep.",
+		"Reject an oversized or partial release batch.",
+	},
+}, {
+	Reference: "govna/audit.md",
+	Required: []string{
+		"Run the ordinary agent-mediated audit without `--json`.",
+		"Require the emitted AC marker versions to match the recorded detailed version.",
+		"Render the selected canon into that scratch directory once with the resolved executable.",
+		"Compare every actionable path through the emitted `### Audit Review` instructions.",
+		"Remove the exact scratch directory before reporting Audit completion or a blocker.",
+	},
+}, {
+	Reference: "govna/canon-cycle.md",
+	Required: []string{
+		"Exercise every rendered profile through ordinary non-JSON `govna audit` at least once.",
+		"Complete one bounded scratch review for every actionable emitted AC.",
+		"Exercise an oversized projected batch before another Implement.",
+		"Exercise oversized, partial, and partly unaccepted batches before Package prep.",
+		"Verify numbered Audit and Refine steps remain atomic in CODE and DOC renders.",
 	},
 }}
 
@@ -124,11 +152,24 @@ var releaseContentCoherenceRule = contentCoherenceRule{
 		"End the structured Package completion report with `Run below to release:`.",
 		"Place the exact release command immediately after that line.",
 		"Add nothing after the release command.",
+		"Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.",
+		"Require every pending release-batch member to complete Ratify before prep.",
+		"Require the established release batch to equal the complete pending release batch before prep.",
+		"Reject a release message longer than 80 bytes before prep.",
+		"Prohibit a smaller release batch while excluded implemented work remains.",
+		"Prohibit automatic release-batch splitting.",
 	},
 	Forbidden: []string{
 		"Present only the release command after prep.",
 		"Do not add trailing commentary about wrapper routing or prompts.",
 		"Do not add trailing commentary after presenting the command.",
+	},
+}
+
+var cycleContentCoherenceRule = contentCoherenceRule{
+	Required: []string{
+		"2. **Audit.**\n   - Review the AC for missing scope, unsafe assumptions, and untestable requirements without editing it.\n   - Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
+		"3. **Refine.**\n   - Update a hand-authored AC with settled findings and Director decisions.\n   - Keep an audit-emitted AC unchanged.\n   - Record its resolved decisions in the active session.",
 	},
 }
 
@@ -361,16 +402,16 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		report.Files = append(report.Files, fr)
 	}
 	if !basePresent {
-		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "migration-required", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
+		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "migration-required", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt", canonPresent: true, targetInspected: true})
 	} else if !bytes.Equal(baseBytes, canonMap[baselinePath]) {
-		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"})
+		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt", canonPresent: true, targetPresent: true, targetInspected: true})
 	}
 	for path, evidence := range targetOnly(root, canonMap, prior, flavor, name) {
 		classification := "target-has-no-canon"
 		if preserve[path] {
 			classification = "preserve"
 		}
-		fr := FileResult{Path: path, Classification: classification, CanonReference: evidence, CompareCommand: "review " + path + " because it is not in the selected embedded Govna files"}
+		fr := FileResult{Path: path, Classification: classification, CanonReference: evidence, CompareCommand: "review " + path + " because it is not in the selected embedded Govna files", targetPresent: true, targetInspected: true}
 		if preserve[path] {
 			fr.PreserveEntries = []string{path}
 		}
@@ -390,7 +431,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		report.Files = append(report.Files, fr)
 	}
 	for path, markers := range legacy {
-		fr := FileResult{Path: path, Classification: "ambiguity", LegacyPreserveMarkers: markers, legacyOnly: true}
+		fr := FileResult{Path: path, Classification: "ambiguity", LegacyPreserveMarkers: markers, legacyOnly: true, targetInspected: true}
 		if preserve[path] {
 			fr.PreserveEntries = []string{path}
 		}
@@ -514,6 +555,15 @@ func checkCoherence(files map[string][]byte) error {
 			return err
 		}
 	}
+	cycleRule := cycleContentCoherenceRule
+	if _, ok := files["govna/development-cycle.md"]; ok {
+		cycleRule.Reference = "govna/development-cycle.md"
+	} else {
+		cycleRule.Reference = "govna/editing-cycle.md"
+	}
+	if err := checkContentCoherence(files, cycleRule); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -613,11 +663,12 @@ func ParsePreserve(root string) (map[string]bool, error) {
 }
 
 func classify(root, path string, want []byte, base *baseline, preserve map[string]bool, limit int) FileResult {
-	fr := FileResult{Path: path, CanonReference: "govna @ v" + canon.Version + ": " + path}
+	fr := FileResult{Path: path, CanonReference: "govna @ v" + canon.Version + ": " + path, canonPresent: true, targetInspected: true}
 	if preserve[path] {
 		fr.PreserveEntries = []string{path}
 	}
 	got, present, _ := readOptional(filepath.Join(root, filepath.FromSlash(path)))
+	fr.targetPresent = present
 	if !present {
 		if preserve[path] {
 			fr.Classification = "match"
@@ -1029,6 +1080,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	writeGroup("Files ready to update", sync)
 	writeGroup("Required control files", migrate)
 	writeGroup("Files needing a Director choice", review)
+	writeAuditReview(&b, sync, migrate, review)
 	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
 	if report.Header.Flavor == "code" {
 		b.WriteString("- Confirm each file selected for update exists in the selected CODE render.\n")
@@ -1144,6 +1196,56 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	}
 	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.\n\n## Status\n\n`PENDING` — immutable audit emission; workflow state is tracked in the active session.\n", at)
 	return b.String()
+}
+
+func writeAuditReview(b *strings.Builder, groups ...[]FileResult) {
+	b.WriteString("### Audit Review\n\n")
+	b.WriteString("- Use the same resolved Govna executable that emitted this AC.\n")
+	b.WriteString("- Verify its detailed version output matches this AC's guarded marker.\n")
+	b.WriteString("- Create one unique system-temporary scratch directory outside this repository.\n")
+	b.WriteString("- Render the selected canon into that directory once with the resolved executable.\n")
+	b.WriteString("- Verify the rendered `govna/canon-baseline.txt` canon version matches this AC's guarded marker.\n")
+	for _, files := range groups {
+		for _, file := range files {
+			switch {
+			case !auditReviewCanonPresent(file):
+				fmt.Fprintf(b, "- Verify `%s` is absent from the selected scratch render with `test ! -e <scratch>/%s`.\n", file.Path, file.Path)
+			case !auditReviewTargetPresent(file):
+				fmt.Fprintf(b, "- Compare `%s` with `diff -u /dev/null <scratch>/%s`.\n", file.Path, file.Path)
+			default:
+				fmt.Fprintf(b, "- Compare `%s` with `diff -ru <scratch>/%s %s`.\n", file.Path, file.Path, file.Path)
+			}
+		}
+	}
+	b.WriteString("- Review the exact proposed rules.\n")
+	b.WriteString("- Check rule overlap and placement.\n")
+	b.WriteString("- Resolve every candidate reference.\n")
+	b.WriteString("- Measure prospective contract growth.\n")
+	b.WriteString("- Verify target-side acceptance evidence.\n")
+	b.WriteString("- Keep this emitted AC and every consumer file unchanged.\n")
+	b.WriteString("- Remove the exact scratch directory before reporting Audit completion or a blocker.\n")
+	b.WriteString("- Use no JSON diff field as required review evidence.\n")
+	b.WriteString("\n")
+}
+
+func auditReviewCanonPresent(file FileResult) bool {
+	if file.canonPresent {
+		return true
+	}
+	if file.Classification == "target-has-no-canon" {
+		return false
+	}
+	return !file.legacyOnly || file.CanonReference != ""
+}
+
+func auditReviewTargetPresent(file FileResult) bool {
+	if file.targetInspected {
+		return file.targetPresent
+	}
+	if file.targetPresent {
+		return true
+	}
+	return file.Classification != "missing-in-target" && file.Classification != "migration-required"
 }
 
 func countPhrase(count int, singular, plural string) string {

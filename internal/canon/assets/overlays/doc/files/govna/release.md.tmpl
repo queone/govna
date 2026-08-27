@@ -11,7 +11,7 @@ Require its confirmation prompt before `git add → commit → annotated tag →
 
 Keep DOC release prep repository-wide.
 Reject CODE target selection.
-Limit release messages to 80 characters.
+Limit release messages to 80 bytes.
 
 DOC repositories do not provide installable utilities, so the independent
 utility-version declaration and `--version` contract does not apply to this
@@ -43,7 +43,14 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 ## Pre-Release Checklist
 
 - Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.
+- Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.
+- Require every pending release-batch member to complete Ratify before prep.
+- Reject prep while excluded implemented work remains in the unreleased repository state.
 - Require the unique release-message AC-reference set to equal the established release batch before prep.
+- Require the established release batch to equal the complete pending release batch before prep.
+- Reject a release message longer than 80 bytes before prep.
+- Prohibit a smaller release batch while excluded implemented work remains.
+- Prohibit automatic release-batch splitting.
 - Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.
 
 1. **Verify completion.**
@@ -55,7 +62,7 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
    - Use MINOR for user-visible structure, navigation, or schema changes.
    - Bump from the latest tag.
 3. **Derive the release message.**
-   - Summarize the delivered user-visible result in no more than 80 characters.
+   - Summarize the delivered user-visible result in no more than 80 bytes.
    - Include every established release-batch AC reference.
    - Exclude every AC reference outside the established release batch.
    - Lead with the plus-joined release-batch AC references.

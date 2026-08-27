@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.11.0 | AC27: make consumer audit and release batching executable |
 | 0.10.0 | AC26: catch consumer-visible canon faults before release |
 | 0.9.1 | AC25: allow integrated audit to enter Refine without another instruction |
 | 0.9.0 | AC24: review audit ACs and package ratified release batches |

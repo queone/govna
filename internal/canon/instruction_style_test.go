@@ -232,6 +232,20 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I56", "Verify every applicable direct-update AT for <path> before legacy-phrase cleanup."},
 	{"I57", "Verify the Unreleased CHANGELOG Summary changes only through exact removal of <phrases> for <path>."},
 	{"I58", "Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for <path>."},
+	{"I59", "Use the same resolved Govna executable that emitted this AC."},
+	{"I60", "Verify its detailed version output matches this AC's guarded marker."},
+	{"I61", "Create one unique system-temporary scratch directory outside this repository."},
+	{"I62", "Render the selected canon into that directory once with the resolved executable."},
+	{"I63", "Verify the rendered govna/canon-baseline.txt canon version matches this AC's guarded marker."},
+	{"I64", "Verify <path> is absent from the selected scratch render with <absence-command>."},
+	{"I65", "Review the exact proposed rules."},
+	{"I66", "Check rule overlap and placement."},
+	{"I67", "Resolve every candidate reference."},
+	{"I68", "Measure prospective contract growth."},
+	{"I69", "Verify target-side acceptance evidence."},
+	{"I70", "Keep this emitted AC and every consumer file unchanged."},
+	{"I71", "Remove the exact scratch directory before reporting Audit completion or a blocker."},
+	{"I72", "Use no JSON diff field as required review evidence."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -241,7 +255,8 @@ var (
 	inferredCheckInstruction   = regexp.MustCompile("^Run `[^`]+` after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
 	notApplicableInstruction   = regexp.MustCompile("^Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
 	renderRemovalInstruction   = regexp.MustCompile("^Create a temporary copy of the selected Govna files with `govna render --flavor (?:doc|code(?: --stack [^`]+)?) <scratch>`\\.$")
-	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff -ru <scratch>/[^`]+ [^`]+`\\.$")
+	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff (?:-ru <scratch>/[^`]+ [^`]+|-u /dev/null <scratch>/[^`]+)`\\.$")
+	auditAbsentInstruction     = regexp.MustCompile("^Verify `[^`]+` is absent from the selected scratch render with `test ! -e <scratch>/[^`]+`\\.$")
 	chooseRemovalInstruction   = regexp.MustCompile("^Choose what to remove from `[^`]+`: only its Govna-managed section, nothing, or the whole file\\.$")
 	otherMigrationInstruction  = regexp.MustCompile("^Create `[^`]+` from the selected temporary render\\.$")
 )
@@ -280,6 +295,7 @@ var generatedDynamicInstructions = []struct {
 	{regexp.MustCompile("^Verify every applicable direct-update AT for `[^`]+` before legacy-phrase cleanup\\.$"), "Verify every applicable direct-update AT for <path> before legacy-phrase cleanup."},
 	{regexp.MustCompile("^Verify the Unreleased CHANGELOG Summary changes only through exact removal of .+ for `[^`]+`\\.$"), "Verify the Unreleased CHANGELOG Summary changes only through exact removal of <phrases> for <path>."},
 	{regexp.MustCompile("^Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for `[^`]+`\\.$"), "Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for <path>."},
+	{auditAbsentInstruction, "Verify <path> is absent from the selected scratch render with <absence-command>."},
 }
 
 var generatedProseStarters = func() map[string]bool {
@@ -292,8 +308,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 58 {
-		t.Fatalf("generated instruction manifest has %d entries, want 58", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 72 {
+		t.Fatalf("generated instruction manifest has %d entries, want 72", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -319,8 +335,8 @@ func TestGeneratedInstructionManifest(t *testing.T) {
 }
 
 func TestGeneratedDynamicInstructionManifestCoverage(t *testing.T) {
-	if len(generatedDynamicInstructions) != 30 {
-		t.Fatalf("dynamic generated instruction normalizers=%d, want 30", len(generatedDynamicInstructions))
+	if len(generatedDynamicInstructions) != 31 {
+		t.Fatalf("dynamic generated instruction normalizers=%d, want 31", len(generatedDynamicInstructions))
 	}
 	manifest := generatedManifestByText(t)
 	seen := map[string]bool{}
@@ -394,12 +410,16 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1, "I02": 1, "I03": 1},
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,
 			"I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
+			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I64": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1,
+			"I69": 1, "I70": 1, "I71": 1, "I72": 1,
 		},
 		"internal/audit/testdata/unresolved-validation-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I28": 1, "I29": 1,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 3, "I28": 1, "I29": 1,
 			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
+			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
+			"I70": 1, "I71": 1, "I72": 1,
 		},
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
@@ -862,7 +882,7 @@ func extractGeneratedInstructions(content string) []string {
 			if instruction == "None." {
 				continue
 			}
-			if section == "### Adoption Instructions" || section == "### Removal Instructions" || section == "## Migration findings" || section == "### Routing Decisions" && strings.HasPrefix(line, "   - ") {
+			if section == "### Audit Review" || section == "### Adoption Instructions" || section == "### Removal Instructions" || section == "## Migration findings" || section == "### Routing Decisions" && strings.HasPrefix(line, "   - ") {
 				instructions = append(instructions, instruction)
 			}
 			continue
@@ -979,7 +999,12 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Start the count paragraph with `Govna found`.",
 			"- Recompute the protected-region digest after adoption.",
 			"- Require the protected-region digest to match the emitted digest.",
-			"- Run `govna audit` before entering an AC phase.",
+			"- Run the ordinary agent-mediated audit without `--json`.",
+			"- Audit the emitted AC immediately.",
+			"- Create exactly one unique system-temporary scratch directory outside the consumer repository.",
+			"- Render the selected canon into that scratch directory once with the resolved executable.",
+			"- Compare every actionable path through the emitted `### Audit Review` instructions.",
+			"- Remove the exact scratch directory before reporting Audit completion or a blocker.",
 			"- Resume Refine after the Director resolves every blocking finding and decision.",
 			"- Run Pre-Implementation Verification after Refine.",
 			"- Stop before Implement.",
@@ -1035,6 +1060,42 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 	}
 }
 
+func TestNumberedAuditAndRefineStepsAreAtomic(t *testing.T) {
+	paths := []string{
+		"govna/development-cycle.md",
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl",
+	}
+	want := []string{
+		"2. **Audit.**",
+		"   - Review the AC for missing scope, unsafe assumptions, and untestable requirements without editing it.",
+		"   - Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
+		"3. **Refine.**",
+		"   - Update a hand-authored AC with settled findings and Director decisions.",
+		"   - Keep an audit-emitted AC unchanged.",
+		"   - Record its resolved decisions in the active session.",
+	}
+	retired := []string{
+		"2. **Audit.** Review the AC",
+		"3. **Refine.** Update a hand-authored AC",
+		"Keep an audit-emitted AC unchanged and record its resolved decisions",
+	}
+	corpus := governanceCorpus(t)
+	for _, path := range paths {
+		content := corpus[path]
+		for _, line := range want {
+			if strings.Count(content, line+"\n") != 1 {
+				t.Errorf("%s numbered-cycle line count is not one: %s", path, line)
+			}
+		}
+		for _, phrase := range retired {
+			if strings.Contains(content, phrase) {
+				t.Errorf("%s retains combined cycle instruction %q", path, phrase)
+			}
+		}
+	}
+}
+
 func TestCandidateCanonAndPackageInstructions(t *testing.T) {
 	want := map[string][]string{
 		"AGENTS.md": {
@@ -1048,7 +1109,13 @@ func TestCandidateCanonAndPackageInstructions(t *testing.T) {
 		},
 		"govna/canon-cycle.md": {
 			"Render DOC and every registered CODE stack.",
-			"Exercise every rendered profile through `govna audit` at least once.",
+			"Exercise every rendered profile through ordinary non-JSON `govna audit` at least once.",
+			"Complete one bounded scratch review for every actionable emitted AC.",
+			"Compare every actionable path without JSON diff fields.",
+			"Exercise an oversized projected batch before another Implement.",
+			"Exercise oversized, partial, and partly unaccepted batches before Package prep.",
+			"Verify 80-byte acceptance with ASCII and multibyte messages.",
+			"Verify numbered Audit and Refine steps remain atomic in CODE and DOC renders.",
 			"Audit every actionable emitted AC immediately.",
 			"Map every provided command or executable artifact to its governing claims.",
 			"Map every governing claim to a named behavioral regression.",
@@ -1252,9 +1319,20 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 	}
 
 	const first = "Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch."
-	const second = "Require the unique release-message AC-reference set to equal the established release batch before prep."
-	const third = "Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request."
-	codeOpening := "## Pre-Release Checklist\n\n- " + first + "\n- " + second + "\n- " + third + "\n\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
+	checklistRules := []string{
+		first,
+		"Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.",
+		"Require every pending release-batch member to complete Ratify before prep.",
+		"Reject prep while excluded implemented work remains in the unreleased repository state.",
+		"Require the unique release-message AC-reference set to equal the established release batch before prep.",
+		"Require the established release batch to equal the complete pending release batch before prep.",
+		"Reject a release message longer than 80 bytes before prep.",
+		"Prohibit a smaller release batch while excluded implemented work remains.",
+		"Prohibit automatic release-batch splitting.",
+		"Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.",
+	}
+	checklistOpening := "- " + strings.Join(checklistRules, "\n- ") + "\n"
+	codeOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
 	for _, path := range buildReleaseRewrittenPaths {
 		content := corpus[path]
 		if !strings.Contains(content, codeOpening) {
@@ -1268,7 +1346,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 	}
 
 	const docPath = "internal/canon/assets/overlays/doc/files/govna/release.md.tmpl"
-	docOpening := "## Pre-Release Checklist\n\n- " + first + "\n- " + second + "\n- " + third + "\n\n1. **Verify completion.**\n"
+	docOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\n1. **Verify completion.**\n"
 	doc := corpus[docPath]
 	if !strings.Contains(doc, docOpening) {
 		t.Errorf("%s omits the required DOC checklist opening", docPath)

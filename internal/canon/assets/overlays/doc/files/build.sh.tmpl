@@ -111,7 +111,7 @@ build_usage() {
 rel_usage() {
   printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message"'
   _emit_usage_line '-h, -?, --help' 'show this help'
-  printf '\n%s\n' 'Release message must be 80 characters or fewer.'
+  printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
 _ensure_git_repo() {
@@ -215,6 +215,8 @@ Flags:
   --dry-run, -n    print intended writes without modifying the working tree
 
 Prints the canonical release command on success. Does not run the release.
+
+Release message must be 80 bytes or fewer.
 EOF
 }
 
@@ -355,7 +357,7 @@ prep_run() {
     return 1
   fi
   if [ -z "$message" ]; then printf 'prep: message must be non-empty\n' >&2; return 1; fi
-  if [ "$(_byte_len "$message")" -gt 80 ]; then printf 'prep: message must be 80 characters or fewer\n' >&2; return 1; fi
+  if [ "$(_byte_len "$message")" -gt 80 ]; then printf 'prep: message must be 80 bytes or fewer\n' >&2; return 1; fi
 
   _prep_validate_git_state "$root" "$version" || return 1
   _prep_detect_changelog_targets "$root" "$version" || {
@@ -424,7 +426,7 @@ rel_main() {
     return 2
   fi
   if [ -z "$message" ]; then printf 'release message must be non-empty\n' >&2; return 2; fi
-  if [ "$(_byte_len "$message")" -gt 80 ]; then printf 'release message must be 80 characters or fewer\n' >&2; return 2; fi
+  if [ "$(_byte_len "$message")" -gt 80 ]; then printf 'release message must be 80 bytes or fewer\n' >&2; return 2; fi
   rel_run "$tag" "$message"
 }
 

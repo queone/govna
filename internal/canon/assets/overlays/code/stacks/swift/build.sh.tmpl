@@ -743,7 +743,7 @@ _validate_release_inputs() {
     { _fail "$prefix: version must match vMAJOR.MINOR.PATCH: $(_quote "$version")"; return 1; }
   [ -n "$message" ] || { _fail "$prefix: message must be non-empty"; return 1; }
   [ "$(_byte_len "$message")" -le 80 ] ||
-    { _fail "$prefix: message must be 80 characters or fewer"; return 1; }
+    { _fail "$prefix: message must be 80 bytes or fewer"; return 1; }
 }
 
 _validate_git_state() {
@@ -804,6 +804,7 @@ EOF
 
 prep_usage() {
   printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'build prep [--dry-run|-n] [--no-build|-B] vX.Y.Z "release message"'
+  printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
 prep_main() {
@@ -847,6 +848,7 @@ prep_main() {
 
 release_usage() {
   printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'build vX.Y.Z "release message"'
+  printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
 release_main() {

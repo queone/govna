@@ -1,8 +1,8 @@
-# AC7 Adopt Govna Governance Files v0.45.0
+# AC7 Adopt Govna Governance Files v0.46.0
 
 ## Summary
 
-This AC updates `widget` to Govna's embedded governance files (canon v0.45.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
+This AC updates `widget` to Govna's embedded governance files (canon v0.46.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
 
 Govna found 2 files ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.
 
@@ -20,6 +20,25 @@ Govna found 2 files ready to update, 0 required control files to add, 1 file nee
 ### Files needing a Director choice
 
 - `local.md` — `ambiguity`: Govna cannot safely choose between updating and keeping the file.
+
+### Audit Review
+
+- Use the same resolved Govna executable that emitted this AC.
+- Verify its detailed version output matches this AC's guarded marker.
+- Create one unique system-temporary scratch directory outside this repository.
+- Render the selected canon into that directory once with the resolved executable.
+- Verify the rendered `govna/canon-baseline.txt` canon version matches this AC's guarded marker.
+- Compare `AGENTS.md` with `diff -ru <scratch>/AGENTS.md AGENTS.md`.
+- Compare `govna/canon-baseline.txt` with `diff -ru <scratch>/govna/canon-baseline.txt govna/canon-baseline.txt`.
+- Compare `local.md` with `diff -ru <scratch>/local.md local.md`.
+- Review the exact proposed rules.
+- Check rule overlap and placement.
+- Resolve every candidate reference.
+- Measure prospective contract growth.
+- Verify target-side acceptance evidence.
+- Keep this emitted AC and every consumer file unchanged.
+- Remove the exact scratch directory before reporting Audit completion or a blocker.
+- Use no JSON diff field as required review evidence.
 
 ### Adoption Instructions
 

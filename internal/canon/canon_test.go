@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.45.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.46.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -500,8 +500,24 @@ func TestCandidateCanonReviewContract(t *testing.T) {
 		}
 		for _, rule := range []string{
 			"- Render DOC and every registered CODE stack.",
-			"- Exercise every rendered profile through `govna audit` at least once.",
+			"- Exercise every rendered profile through ordinary non-JSON `govna audit` at least once.",
+			"- Resolve the Govna executable before each consumer-equivalent audit.",
+			"- Reuse that resolved executable for the Audit scratch render.",
+			"- Verify the emitted marker versions against the resolved executable.",
+			"- Verify the rendered baseline canon version against the emitted marker.",
+			"- Complete one bounded scratch review for every actionable emitted AC.",
+			"- Compare every actionable path without JSON diff fields.",
+			"- Keep the emitted AC and consumer fixture byte-identical during review.",
+			"- Remove the exact scratch directory before completing review.",
 			"- Audit every actionable emitted AC immediately.",
+			"- Exercise one-AC and fitting multi-AC pending batches.",
+			"- Exercise an oversized projected batch before another Implement.",
+			"- Exercise oversized, partial, and partly unaccepted batches before Package prep.",
+			"- Require every implemented pending-batch member to complete Ratify before Package.",
+			"- Verify whole-tree release staging cannot bypass complete-batch rules.",
+			"- Verify 80-byte acceptance with ASCII and multibyte messages.",
+			"- Reject 81-byte messages before release-prep mutation.",
+			"- Verify numbered Audit and Refine steps remain atomic in CODE and DOC renders.",
 			"- Map every provided command or executable artifact to its governing claims.",
 			"- Map every governing claim to a named behavioral regression.",
 			"- Verify every supported profile provides its required canonical command implementation.",
@@ -554,7 +570,12 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		"- Enter Audit only when govna audit emits or reuses one guarded adoption AC.",
 		"- Keep a clean audit result or pre-emission failure outside the AC phases.",
 		"- Audit the emitted AC immediately.",
-		"- Keep the emitted AC unchanged during integrated Audit and Refine.",
+		"- Authorize the bounded scratch-review procedure in `govna/audit.md` from the original explicit `govna audit` request.",
+		"- Bind the scratch review to the resolved Govna executable and the emitted AC marker versions.",
+		"- Limit scratch-review authority to one unique system-temporary directory outside the consumer repository.",
+		"- Keep the emitted AC and consumer repository unchanged during integrated Audit and Refine.",
+		"- Remove the exact scratch directory before reporting Audit completion or a blocker.",
+		"- End scratch-review authority when Audit ends.",
 		"- Pause integrated audit adoption while any blocking finding or Director decision remains unresolved.",
 		"- Resume Refine after the Director resolves every blocking finding and decision.",
 		"- Require a new audit emission when a required correction would change the immutable AC.",
@@ -608,7 +629,11 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		text := string(content)
 		for _, required := range []string{
 			"### Agent-mediated review",
-			"- Run `govna audit` before entering an AC phase.",
+			"- Run the ordinary agent-mediated audit without `--json`.",
+			"- Require the emitted AC marker versions to match the recorded detailed version.",
+			"- Render the selected canon into that scratch directory once with the resolved executable.",
+			"- Compare every actionable path through the emitted `### Audit Review` instructions.",
+			"- Remove the exact scratch directory before reporting Audit completion or a blocker.",
 			"- Resume Refine after the Director resolves every blocking finding and decision.",
 			"- Run Pre-Implementation Verification after Refine.",
 			"- Stop before Implement.",
@@ -662,13 +687,26 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		text := string(content)
 		for _, required := range []string{
 			"- Treat an explicit valid Package instruction for an established Ratified release batch as the trigger for release-prep bookkeeping.",
+			"- Define the pending release batch as every unpackaged AC whose implementation is present in the unreleased repository state.",
+			"- Include an implemented AC in the pending release batch while it awaits Ratify.",
+			"- Require every pending release-batch member to complete Ratify before Package.",
+			"- Require the established release batch to equal the complete pending release batch.",
+			"- Reject Package while excluded implemented work remains in the unreleased repository state.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
-			"- Treat one active Ratified AC as an established one-AC release batch.",
-			"- Treat only a Director-named set of Ratified ACs as an established multi-AC release batch.",
+			"- Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.",
+			"- Treat only a Director-named complete pending release batch as an established multi-AC release batch.",
 			"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
 			"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
 			"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
 			"- Reject a named release batch that contains a non-Ratified AC.",
+			"- Measure the projected complete pending release batch with one private provisional prefix-plus-summary string before another AC enters Implement.",
+			"- Use the provisional string only for the 80-byte fit check.",
+			"- Discard the provisional string after the fit check.",
+			"- Start another Implement only when the projected complete pending release batch can fit one compliant release message.",
+			"- Require Package for the current fitting batch before another Implement when the projection cannot fit.",
+			"- Recheck the complete pending release batch and exact release message before Package runs prep.",
+			"- Reject an oversized or partial release batch.",
+			"- Prohibit automatic release-batch splitting.",
 		} {
 			if strings.Count(text, required) != 1 {
 				t.Errorf("%s requires one release-batch rule %q", path, required)
@@ -691,7 +729,14 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		text := string(content)
 		for _, required := range []string{
 			"- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.",
+			"- Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.",
+			"- Require every pending release-batch member to complete Ratify before prep.",
+			"- Reject prep while excluded implemented work remains in the unreleased repository state.",
 			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
+			"- Require the established release batch to equal the complete pending release batch before prep.",
+			"- Reject a release message longer than 80 bytes before prep.",
+			"- Prohibit a smaller release batch while excluded implemented work remains.",
+			"- Prohibit automatic release-batch splitting.",
 		} {
 			if strings.Count(text, required) != 1 {
 				t.Errorf("%s requires one release-batch checklist rule %q", path, required)
@@ -708,8 +753,8 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(content), "Package compares the release message's unique AC references with the established batch before prep.") {
-			t.Errorf("%s omits release-message batch equality", path)
+		if !strings.Contains(string(content), "Package requires every implemented batch member to be Ratified, compares the complete pending batch with the exact message, and rejects partial or oversized batches before prep.") {
+			t.Errorf("%s omits complete release-batch safety", path)
 		}
 	}
 }
@@ -799,12 +844,20 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		"- Apply an unnumbered Audit, Refine, Implement, or Ratify instruction when exactly one AC can enter the requested phase.",
 		"- Require the AC number when multiple ACs can enter the requested phase.",
 		"- Ask the Director for the AC number and last completed lifecycle action when phase eligibility cannot be established.",
-		"- Treat one active Ratified AC as an established one-AC release batch.",
-		"- Treat only a Director-named set of Ratified ACs as an established multi-AC release batch.",
+		"- Measure the projected complete pending release batch with one private provisional prefix-plus-summary string before another AC enters Implement.",
+		"- Use the provisional string only for the 80-byte fit check.",
+		"- Discard the provisional string after the fit check.",
+		"- Start another Implement only when the projected complete pending release batch can fit one compliant release message.",
+		"- Require Package for the current fitting batch before another Implement when the projection cannot fit.",
+		"- Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.",
+		"- Treat only a Director-named complete pending release batch as an established multi-AC release batch.",
 		"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
 		"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
 		"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
 		"- Reject a named release batch that contains a non-Ratified AC.",
+		"- Recheck the complete pending release batch and exact release message before Package runs prep.",
+		"- Reject an oversized or partial release batch.",
+		"- Prohibit automatic release-batch splitting.",
 	}
 	retiredRules := []string{
 		"Apply an unnumbered action instruction to the sole AC under `govna/`.",

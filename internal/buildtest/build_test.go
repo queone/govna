@@ -1022,6 +1022,92 @@ for file in govna/ac*.md; do [ -f "$file" ] && printf '%s\n' "$file"; done
 	})
 }
 
+func TestRenderedReleaseMessageByteBoundary(t *testing.T) {
+	root := repoRoot(t)
+	sourceLoader := "source ./build.sh\n"
+	swiftLoader := "eval \"$(sed '/^main \\\"$@\\\"/,$d' ./build.sh)\"\n"
+	validatorProbe := strings.Join([]string{
+		"_validate_release_inputs prep v1.2.3 \"$1\" >/dev/null 2>&1 || exit 10",
+		"_validate_release_inputs prep v1.2.3 \"$2\" >/dev/null 2>&1 && exit 11",
+		"_validate_release_inputs prep v1.2.3 \"$3\" >/dev/null 2>&1 || exit 12",
+		"_validate_release_inputs prep v1.2.3 \"$4\" >/dev/null 2>&1 && exit 13",
+		"exit 0",
+	}, "\n") + "\n"
+	goProbe := strings.Join([]string{
+		"probe() {",
+		"  local reached=0",
+		"  _prep_validate_git_state() { reached=1; return 1; }",
+		"  prep_run 1 1 0 v1.2.3 \"$1\" >/dev/null 2>&1 || true",
+		"  [ \"$reached\" -eq \"$2\" ]",
+		"}",
+		"probe \"$1\" 1 || exit 10",
+		"probe \"$2\" 0 || exit 11",
+		"probe \"$3\" 1 || exit 12",
+		"probe \"$4\" 0 || exit 13",
+	}, "\n") + "\n"
+	terraformProbe := strings.Join([]string{
+		"probe() {",
+		"  local reached=0",
+		"  _prep_validate_git_state() { reached=1; return 1; }",
+		"  prep_run 1 1 v1.2.3 \"$1\" >/dev/null 2>&1 || true",
+		"  [ \"$reached\" -eq \"$2\" ]",
+		"}",
+		"probe \"$1\" 1 || exit 10",
+		"probe \"$2\" 0 || exit 11",
+		"probe \"$3\" 1 || exit 12",
+		"probe \"$4\" 0 || exit 13",
+	}, "\n") + "\n"
+	docProbe := strings.Join([]string{
+		"probe() {",
+		"  local reached=0",
+		"  _prep_validate_git_state() { reached=1; return 1; }",
+		"  prep_run 1 v1.2.3 \"$1\" >/dev/null 2>&1 || true",
+		"  [ \"$reached\" -eq \"$2\" ]",
+		"}",
+		"probe \"$1\" 1 || exit 10",
+		"probe \"$2\" 0 || exit 11",
+		"probe \"$3\" 1 || exit 12",
+		"probe \"$4\" 0 || exit 13",
+	}, "\n") + "\n"
+	profiles := []struct {
+		name, path, command string
+	}{
+		{name: "Root Go", path: "build.sh", command: sourceLoader + goProbe},
+		{name: "Go", path: "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl", command: sourceLoader + goProbe},
+		{name: "Rust", path: "internal/canon/assets/overlays/code/stacks/rust/build.sh.tmpl", command: sourceLoader + validatorProbe},
+		{name: "Swift", path: "internal/canon/assets/overlays/code/stacks/swift/build.sh.tmpl", command: swiftLoader + validatorProbe},
+		{name: "Terraform", path: "internal/canon/assets/overlays/code/stacks/terraform/build.sh.tmpl", command: sourceLoader + terraformProbe},
+		{name: "DOC", path: "internal/canon/assets/overlays/doc/files/build.sh.tmpl", command: sourceLoader + docProbe},
+	}
+	ascii80 := strings.Repeat("a", 80)
+	ascii81 := strings.Repeat("a", 81)
+	multibyte80 := strings.Repeat("é", 40)
+	multibyte82 := strings.Repeat("é", 41)
+	if len(multibyte80) != 80 || len(multibyte82) != 82 {
+		t.Fatal("multibyte boundary fixture has unexpected UTF-8 length")
+	}
+	for _, profile := range profiles {
+		t.Run(profile.name, func(t *testing.T) {
+			dir := t.TempDir()
+			script := mustRead(t, filepath.Join(root, profile.path))
+			if !bytes.Contains(script, []byte("Release message must be 80 bytes or fewer.")) || !bytes.Contains(script, []byte("message must be 80 bytes or fewer")) {
+				t.Fatal("release adapter omits accurate byte-limit help or error text")
+			}
+			if bytes.Contains(script, []byte("80 characters")) {
+				t.Fatal("release adapter still describes the byte boundary as characters")
+			}
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+			out, err := run(t, dir, "", "-c", profile.command, "_", ascii80, ascii81, multibyte80, multibyte82)
+			if err != nil {
+				t.Fatalf("byte-boundary probe: %v: %s", err, out)
+			}
+			if got := mustRead(t, filepath.Join(dir, "build.sh")); !bytes.Equal(got, script) {
+				t.Fatal("byte-boundary validation mutated the release adapter")
+			}
+		})
+	}
+}
+
 func TestReleaseCancellationIsNonMutating(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()

@@ -1096,7 +1096,7 @@ _validate_release_inputs() {
     return 1
   fi
   if [ "$(_byte_len "$message")" -gt 80 ]; then
-    _failure "$(printf '%s: message must be 80 characters or fewer' "$prefix")"
+    _failure "$(printf '%s: message must be 80 bytes or fewer' "$prefix")"
     return 1
   fi
 }
@@ -1240,6 +1240,8 @@ inserting a CHANGELOG row, deleting completed AC files, and validating.
   -v, --verbose                  stream complete phase command output
   --dry-run, -n                  print intended writes without modifying the working tree
   --no-build, -B                 skip post-change validation when the stack permits it
+
+Release message must be 80 bytes or fewer.
 EOF
 }
 
@@ -1397,7 +1399,7 @@ prep_main() {
 
 rel_usage() {
   printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message"'
-  printf '\n%s\n' 'Release message must be 80 characters or fewer.'
+  printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
 _git_err=''

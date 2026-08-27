@@ -46,7 +46,7 @@ Draft → Audit → Refine → Implement → Ratify → Package
 
 Draft creates the AC. Audit, Refine, Implement, and Ratify are its four phases. Package is the separate post-Ratify release-preparation action.
 
-Audit, Refine, Implement, and Ratify target one eligible AC. Package instead targets one established batch of accepted ACs. One active Ratified AC forms a one-AC batch. Use `Package AC70+AC71` to establish and prepare a named multi-AC batch, or use standalone `Package`, `package`, `pack`, or `prep` after the batch is already known. The release message must contain every and only the batch's AC references before prep runs.
+Audit, Refine, Implement, and Ratify target one eligible AC. The pending release batch contains every unpackaged AC whose implementation is present, including work still awaiting Ratify. Before another AC enters Implement, the Operator privately checks that the projected plus-joined references and a brief result summary can fit one 80-byte message; that calculation does not start Package. Package requires every pending member to be Ratified and targets the complete batch. Use `Package AC70+AC71` to establish a fitting multi-AC batch, or use standalone `Package`, `package`, `pack`, or `prep` after a complete batch is already known. Prep rejects an oversized batch, a partial batch, and a smaller batch that would leave implemented work outside the release.
 
 ## Installation
 
