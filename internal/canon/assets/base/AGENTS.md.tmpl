@@ -314,7 +314,8 @@ Note: this rule does not prohibit batching independent commands.
 ### Phase-Advancement Rules
 
 - Treat only explicit Director action language as authorization to enter the named next action.
-- Exempt only an eligible bounded completeness correction under `### Four-Phase Workflow` from a fresh Refine or Implement action instruction.
+- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction.
+- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.
 - Treat standalone `Draft` or `draft` as the pre-cycle action that creates the active AC.
 - Require the Director to authorize Draft before creating the AC.
 - Start an AC cycle only after the Director identifies the AC and authorizes Audit or integrated audit adoption identifies the emitted AC.

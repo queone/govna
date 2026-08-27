@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.43.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.44.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -648,6 +648,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		"Apply an unnumbered Audit, Refine, Implement, Ratify, or Package instruction when exactly one AC can enter the requested action under its established lifecycle state.",
 		"Require the AC number when multiple ACs can enter the requested action.",
 		"Ask the Director for the AC number and last completed lifecycle action when eligibility cannot be established.",
+		"Exempt only an eligible bounded completeness correction under `### Four-Phase Workflow` from a fresh Refine or Implement action instruction.",
 	}
 	assertRules := func(t *testing.T, path, content string) {
 		t.Helper()
@@ -725,6 +726,107 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 			}
 			assertAGENTSRules(t, variant.name+" AGENTS.md", fileText(t, files, "AGENTS.md"))
 			assertRules(t, variant.name+" "+variant.cyclePath, fileText(t, files, variant.cyclePath))
+		})
+	}
+}
+
+func TestPhaseAuthorizationMatrix(t *testing.T) {
+	const refineRule = "- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction."
+	const implementRule = "- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction."
+	const retiredRule = "Exempt only an eligible bounded completeness correction under ### Four-Phase Workflow from a fresh Refine or Implement action instruction."
+
+	root := filepath.Join("..", "..")
+	contracts := []struct {
+		name string
+		text string
+	}{}
+	for _, path := range []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		contracts = append(contracts, struct {
+			name string
+			text string
+		}{name: path, text: string(content)})
+	}
+	for _, variant := range []struct {
+		name   string
+		config Config
+	}{
+		{name: "rendered CODE", config: Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"}},
+		{name: "rendered DOC", config: Config{Flavor: Doc, RepoName: "handbook"}},
+	} {
+		files, err := Render(variant.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contracts = append(contracts, struct {
+			name string
+			text string
+		}{name: variant.name, text: fileText(t, files, "AGENTS.md")})
+	}
+
+	scenarios := []struct {
+		name          string
+		token         string
+		wantRefine    bool
+		wantImplement bool
+	}{
+		{name: "hand-authored AC", token: "hand-authored AC", wantRefine: false, wantImplement: false},
+		{name: "integrated audit adoption", token: "integrated audit adoption", wantRefine: true, wantImplement: false},
+		{name: "bounded completeness correction", token: "eligible bounded completeness correction", wantRefine: true, wantImplement: true},
+	}
+	guards := []string{
+		"- Require fresh approval for every new action.",
+		"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
+		"- Continue Director-authorized Implement authority only for an eligible bounded completeness correction under ### Four-Phase Workflow.",
+		"- Pause after Audit until the Director requests Refine unless integrated audit adoption applies.",
+		"- Pause after Refine and await explicit Director implementation-ready confirmation to Implement.",
+		"- Apply the bounded completeness exception only after the Director authorizes Implement.",
+		"- Prevent the exception from authorizing initial Implement, Audit, Ratify, Package, release preparation, publication, delegation, or commits.",
+		"- Treat only explicit Director action language as authorization to enter the named next action.",
+		"- Treat a compound request as authorization for only the named action.",
+		"- Pause before any unnamed action.",
+		"- Stop integrated audit adoption before Implement.",
+	}
+
+	for _, contract := range contracts {
+		t.Run(contract.name, func(t *testing.T) {
+			normalized := strings.ReplaceAll(contract.text, "`", "")
+			_, after, ok := strings.Cut(normalized, "### Phase-Advancement Rules\n")
+			if !ok {
+				t.Fatal("missing Phase-Advancement Rules")
+			}
+			section := after
+			if end := strings.Index(section, "\n### "); end >= 0 {
+				section = section[:end]
+			}
+			for _, rule := range []string{refineRule, implementRule} {
+				if count := strings.Count(section, rule); count != 1 {
+					t.Errorf("phase exception count=%d, want 1: %s", count, rule)
+				}
+			}
+			if strings.Contains(section, retiredRule) {
+				t.Errorf("retains combined phase exception: %s", retiredRule)
+			}
+			for _, guard := range guards {
+				if count := strings.Count(normalized, guard); count != 1 {
+					t.Errorf("authorization guard count=%d, want 1: %s", count, guard)
+				}
+			}
+			for _, scenario := range scenarios {
+				if got := strings.Contains(refineRule, scenario.token); got != scenario.wantRefine {
+					t.Errorf("%s Refine authorization=%t, want %t", scenario.name, got, scenario.wantRefine)
+				}
+				if got := strings.Contains(implementRule, scenario.token); got != scenario.wantImplement {
+					t.Errorf("%s Implement authorization=%t, want %t", scenario.name, got, scenario.wantImplement)
+				}
+			}
 		})
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.43.0"
+const Version = "0.44.0"
 
 //go:embed all:assets
 var assets embed.FS

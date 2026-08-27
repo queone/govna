@@ -1,4 +1,4 @@
-base/AGENTS.md	560	457
+base/AGENTS.md	561	458
 overlays/code/README.md	28	16
 overlays/code/files/.gitignore.tmpl	18	0
 overlays/code/files/CHANGELOG.md.tmpl	5	0
@@ -23,7 +23,7 @@ overlays/code/stacks/swift/build.sh.tmpl	891	0
 overlays/code/stacks/terraform/build.sh.tmpl	954	0
 overlays/doc/README.md	28	16
 overlays/doc/files/.gitignore.tmpl	10	0
-overlays/doc/files/AGENTS.md.tmpl	516	429
+overlays/doc/files/AGENTS.md.tmpl	517	430
 overlays/doc/files/CHANGELOG.md.tmpl	5	0
 overlays/doc/files/README.md.tmpl	23	0
 overlays/doc/files/build.sh.tmpl	462	0

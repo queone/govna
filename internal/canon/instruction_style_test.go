@@ -1016,6 +1016,8 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Stop when a request lacks authorization, scope, or required context.",
 			"- Ask for the missing authorization, scope, or context.",
 			"- Apply integrated audit adoption only when the Director explicitly requests govna audit.",
+			"- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction.",
+			"- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
 		},
 	}
@@ -1167,6 +1169,31 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 		}
 		if strings.Contains(content, "### Self-review (mandatory)") {
 			t.Errorf("%s retains the parenthetical self-review heading", path)
+		}
+	}
+
+	const phaseHeading = "### Phase-Advancement Rules\n"
+	const refineException = "- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction."
+	const implementException = "- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction."
+	const retiredException = "Exempt only an eligible bounded completeness correction under `### Four-Phase Workflow` from a fresh Refine or Implement action instruction."
+	for _, path := range agentsRewrittenPaths {
+		content := corpus[path]
+		_, after, ok := strings.Cut(content, phaseHeading)
+		if !ok {
+			t.Errorf("%s omits the phase-advancement section", path)
+			continue
+		}
+		section := after
+		if end := strings.Index(section, "\n### "); end >= 0 {
+			section = section[:end]
+		}
+		for _, instruction := range []string{refineException, implementException} {
+			if count := strings.Count(section, instruction); count != 1 {
+				t.Errorf("%s phase-exception count=%d, want 1: %s", path, count, instruction)
+			}
+		}
+		if strings.Contains(section, retiredException) {
+			t.Errorf("%s retains the combined phase exception", path)
 		}
 	}
 
