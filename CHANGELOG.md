@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.9.0 | AC24: review audit ACs and package ratified release batches |
 | 0.8.5 | AC23: route unnumbered lifecycle actions to the eligible AC |
 | 0.8.4 | AC22: make canonical Go builds atomic and signal-safe |
 | 0.8.3 | AC21: ignore non-command Go directories during builds |

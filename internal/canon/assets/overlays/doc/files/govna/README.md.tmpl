@@ -2,7 +2,7 @@
 
 Use this directory for the documents that explain how content work is planned, reviewed, edited, and released in this repository.
 
-Read [`operator-contract-rationale.md`](operator-contract-rationale.md) to understand how the contract makes publishing ceremonies more effective and efficient, including why the session-entry rules work as they do. Read [`audit.md`](audit.md) to understand how `govna audit` compares repository files with Govna's embedded governance files and writes an AC for review.
+Read [`operator-contract-rationale.md`](operator-contract-rationale.md) to understand how the contract makes publishing ceremonies more effective and efficient, including why the session-entry rules work as they do. Read [`audit.md`](audit.md) to understand how `govna audit` compares repository files with Govna's embedded governance files and emits an immutable AC. An explicit agent-mediated audit request continues through immediate Operator Audit and no-edit Refine, then stops before Implement.
 
 Recommended contents to add:
 

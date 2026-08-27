@@ -36,6 +36,8 @@ Trace the main request, job, or publish path from the user-visible entry point t
 
 The governed change path is `Draft → Audit → Refine → Implement → Ratify → Package`. Draft creates the AC; Audit, Refine, Implement, and Ratify are the four AC phases; Package is post-Ratify release preparation and is not a fifth phase.
 
+Integrated audit adoption is the only command-mediated phase exception. It can advance one emitted adoption AC through immediate Audit and no-edit Refine, but it cannot enter Implement. Package uses an established Ratified release batch instead of treating each batch member as a competing phase target. A named request such as `Package AC70+AC71` establishes that batch; a standalone Package alias reuses the batch already established in the active session.
+
 ## Architecture Notes
 
 - record stable system decisions here

@@ -1078,7 +1078,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation (%s).\n\n", at, reason)
 		at++
 	}
-	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.\n\n## Status\n\n`PENDING` — audit emission; awaiting explicit Director Audit.\n", at)
+	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.\n\n## Status\n\n`PENDING` — immutable audit emission; workflow state is tracked in the active session.\n", at)
 	return b.String()
 }
 

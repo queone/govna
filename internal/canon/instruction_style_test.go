@@ -979,6 +979,10 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Start the count paragraph with `Govna found`.",
 			"- Recompute the protected-region digest after adoption.",
 			"- Require the protected-region digest to match the emitted digest.",
+			"- Run `govna audit` before entering an AC phase.",
+			"- Resume Refine after the Director resolves every blocking finding and decision.",
+			"- Run Pre-Implementation Verification after Refine.",
+			"- Stop before Implement.",
 		},
 		"govna/build-release.md": {
 			"- Run ordinary canonical pre-change validation for Go prep.",
@@ -987,6 +991,8 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Refresh validation-token evidence for Rust prep.",
 			"- Rebuild a release from its clean tagged commit before publication.",
 			"- Install the rebuilt release before publication.",
+			"- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.",
+			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
 		},
 		"govna/code-stacks.md": {
 			"- Bump the root package version during release prep.",
@@ -1009,6 +1015,8 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Keep edits local during every update.",
 			"- Stop when a request lacks authorization, scope, or required context.",
 			"- Ask for the missing authorization, scope, or context.",
+			"- Apply integrated audit adoption only when the Director explicitly requests govna audit.",
+			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
 		},
 	}
 	corpus := governanceCorpus(t)
@@ -1162,9 +1170,10 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 		}
 	}
 
-	const first = "Start this checklist only when the director explicitly requests standalone `Package`, `package`, `pack`, or `prep` in the active Ratified AC context."
-	const second = "Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request."
-	codeOpening := "## Pre-Release Checklist\n\n- " + first + "\n- " + second + "\n\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
+	const first = "Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch."
+	const second = "Require the unique release-message AC-reference set to equal the established release batch before prep."
+	const third = "Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request."
+	codeOpening := "## Pre-Release Checklist\n\n- " + first + "\n- " + second + "\n- " + third + "\n\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
 	for _, path := range buildReleaseRewrittenPaths {
 		content := corpus[path]
 		if !strings.Contains(content, codeOpening) {
@@ -1178,7 +1187,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 	}
 
 	const docPath = "internal/canon/assets/overlays/doc/files/govna/release.md.tmpl"
-	docOpening := "## Pre-Release Checklist\n\n- " + first + "\n- " + second + "\n\n1. **Verify completion.**\n"
+	docOpening := "## Pre-Release Checklist\n\n- " + first + "\n- " + second + "\n- " + third + "\n\n1. **Verify completion.**\n"
 	doc := corpus[docPath]
 	if !strings.Contains(doc, docOpening) {
 		t.Errorf("%s omits the required DOC checklist opening", docPath)

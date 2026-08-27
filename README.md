@@ -46,6 +46,8 @@ Draft → Audit → Refine → Implement → Ratify → Package
 
 Draft creates the AC. Audit, Refine, Implement, and Ratify are its four phases. Package is the separate post-Ratify release-preparation action.
 
+Audit, Refine, Implement, and Ratify target one eligible AC. Package instead targets one established batch of accepted ACs. One active Ratified AC forms a one-AC batch. Use `Package AC70+AC71` to establish and prepare a named multi-AC batch, or use standalone `Package`, `package`, `pack`, or `prep` after the batch is already known. The release message must contain every and only the batch's AC references before prep runs.
+
 ## Installation
 
 Govna requires Go 1.27 or later when building from source.
@@ -120,6 +122,8 @@ govna audit
 Audit reads the repository metadata and its baseline, the saved hashes of Govna-managed file regions previously installed there. It also reads the optional preserve registry, the list of files a Director chose to keep local. Each file receives a classification, which is the exact result label explaining its state. When Govna cannot safely act, the emitted AC asks for a routing decision: a Director choice to update, keep, migrate, or remove the file. The AC also records the repository check, meaning the command to run after updates or the reason no command applies. Audit does not make those choices or modify existing governed content.
 
 Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
+
+An explicit agent-mediated request to run `govna audit` also authorizes immediate review of one emitted or reused adoption AC. The executable still performs only deterministic comparison and emission. The Operator performs Audit, completes no-edit Refine after every blocker is resolved, runs Pre-Implementation Verification, reports readiness only when that checklist passes, and stops before Implement. A clean result or pre-emission failure enters no AC phase. A correction that would change the immutable AC requires a new audit emission.
 
 Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
 

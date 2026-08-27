@@ -865,6 +865,66 @@ func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
 	}
 }
 
+func TestRenderedPrepCompositeACReferences(t *testing.T) {
+	root := repoRoot(t)
+	for _, tc := range []struct {
+		name  string
+		path  string
+		parse string
+		find  string
+	}{
+		{"Go", "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl", "_prep_parse_ac_refs", `_prep_find_ac_files "$PWD" "$refs" | sed "s|$PWD/||"`},
+		{"Rust", "internal/canon/assets/overlays/code/stacks/rust/build.sh.tmpl", "_ac_refs", `_matching_ac_files "$refs"`},
+		{"Terraform", "internal/canon/assets/overlays/code/stacks/terraform/build.sh.tmpl", "_prep_parse_ac_refs", `_prep_find_ac_files "$PWD" "$refs" | sed "s|$PWD/||"`},
+		{"DOC", "internal/canon/assets/overlays/doc/files/build.sh.tmpl", "_prep_parse_ac_refs", `_prep_find_ac_files "$PWD" "$refs" | sed "s|$PWD/||"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, tc.path)), 0o755)
+			for _, name := range []string{"ac70-first.md", "ac71-second.md", "ac72-unrelated.md"} {
+				writeBuildFixture(t, filepath.Join(dir, "govna", name), []byte("fixture\n"), 0o644)
+			}
+			command := fmt.Sprintf(`source ./build.sh
+refs=$(%s 'AC71+AC70+AC71 delivered result')
+printf 'refs:\n%%s\nfiles:\n' "$refs"
+%s
+`, tc.parse, tc.find)
+			out, err := run(t, dir, "", "-c", command)
+			if err != nil {
+				t.Fatalf("composite refs: %v: %s", err, out)
+			}
+			want := "refs:\n70\n71\nfiles:\ngovna/ac70-first.md\ngovna/ac71-second.md\n"
+			if out != want {
+				t.Fatalf("composite selection:\n%s\nwant:\n%s", out, want)
+			}
+		})
+	}
+
+	t.Run("Swift", func(t *testing.T) {
+		dir := t.TempDir()
+		writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/swift/build.sh.tmpl")), 0o755)
+		writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---|---|\n| Unreleased | |\n"), 0o644)
+		for _, name := range []string{"ac70-first.md", "ac71-second.md", "ac72-unrelated.md"} {
+			writeBuildFixture(t, filepath.Join(dir, "govna", name), []byte("fixture\n"), 0o644)
+		}
+		command := `eval "$(sed '/^main "$@"/,$d' ./build.sh)"
+refs=$(_prep_refs 'AC71+AC70+AC71 delivered result')
+printf 'refs:\n%s\n' "$refs"
+_prep_apply v1.2.3 'AC71+AC70+AC71 delivered result'
+printf 'remaining:\n'
+for file in govna/ac*.md; do [ -f "$file" ] && printf '%s\n' "$file"; done
+`
+		out, err := run(t, dir, "", "-c", command)
+		if err != nil {
+			t.Fatalf("composite refs: %v: %s", err, out)
+		}
+		want := "refs:\nAC70\nAC71\nremaining:\ngovna/ac72-unrelated.md\n"
+		if out != want {
+			t.Fatalf("composite selection:\n%s\nwant:\n%s", out, want)
+		}
+	})
+}
+
 func TestReleaseCancellationIsNonMutating(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()

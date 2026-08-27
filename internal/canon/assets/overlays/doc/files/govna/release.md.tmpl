@@ -42,7 +42,8 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 
 ## Pre-Release Checklist
 
-- Start this checklist only when the director explicitly requests standalone `Package`, `package`, `pack`, or `prep` in the active Ratified AC context.
+- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.
+- Require the unique release-message AC-reference set to equal the established release batch before prep.
 - Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.
 
 1. **Verify completion.**
@@ -55,7 +56,9 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
    - Bump from the latest tag.
 3. **Derive the release message.**
    - Summarize the delivered user-visible result in no more than 80 characters.
-   - Lead with the AC reference when one exists.
+   - Include every established release-batch AC reference.
+   - Exclude every AC reference outside the established release batch.
+   - Lead with the plus-joined release-batch AC references.
 4. **Run release prep.**
    - Run `./build.sh prep vX.Y.Z "derived message"`.
    - Use `--dry-run` or `-n` to inspect without writes.

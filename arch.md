@@ -45,7 +45,7 @@ Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for pa
 
 Apply determines repository identity through `internal/repository`, renders the selected embedded files, and either writes them into a new repository or merges registered Govna sections into an existing one. Adding those files is adoption. `internal/emission` writes one adoption AC that names the executable version and canon version separately. Apply never reads or changes legacy `governa/` content. Optional Git initialization runs last.
 
-Audit validates a repository that has adopted Govna, reads metadata, the baseline, and the optional preserve registry—the files a Director chose to keep local—and compares Govna-managed regions in byte order. Each exact classification label explains whether a file needs no update, can be updated safely, stays local, or needs a Director choice. Clean audits write nothing. Actionable audits write or reuse one unedited AC keyed by canon version. Its marker records the executable and canon versions separately, and JSON uses the same report data.
+Audit validates a repository that has adopted Govna, reads metadata, the baseline, and the optional preserve registry—the files a Director chose to keep local—and compares Govna-managed regions in byte order. Each exact classification label explains whether a file needs no update, can be updated safely, stays local, or needs a Director choice. Clean audits write nothing. Actionable audits write or reuse one unedited AC keyed by canon version. Its marker records the executable and canon versions separately, and JSON uses the same report data. When an agent is explicitly asked to run the command, the Operator immediately reviews that AC, resumes no-edit Refine after blockers are resolved, runs the final readiness check, and stops before Implement. Active phase state remains in the session rather than the immutable AC.
 
 Removal reads the same repository identity and preserve information. It compares current Govna files and examines repository-only entries without following symlinks. It sorts files into remove, keep, and Director-choice groups, removes preserve control state last, and writes or safely reuses one canon-version-keyed removal AC. The removal marker records executable and canon versions separately and upgrades unedited legacy markers. The command carries out no removal choice.
 
@@ -54,6 +54,8 @@ The canonical Go build discovers regular command entry points, checks their lite
 ## AC Lifecycle Control Flow
 
 The governed change path is `Draft → Audit → Refine → Implement → Ratify → Package`. Draft creates the AC; Audit, Refine, Implement, and Ratify are the four AC phases; Package is post-Ratify release preparation and is not a fifth phase.
+
+Integrated audit adoption is the only command-mediated phase exception. It can advance one emitted adoption AC through immediate Audit and no-edit Refine, but it cannot enter Implement. Package uses an established Ratified release batch instead of treating each batch member as a competing phase target. A named request such as `Package AC70+AC71` establishes that batch; a standalone Package alias reuses the batch already established in the active session.
 
 ## Architecture Notes
 

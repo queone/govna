@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.42.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.43.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -357,7 +357,7 @@ func TestImmutableAuditACVerificationContract(t *testing.T) {
 	}
 	required := []string{
 		"- Confirm each settled decision landed verbatim in the AC.",
-		"- Treat a Director-resolved routing decision recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
+		"- Treat a Director-resolved routing decision or explicit workflow override recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
 		"- Apply each resolved routing action while leaving the emitted AC stub unchanged.",
 		"- Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.",
 		"- Install each missing canon-backed replacement before retired-source routing.",
@@ -372,6 +372,178 @@ func TestImmutableAuditACVerificationContract(t *testing.T) {
 			if count := strings.Count(string(content), rule); count != 1 {
 				t.Errorf("%s rule count=%d, want 1 for %q", path, count, rule)
 			}
+		}
+	}
+}
+
+func TestIntegratedAuditAdoptionContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	agentPaths := []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	}
+	adoptionRules := []string{
+		"- Apply integrated audit adoption only when the Director explicitly requests govna audit.",
+		"- Enter Audit only when govna audit emits or reuses one guarded adoption AC.",
+		"- Keep a clean audit result or pre-emission failure outside the AC phases.",
+		"- Audit the emitted AC immediately.",
+		"- Keep the emitted AC unchanged during integrated Audit and Refine.",
+		"- Pause integrated audit adoption while any blocking finding or Director decision remains unresolved.",
+		"- Resume Refine after the Director resolves every blocking finding and decision.",
+		"- Require a new audit emission when a required correction would change the immutable AC.",
+		"- Complete Refine without editing the emitted AC when no blocker remains.",
+		"- Run Pre-Implementation Verification after integrated Refine.",
+		"- Report implementation readiness only when Pre-Implementation Verification passes.",
+		"- Remain in Refine when Pre-Implementation Verification finds a gap.",
+		"- Stop integrated audit adoption before Implement.",
+		"- Track the active phase in the session instead of the emitted AC.",
+	}
+	for _, path := range agentPaths {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(content)
+		for _, rule := range append([]string{
+			"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
+			"- Pause after Audit until the Director requests Refine unless integrated audit adoption applies.",
+			"- Treat a Director-resolved routing decision or explicit workflow override recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
+		}, adoptionRules...) {
+			if count := strings.Count(text, rule); count != 1 {
+				t.Errorf("%s integrated-audit rule count=%d, want 1: %s", path, count, rule)
+			}
+		}
+		_, adoption, ok := strings.Cut(text, "### Audit Adoption\n")
+		if !ok {
+			t.Errorf("%s omits Audit Adoption", path)
+			continue
+		}
+		if end := strings.Index(adoption, "\n## "); end >= 0 {
+			adoption = adoption[:end]
+		}
+		for _, rule := range adoptionRules {
+			if !strings.Contains(adoption, rule) {
+				t.Errorf("%s places integrated-audit rule outside Audit Adoption: %s", path, rule)
+			}
+		}
+	}
+
+	auditPaths := []string{
+		"govna/audit.md",
+		"internal/canon/assets/overlays/code/files/govna/audit.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/audit.md.tmpl",
+	}
+	for _, path := range auditPaths {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(content)
+		for _, required := range []string{
+			"### Agent-mediated review",
+			"- Run `govna audit` before entering an AC phase.",
+			"- Resume Refine after the Director resolves every blocking finding and decision.",
+			"- Run Pre-Implementation Verification after Refine.",
+			"- Stop before Implement.",
+			"`PENDING` — immutable audit emission; workflow state is tracked in the active session.",
+		} {
+			if strings.Count(text, required) != 1 {
+				t.Errorf("%s requires one integrated-audit phrase %q", path, required)
+			}
+		}
+		if strings.Contains(text, "audit emission; awaiting explicit Director Audit") {
+			t.Errorf("%s retains the separate-Audit waiting status", path)
+		}
+	}
+
+	docRequirements := map[string]string{
+		"README.md":       "An explicit agent-mediated request to run `govna audit` also authorizes immediate review",
+		"arch.md":         "Integrated audit adoption is the only command-mediated phase exception.",
+		"govna/README.md": "continues through immediate Operator Audit and no-edit Refine",
+		"internal/canon/assets/overlays/code/files/README.md.tmpl":                  "also authorizes immediate Audit and Refine",
+		"internal/canon/assets/overlays/doc/files/README.md.tmpl":                   "also authorizes immediate Audit and Refine",
+		"internal/canon/assets/overlays/code/files/arch.md.tmpl":                    "Integrated audit adoption is the only command-mediated phase exception.",
+		"internal/canon/assets/overlays/code/files/govna/README.md.tmpl":            "continues through immediate Operator Audit and no-edit Refine",
+		"internal/canon/assets/overlays/doc/files/govna/README.md.tmpl":             "continues through immediate Operator Audit and no-edit Refine",
+		"govna/development-cycle.md":                                                "The `govna` executable ends after deterministic audit comparison and emission.",
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl": "The `govna` executable ends after deterministic audit comparison and emission.",
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl":      "The `govna` executable ends after deterministic audit comparison and emission.",
+	}
+	for path, required := range docRequirements {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), required) {
+			t.Errorf("%s omits integrated-audit guidance %q", path, required)
+		}
+	}
+}
+
+func TestRatifiedReleaseBatchContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	agentPaths := []string{
+		"AGENTS.md",
+		"internal/canon/assets/base/AGENTS.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
+	}
+	for _, path := range agentPaths {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(content)
+		for _, required := range []string{
+			"- Treat an explicit valid Package instruction for an established Ratified release batch as the trigger for release-prep bookkeeping.",
+			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
+			"- Treat one active Ratified AC as an established one-AC release batch.",
+			"- Treat only a Director-named set of Ratified ACs as an established multi-AC release batch.",
+			"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
+			"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
+			"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
+			"- Reject a named release batch that contains a non-Ratified AC.",
+		} {
+			if strings.Count(text, required) != 1 {
+				t.Errorf("%s requires one release-batch rule %q", path, required)
+			}
+		}
+		if strings.Contains(text, "Treat an explicit standalone `Package`, `package`, `pack`, or `prep` request in an active Ratified AC context as the trigger") {
+			t.Errorf("%s retains the singular standalone Package trigger", path)
+		}
+	}
+
+	for _, path := range []string{
+		"govna/build-release.md",
+		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/release.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(content)
+		for _, required := range []string{
+			"- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.",
+			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
+		} {
+			if strings.Count(text, required) != 1 {
+				t.Errorf("%s requires one release-batch checklist rule %q", path, required)
+			}
+		}
+	}
+
+	for _, path := range []string{
+		"govna/development-cycle.md",
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), "Package compares the release message's unique AC references with the established batch before prep.") {
+			t.Errorf("%s omits release-message batch equality", path)
 		}
 	}
 }
@@ -457,19 +629,31 @@ func TestGovernanceScenarios(t *testing.T) {
 
 func TestPhaseEligibleACRoutingRules(t *testing.T) {
 	rules := []string{
-		"- Apply an unnumbered Audit, Refine, Implement, Ratify, or Package instruction when exactly one AC can enter the requested action under its established lifecycle state.",
-		"- Require the AC number when multiple ACs can enter the requested action.",
-		"- Ask the Director for the AC number and last completed lifecycle action when eligibility cannot be established.",
+		"- Start an AC cycle only after the Director identifies the AC and authorizes Audit or integrated audit adoption identifies the emitted AC.",
+		"- Apply an unnumbered Audit, Refine, Implement, or Ratify instruction when exactly one AC can enter the requested phase.",
+		"- Require the AC number when multiple ACs can enter the requested phase.",
+		"- Ask the Director for the AC number and last completed lifecycle action when phase eligibility cannot be established.",
+		"- Treat one active Ratified AC as an established one-AC release batch.",
+		"- Treat only a Director-named set of Ratified ACs as an established multi-AC release batch.",
+		"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
+		"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
+		"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
+		"- Reject a named release batch that contains a non-Ratified AC.",
 	}
 	retiredRules := []string{
 		"Apply an unnumbered action instruction to the sole AC under `govna/`.",
 		"Use an unnumbered phase instruction when one AC is under `govna/`.",
 		"Require the AC number when multiple ACs are present.",
+		"Start an AC cycle only when the Director identifies the active AC and explicitly requests Audit.",
+		"Apply an unnumbered Audit, Refine, Implement, Ratify, or Package instruction when exactly one AC can enter the requested action under its established lifecycle state.",
+		"Require the AC number when multiple ACs can enter the requested action.",
+		"Ask the Director for the AC number and last completed lifecycle action when eligibility cannot be established.",
 	}
 	assertRules := func(t *testing.T, path, content string) {
 		t.Helper()
+		normalized := strings.ReplaceAll(content, "`", "")
 		for _, rule := range rules {
-			if count := strings.Count(content, rule); count != 1 {
+			if count := strings.Count(normalized, rule); count != 1 {
 				t.Errorf("%s phase-routing rule count=%d, want 1: %s", path, count, rule)
 			}
 		}
@@ -488,7 +672,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 			t.Errorf("%s omits Phase-Advancement Rules", path)
 			return
 		}
-		section := after
+		section := strings.ReplaceAll(after, "`", "")
 		if end := strings.Index(section, "\n### "); end >= 0 {
 			section = section[:end]
 		}
