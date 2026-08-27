@@ -95,10 +95,42 @@ type coherenceRule struct {
 	Targets   []string
 }
 
+type contentCoherenceRule struct {
+	Reference string
+	Required  []string
+	Forbidden []string
+}
+
 var coherenceRules = []coherenceRule{{
 	Reference: "govna/roles.md",
 	Targets:   []string{"govna/build-release.md", "govna/release.md"},
 }}
+
+var sharedContentCoherenceRules = []contentCoherenceRule{{
+	Reference: "AGENTS.md",
+	Required: []string{
+		"Start every Package completion report with the plain, unbulleted, unindented line `Package complete.`.",
+		"Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report.",
+		"Present the exact drafted release command.",
+		"Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction.",
+		"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
+		"Resume Refine after the Director resolves every blocking finding and decision.",
+		"Stop integrated audit adoption before Implement.",
+	},
+}}
+
+var releaseContentCoherenceRule = contentCoherenceRule{
+	Required: []string{
+		"End the structured Package completion report with `Run below to release:`.",
+		"Place the exact release command immediately after that line.",
+		"Add nothing after the release command.",
+	},
+	Forbidden: []string{
+		"Present only the release command after prep.",
+		"Do not add trailing commentary about wrapper routing or prompts.",
+		"Do not add trailing commentary after presenting the command.",
+	},
+}
 
 var semverRE = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 var shaRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -241,7 +273,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		}
 		canonical, ok := canon.CanonicalStack(stack)
 		if !ok {
-			return report, false, fmt.Errorf("unsupported CODE stack %q", stack)
+			return report, false, fmt.Errorf("unsupported CODE stack %q: use %s", stack, canon.SupportedStackChoices)
 		}
 		stack = canonical
 	} else if stack != "" {
@@ -443,6 +475,7 @@ func less(a, b version) bool {
 }
 
 func checkCoherence(files map[string][]byte) error {
+	releasePath := ""
 	for _, rule := range coherenceRules {
 		content, ok := files[rule.Reference]
 		if !ok {
@@ -466,6 +499,37 @@ func checkCoherence(files map[string][]byte) error {
 		}
 		if present == "" {
 			return usererr.Errorf("embedded Govna files disagree with each other: %s has no release document; report this to the Govna maintainer", rule.Reference)
+		}
+		releasePath = present
+	}
+	for _, rule := range sharedContentCoherenceRules {
+		if err := checkContentCoherence(files, rule); err != nil {
+			return err
+		}
+	}
+	if releasePath != "" {
+		rule := releaseContentCoherenceRule
+		rule.Reference = releasePath
+		if err := checkContentCoherence(files, rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkContentCoherence(files map[string][]byte, rule contentCoherenceRule) error {
+	content, ok := files[rule.Reference]
+	if !ok {
+		return usererr.Errorf("embedded Govna files disagree with each other: %s is missing; report this to the Govna maintainer", rule.Reference)
+	}
+	for _, required := range rule.Required {
+		if count := bytes.Count(content, []byte(required)); count != 1 {
+			return usererr.Errorf("embedded Govna files disagree with each other: %s must contain exactly one %q instruction; report this to the Govna maintainer", rule.Reference, required)
+		}
+	}
+	for _, forbidden := range rule.Forbidden {
+		if bytes.Contains(content, []byte(forbidden)) {
+			return usererr.Errorf("embedded Govna files disagree with each other: %s retains conflicting instruction %q; report this to the Govna maintainer", rule.Reference, forbidden)
 		}
 	}
 	return nil
@@ -1121,12 +1185,9 @@ func validationDisposition(root string, report Report) validationOutcome {
 
 func stackManifestReachable(root, stack string) bool {
 	manifests := map[string][]string{
-		"Go":     {"go.mod"},
-		"Rust":   {"Cargo.toml"},
-		"Swift":  {"Package.swift"},
-		"Node":   {"package.json"},
-		"Python": {"pyproject.toml"},
-		"Java":   {"pom.xml", "build.gradle"},
+		"Go":    {"go.mod"},
+		"Rust":  {"Cargo.toml"},
+		"Swift": {"Package.swift"},
 	}
 	for _, manifest := range manifests[stack] {
 		if regularFile(filepath.Join(root, manifest)) {

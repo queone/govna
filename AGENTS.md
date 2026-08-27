@@ -564,3 +564,5 @@ Note: `CLAUDE.md` is an example of an exempt identifier — it names a product-s
 - Keep Go tests beside the packages they exercise.
 - Keep repository-specific governance verification under `govna/`.
 - Prohibit a top-level `tests/` directory.
+- Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.
+- Block canon-change Implement completion while that review has an unresolved Govna-canon finding.

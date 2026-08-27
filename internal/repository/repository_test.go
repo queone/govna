@@ -18,6 +18,60 @@ func TestResolution(t *testing.T) {
 		t.Fatal("consumer identified as source")
 	}
 }
+
+func TestStackSelectionSupportsOnlyCompleteAdapters(t *testing.T) {
+	for _, tc := range []struct {
+		name, manifest, stack string
+		supported             bool
+	}{
+		{name: "Go", manifest: "go.mod", stack: "Go", supported: true},
+		{name: "Rust", manifest: "Cargo.toml", stack: "Rust", supported: true},
+		{name: "Swift", manifest: "Package.swift", stack: "Swift", supported: true},
+		{name: "Terraform lock", manifest: ".terraform.lock.hcl", stack: "Terraform", supported: true},
+		{name: "Terraform file", manifest: "main.tf", stack: "Terraform", supported: true},
+		{name: "Node", manifest: "package.json", stack: "Node"},
+		{name: "Python", manifest: "pyproject.toml", stack: "Python"},
+		{name: "Java Maven", manifest: "pom.xml", stack: "Java"},
+		{name: "Java Gradle", manifest: "build.gradle", stack: "Java"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, tc.manifest), []byte("fixture\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if tc.supported {
+				if got := Stack(root); got != tc.stack {
+					t.Fatalf("stack=%q, want %q", got, tc.stack)
+				}
+				if flavor, err := Flavor(root, ""); err != nil || flavor != "CODE" {
+					t.Fatalf("flavor=%q err=%v", flavor, err)
+				}
+				return
+			}
+			if got := Stack(root); got != "" {
+				t.Fatalf("unsupported manifest inferred stack %q", got)
+			}
+			_, err := Flavor(root, "")
+			if err == nil || !strings.Contains(err.Error(), tc.stack) || !strings.Contains(err.Error(), "Go, Rust, Swift, or Terraform") {
+				t.Fatalf("unsupported manifest error=%v", err)
+			}
+		})
+	}
+}
+
+func TestStackSelectionIgnoresManifestDirectories(t *testing.T) {
+	for _, manifest := range []string{"go.mod", "Cargo.toml", "Package.swift", ".terraform.lock.hcl", "main.tf", "package.json", "pyproject.toml", "pom.xml", "build.gradle"} {
+		t.Run(manifest, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.Mkdir(filepath.Join(root, manifest), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if got := Stack(root); got != "" {
+				t.Fatalf("manifest directory inferred stack %q", got)
+			}
+		})
+	}
+}
 func TestSourceSignature(t *testing.T) {
 	d := t.TempDir()
 	os.MkdirAll(filepath.Join(d, "internal/canon/assets/base"), 0755)

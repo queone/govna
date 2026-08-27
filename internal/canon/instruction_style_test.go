@@ -1035,6 +1035,60 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 	}
 }
 
+func TestCandidateCanonAndPackageInstructions(t *testing.T) {
+	want := map[string][]string{
+		"AGENTS.md": {
+			"Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.",
+			"Block canon-change Implement completion while that review has an unresolved Govna-canon finding.",
+		},
+		"govna/build-release.md": {
+			"End the structured Package completion report with `Run below to release:`.",
+			"Place the exact release command immediately after that line.",
+			"Add nothing after the release command.",
+		},
+		"govna/canon-cycle.md": {
+			"Render DOC and every registered CODE stack.",
+			"Exercise every rendered profile through `govna audit` at least once.",
+			"Audit every actionable emitted AC immediately.",
+			"Map every provided command or executable artifact to its governing claims.",
+			"Map every governing claim to a named behavioral regression.",
+			"Verify every supported profile provides its required canonical command implementation.",
+			"Block Implement completion on any unresolved Govna-canon finding.",
+		},
+		"govna/code-stacks.md": {
+			"Use only Go, Rust, Swift, or Terraform as selectable CODE stacks.",
+		},
+		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl": {
+			"End the structured Package completion report with `Run below to release:`.",
+			"Place the exact release command immediately after that line.",
+			"Add nothing after the release command.",
+		},
+		"internal/canon/assets/overlays/doc/files/govna/release.md.tmpl": {
+			"End the structured Package completion report with `Run below to release:`.",
+			"Place the exact release command immediately after that line.",
+			"Add nothing after the release command.",
+		},
+	}
+	corpus := governanceCorpus(t)
+	for path, instructions := range want {
+		content, ok := corpus[path]
+		if !ok {
+			t.Fatalf("governance corpus omits %s", path)
+		}
+		for _, instruction := range instructions {
+			if count := countRuleInstruction(content, instruction); count != 1 {
+				t.Errorf("%s instruction count=%d, want 1: %s", path, count, instruction)
+			}
+			if !focusedImperativeStarter(instruction) {
+				t.Errorf("%s instruction lacks an imperative starter: %s", path, instruction)
+			}
+			if secondAction.MatchString(instruction) {
+				t.Errorf("%s instruction contains a second action: %s", path, instruction)
+			}
+		}
+	}
+}
+
 func TestRewrittenInstructionManifest(t *testing.T) {
 	if len(rewrittenInstructionReviews) != 45 {
 		t.Fatalf("rewritten instruction manifest has %d entries, want 45", len(rewrittenInstructionReviews))

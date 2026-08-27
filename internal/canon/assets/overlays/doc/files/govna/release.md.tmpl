@@ -62,13 +62,18 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 4. **Run release prep.**
    - Run `./build.sh prep vX.Y.Z "derived message"`.
    - Use `--dry-run` or `-n` to inspect without writes.
-5. **Present the release command.** Print the exact command emitted by prep for the director to run:
+5. **Complete the Package report.**
+   - End the structured Package completion report with `Run below to release:`.
+   - Place the exact release command immediately after that line.
+   - Add nothing after the release command.
+
+Example release command:
 
 ```
 ./build.sh vX.Y.Z "derived message"
 ```
 
-The agent never runs the release command — only the director does. Do not add trailing commentary after presenting the command. The director already knows.
+The agent never runs the release command. Only the director does.
 
 ## CHANGELOG Conventions
 

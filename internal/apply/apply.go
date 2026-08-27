@@ -66,12 +66,12 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 			stack = repository.Stack(cwd)
 		}
 		if stack == "" {
-			fmt.Fprintf(stderr, "apply: could not infer CODE stack from cwd=%s; pass --stack to override\n", cwd)
+			fmt.Fprintf(stderr, "apply: could not infer a supported CODE stack from cwd=%s; use %s with --stack\n", cwd, canon.SupportedStackChoices)
 			return 1
 		}
 		canonical, ok := canon.CanonicalStack(stack)
 		if !ok {
-			fmt.Fprintf(stderr, "apply: unsupported CODE stack %q\n", stack)
+			fmt.Fprintf(stderr, "apply: unsupported CODE stack %q: use %s\n", stack, canon.SupportedStackChoices)
 			return 1
 		}
 		stack = canonical

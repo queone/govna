@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/queone/govna/internal/canon"
 )
 
 func repoRoot(t *testing.T) string {
@@ -29,6 +31,101 @@ func run(t *testing.T, dir string, input string, args ...string) (string, error)
 	cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+func TestSupportedProfileCommandParity(t *testing.T) {
+	type binding struct {
+		claim, implementation, regression string
+		shellRegression                   bool
+	}
+	profiles := []struct {
+		name, claimsPath string
+		config           canon.Config
+		bindings         []binding
+	}{
+		{
+			name: "DOC", claimsPath: "govna/release.md",
+			config: canon.Config{Flavor: canon.Doc, RepoName: "handbook"},
+			bindings: []binding{
+				{claim: "`build.sh` is self-contained Bash 3.2+ tooling.", implementation: "_prep_parse_ac_refs()", regression: "TestRenderedPrepCompositeACReferences"},
+			},
+		},
+		{
+			name: "Go", claimsPath: "govna/code-stacks.md",
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
+			bindings: []binding{
+				{claim: "Compile each selected utility once in an invocation-owned external temporary directory.", implementation: "go build -o \"$compiled_path\"", regression: "TestRenderedGoBuildExecutesWithoutNetwork"},
+				{claim: "Terminate after handling HUP, INT, or TERM.", implementation: "_build_signal_exit", regression: "TestGoBuildSignalsTerminateAndCleanOwnedArtifacts"},
+			},
+		},
+		{
+			name: "Rust", claimsPath: "govna/code-stacks.md",
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
+			bindings: []binding{
+				{claim: "Require one literal `PROGRAM_VERSION: &str` strict stable SemVer declaration in each declared binary path.", implementation: "_validate_utility_declarations", regression: "test_utility_declaration_validation", shellRegression: true},
+				{claim: "Validate every declaration before compilation and each compiled binary before installation.", implementation: "_validate_compiled_utility \"$target\" \"$version\"", regression: "test_compiled_version_output", shellRegression: true},
+			},
+		},
+		{
+			name: "Swift", claimsPath: "govna/code-stacks.md",
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
+			bindings: []binding{
+				{claim: "Keep SwiftPM artifacts in one invocation-owned external scratch directory and clean it on success, failure, and handled signals.", implementation: "govna-swift-build.XXXXXX", regression: "TestSupportedProfileCommandParity"},
+				{claim: "Run strict toolchain formatting, debug compilation, tests, and release compilation with compiler warnings as errors.", implementation: "-Xswiftc -warnings-as-errors", regression: "TestSupportedProfileCommandParity"},
+			},
+		},
+		{
+			name: "Terraform", claimsPath: "govna/code-stacks.md",
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
+			bindings: []binding{
+				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform fmt -check -recursive", regression: "TestSupportedProfileCommandParity"},
+				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform validate", regression: "TestSupportedProfileCommandParity"},
+			},
+		},
+	}
+
+	root := repoRoot(t)
+	goRegressions := string(mustRead(t, filepath.Join(root, "internal/buildtest/build_test.go")))
+	rustRegressions := string(mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/rust/tests/build_cli.sh.tmpl")))
+	for _, profile := range profiles {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := canon.Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rendered := map[string]string{}
+			for _, file := range files {
+				rendered[file.Path] = string(file.Content)
+			}
+			script := rendered["build.sh"]
+			claims := rendered[profile.claimsPath]
+			if script == "" || claims == "" {
+				t.Fatalf("render omits build.sh or %s", profile.claimsPath)
+			}
+			check := exec.Command("/bin/bash", "-n")
+			check.Stdin = strings.NewReader(script)
+			if output, err := check.CombinedOutput(); err != nil {
+				t.Fatalf("rendered build syntax: %v: %s", err, output)
+			}
+			for _, item := range profile.bindings {
+				if !strings.Contains(claims, item.claim) {
+					t.Errorf("governing claims omit %q", item.claim)
+				}
+				if !strings.Contains(script, item.implementation) {
+					t.Errorf("rendered command omits implementation marker %q for claim %q", item.implementation, item.claim)
+				}
+				regressions := goRegressions
+				declaration := "func " + item.regression + "("
+				if item.shellRegression {
+					regressions = rustRegressions
+					declaration = item.regression + "()"
+				}
+				if !strings.Contains(regressions, declaration) {
+					t.Errorf("claim %q has no named regression %s", item.claim, item.regression)
+				}
+			}
+		})
+	}
 }
 
 func TestGoBuildRejectsValidationTokens(t *testing.T) {

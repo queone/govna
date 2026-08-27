@@ -172,7 +172,7 @@ Govna provides two overlay flavors:
 - **CODE** — governance, architecture, development, build, and release support for software repositories.
 - **DOC** — governance and editing support for documentation repositories.
 
-CODE repositories have first-class stack contracts for Go, Rust, Terraform, and Swift. Each supported stack defines inference, canonical validation, installation, scoped-build, and release behavior. See [`govna/code-stacks.md`](govna/code-stacks.md) for the complete contracts.
+CODE repositories can select only Go, Rust, Swift, and Terraform because those stacks have complete canonical build adapters. Each supported stack defines inference, canonical validation, installation, scoped-build, and release behavior. See [`govna/code-stacks.md`](govna/code-stacks.md) for the complete contracts.
 
 ## Design
 

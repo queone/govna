@@ -82,6 +82,9 @@ func TestRunErrors(t *testing.T) {
 		{"doc module", []string{"--flavor", "doc", "--module-path", "x/y", "out"}, nil, "applies only to Go CODE canon", 1},
 		{"non-go module", []string{"--flavor", "code", "--stack", "Rust", "--module-path", "x/y", "out"}, nil, "applies only to Go CODE canon", 1},
 		{"unsupported stack", []string{"--flavor", "code", "--stack", "Ruby", "out"}, nil, "unsupported CODE stack", 1},
+		{"unsupported Java", []string{"--flavor", "code", "--stack", "Java", "out"}, nil, "use Go, Rust, Swift, or Terraform", 1},
+		{"unsupported Node", []string{"--flavor", "code", "--stack", "Node", "out"}, nil, "use Go, Rust, Swift, or Terraform", 1},
+		{"unsupported Python", []string{"--flavor", "code", "--stack", "Python", "out"}, nil, "use Go, Rust, Swift, or Terraform", 1},
 		{"missing go module", []string{"--flavor", "code", "--stack", "Go", "out"}, nil, "could not read module path", 1},
 		{"absent flavor", []string{"out"}, nil, "Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest", 1},
 		{"conflict", []string{"out"}, func(cwd string) {
@@ -105,7 +108,7 @@ func TestRunErrors(t *testing.T) {
 }
 
 func TestFlavorAndStackInference(t *testing.T) {
-	for _, tc := range []struct{ name, manifest, stack string }{{"Go", "go.mod", "Go"}, {"Terraform lock", ".terraform.lock.hcl", "Terraform"}, {"Rust", "Cargo.toml", "Rust"}, {"Swift", "Package.swift", "Swift"}, {"Node", "package.json", "Node"}, {"Python", "pyproject.toml", "Python"}, {"Java pom", "pom.xml", "Java"}, {"Java gradle", "build.gradle", "Java"}, {"Terraform glob", "main.tf", "Terraform"}} {
+	for _, tc := range []struct{ name, manifest, stack string }{{"Go", "go.mod", "Go"}, {"Terraform lock", ".terraform.lock.hcl", "Terraform"}, {"Rust", "Cargo.toml", "Rust"}, {"Swift", "Package.swift", "Swift"}, {"Terraform glob", "main.tf", "Terraform"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			cwd := t.TempDir()
 			os.WriteFile(filepath.Join(cwd, tc.manifest), []byte("module example.com/x\n"), 0o644)
@@ -114,6 +117,32 @@ func TestFlavorAndStackInference(t *testing.T) {
 			}
 			if got := inferStack(cwd); got != tc.stack {
 				t.Fatalf("got %s", got)
+			}
+		})
+	}
+	for _, tc := range []struct{ name, manifest string }{{"Node", "package.json"}, {"Python", "pyproject.toml"}, {"Java pom", "pom.xml"}, {"Java gradle", "build.gradle"}} {
+		t.Run("unsupported "+tc.name, func(t *testing.T) {
+			cwd := t.TempDir()
+			if err := os.WriteFile(filepath.Join(cwd, tc.manifest), []byte("fixture\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := inferStack(cwd); got != "" {
+				t.Fatalf("unsupported manifest inferred %q", got)
+			}
+			var stdout, stderr bytes.Buffer
+			if code := Run([]string{"--flavor", "code", "out"}, &stdout, &stderr, cwd); code != 1 || !strings.Contains(stderr.String(), "Go, Rust, Swift, or Terraform") {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+		})
+	}
+	for _, manifest := range []string{"go.mod", "Cargo.toml", "Package.swift", ".terraform.lock.hcl", "main.tf", "package.json", "pyproject.toml", "pom.xml", "build.gradle"} {
+		t.Run("directory "+manifest, func(t *testing.T) {
+			cwd := t.TempDir()
+			if err := os.Mkdir(filepath.Join(cwd, manifest), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if got := inferStack(cwd); got != "" {
+				t.Fatalf("manifest directory inferred %q", got)
 			}
 		})
 	}
@@ -166,7 +195,7 @@ func TestRenderGoldenManifest(t *testing.T) {
 		expected[fields[0]+"\t"+fields[1]] = fields[2] + "\t" + fields[3]
 	}
 	seen := map[string]bool{}
-	for _, variant := range []string{"doc", "go", "rust", "swift", "terraform", "node", "python", "java"} {
+	for _, variant := range []string{"doc", "go", "rust", "swift", "terraform"} {
 		cwd := filepath.Join(t.TempDir(), "widget")
 		if err := os.Mkdir(cwd, 0o755); err != nil {
 			t.Fatal(err)

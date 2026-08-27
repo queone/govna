@@ -12,7 +12,9 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.44.0"
+const Version = "0.45.0"
+
+const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
 //go:embed all:assets
 var assets embed.FS
@@ -99,7 +101,7 @@ func ProtectedRegion(path string, content []byte) ([]byte, bool) {
 
 // Stacks returns every registered CODE stack in stable order.
 func Stacks() []string {
-	return []string{"Go", "Java", "Node", "Python", "Rust", "Swift", "Terraform"}
+	return []string{"Go", "Rust", "Swift", "Terraform"}
 }
 
 func Render(cfg Config) ([]File, error) {
@@ -108,7 +110,7 @@ func Render(cfg Config) ([]File, error) {
 		var ok bool
 		stack, ok = CanonicalStack(cfg.Stack)
 		if !ok {
-			return nil, fmt.Errorf("unsupported CODE stack %q: use Go, Rust, Swift, Terraform, Node, Python, or Java", cfg.Stack)
+			return nil, fmt.Errorf("unsupported CODE stack %q: use %s", cfg.Stack, SupportedStackChoices)
 		}
 	}
 	modulePath := cfg.ModulePath
@@ -278,12 +280,6 @@ func CanonicalStack(stack string) (string, bool) {
 		return "Swift", true
 	case "terraform":
 		return "Terraform", true
-	case "node":
-		return "Node", true
-	case "python":
-		return "Python", true
-	case "java":
-		return "Java", true
 	default:
 		return "", false
 	}

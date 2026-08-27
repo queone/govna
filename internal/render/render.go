@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/queone/govna/internal/canon"
@@ -35,13 +36,13 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 		if stack == "" {
 			stack = repository.Stack(cwd)
 			if stack == "" {
-				fmt.Fprintf(stderr, "could not infer CODE stack from cwd=%s; pass --stack to override\n", cwd)
+				fmt.Fprintf(stderr, "could not infer a supported CODE stack from cwd=%s; use %s with --stack\n", cwd, canon.SupportedStackChoices)
 				return 1
 			}
 		}
 		canonical, ok := canon.CanonicalStack(stack)
 		if !ok {
-			fmt.Fprintf(stderr, "render canon: unsupported CODE stack %q: use Go, Rust, Swift, Terraform, Node, Python, or Java\n", stack)
+			fmt.Fprintf(stderr, "render canon: unsupported CODE stack %q: use %s\n", stack, canon.SupportedStackChoices)
 			return 1
 		}
 		stack = canonical
@@ -190,9 +191,12 @@ func resolveFlavor(cwd, explicit string) (canon.Flavor, error) {
 	hasJekyll := jekyll == nil
 	hasCode := false
 	for _, name := range []string{"go.mod", "Cargo.toml", "Package.swift", ".terraform.lock.hcl"} {
-		if _, err := os.Stat(filepath.Join(cwd, name)); err == nil {
+		if regularFile(filepath.Join(cwd, name)) {
 			hasCode = true
 		}
+	}
+	if hasRegularMatch(filepath.Join(cwd, "*.tf")) {
+		hasCode = true
 	}
 	if hasCode && hasJekyll {
 		return "", usererr.Errorf("Govna found both CODE and DOC evidence: the repository has _config.yml and a CODE project manifest; pass --flavor code or --flavor doc")
@@ -203,17 +207,32 @@ func resolveFlavor(cwd, explicit string) (canon.Flavor, error) {
 	if hasJekyll {
 		return canon.Doc, nil
 	}
+	for _, item := range []struct{ name, stack string }{{"package.json", "Node"}, {"pyproject.toml", "Python"}, {"pom.xml", "Java"}, {"build.gradle", "Java"}} {
+		if regularFile(filepath.Join(cwd, item.name)) {
+			return "", usererr.Errorf("Govna found %s for the unsupported %s CODE stack; use %s", item.name, item.stack, canon.SupportedStackChoices)
+		}
+	}
 	return "", usererr.Errorf("Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest")
 }
 
 func inferStack(cwd string) string {
-	for _, item := range []struct{ name, stack string }{{"go.mod", "Go"}, {".terraform.lock.hcl", "Terraform"}, {"Cargo.toml", "Rust"}, {"Package.swift", "Swift"}, {"package.json", "Node"}, {"pyproject.toml", "Python"}, {"pom.xml", "Java"}, {"build.gradle", "Java"}} {
-		if _, err := os.Stat(filepath.Join(cwd, item.name)); err == nil {
+	for _, item := range []struct{ name, stack string }{{"go.mod", "Go"}, {".terraform.lock.hcl", "Terraform"}, {"Cargo.toml", "Rust"}, {"Package.swift", "Swift"}} {
+		if regularFile(filepath.Join(cwd, item.name)) {
 			return item.stack
 		}
 	}
-	if matches, _ := filepath.Glob(filepath.Join(cwd, "*.tf")); len(matches) > 0 {
+	if hasRegularMatch(filepath.Join(cwd, "*.tf")) {
 		return "Terraform"
 	}
 	return ""
+}
+
+func regularFile(name string) bool {
+	info, err := os.Stat(name)
+	return err == nil && info.Mode().IsRegular()
+}
+
+func hasRegularMatch(pattern string) bool {
+	matches, _ := filepath.Glob(pattern)
+	return slices.ContainsFunc(matches, regularFile)
 }

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.10.0 | AC26: catch consumer-visible canon faults before release |
 | 0.9.1 | AC25: allow integrated audit to enter Refine without another instruction |
 | 0.9.0 | AC24: review audit ACs and package ratified release batches |
 | 0.8.5 | AC23: route unnumbered lifecycle actions to the eligible AC |

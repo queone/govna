@@ -16,7 +16,7 @@ const (
 )
 
 func TestRenderVariants(t *testing.T) {
-	for _, stack := range []string{"Go", "Rust", "Swift", "Terraform", "Node", "Python", "Java"} {
+	for _, stack := range Stacks() {
 		t.Run(stack, func(t *testing.T) {
 			module := ""
 			if stack == "Go" {
@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.44.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.45.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -187,14 +187,19 @@ func TestSelfHostedGoBaseline(t *testing.T) {
 }
 
 func TestCanonicalStack(t *testing.T) {
-	for input, want := range map[string]string{"go": "Go", "GOLANG": "Go", "rUsT": "Rust", "swift": "Swift", "terraform": "Terraform", "node": "Node", "python": "Python", "java": "Java"} {
+	for input, want := range map[string]string{"go": "Go", "GOLANG": "Go", "rUsT": "Rust", "swift": "Swift", "terraform": "Terraform"} {
 		got, ok := CanonicalStack(input)
 		if !ok || got != want {
 			t.Fatalf("%s: %s, %v", input, got, ok)
 		}
 	}
-	if _, ok := CanonicalStack("ruby"); ok {
-		t.Fatal("accepted unsupported stack")
+	for _, stack := range []string{"Java", "Node", "Python", "Ruby"} {
+		if _, ok := CanonicalStack(stack); ok {
+			t.Errorf("accepted unsupported stack %s", stack)
+		}
+		if _, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: stack}); err == nil || !strings.Contains(err.Error(), SupportedStackChoices) {
+			t.Errorf("unsupported stack %s error=%v", stack, err)
+		}
 	}
 }
 
@@ -208,7 +213,7 @@ func TestComparisonRegions(t *testing.T) {
 	if !ok || string(protected) != "## Project Rules\r\nlocal\n" {
 		t.Fatalf("protected=%q ok=%v", protected, ok)
 	}
-	if got := Stacks(); len(got) != 7 || got[0] != "Go" || got[6] != "Terraform" {
+	if got := strings.Join(Stacks(), ","); got != "Go,Rust,Swift,Terraform" {
 		t.Fatalf("stacks=%v", got)
 	}
 }
@@ -343,6 +348,167 @@ func TestAuditValidationContract(t *testing.T) {
 		} {
 			if strings.Contains(string(content), removed) {
 				t.Errorf("%s retains superseded claim %q", path, removed)
+			}
+		}
+	}
+}
+
+func TestPackageCompletionContract(t *testing.T) {
+	agentRules := []string{
+		"Start every Package completion report with the plain, unbulleted, unindented line `Package complete.`.",
+		"Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report.",
+		"Present the exact drafted release command.",
+	}
+	releaseRules := []string{
+		"End the structured Package completion report with `Run below to release:`.",
+		"Place the exact release command immediately after that line.",
+		"Add nothing after the release command.",
+	}
+	retired := []string{
+		"Present only the release command after prep.",
+		"Do not add trailing commentary about wrapper routing or prompts.",
+		"Do not add trailing commentary after presenting the command.",
+	}
+	assertContract := func(t *testing.T, name, agents, release string) {
+		t.Helper()
+		for _, rule := range agentRules {
+			if count := strings.Count(agents, rule); count != 1 {
+				t.Errorf("%s AGENTS rule count=%d, want 1: %s", name, count, rule)
+			}
+		}
+		position := -1
+		for _, rule := range releaseRules {
+			if count := strings.Count(release, rule); count != 1 {
+				t.Errorf("%s release rule count=%d, want 1: %s", name, count, rule)
+			}
+			next := strings.Index(release, rule)
+			if next <= position {
+				t.Errorf("%s release rule is out of order: %s", name, rule)
+			}
+			position = next
+		}
+		for _, phrase := range retired {
+			if strings.Contains(release, phrase) {
+				t.Errorf("%s retains conflicting Package instruction: %s", name, phrase)
+			}
+		}
+	}
+
+	root := filepath.Join("..", "..")
+	rootAgents, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, path string }{
+		{name: "CODE authority", path: "govna/build-release.md"},
+		{name: "CODE template", path: "internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl"},
+		{name: "DOC template", path: "internal/canon/assets/overlays/doc/files/govna/release.md.tmpl"},
+	} {
+		release, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(tc.path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertContract(t, tc.name, string(rootAgents), string(release))
+	}
+
+	profiles := []struct {
+		name, releasePath string
+		config            Config
+	}{{name: "DOC", releasePath: "govna/release.md", config: Config{Flavor: Doc, RepoName: "handbook"}}}
+	for _, stack := range Stacks() {
+		modulePath := ""
+		if stack == "Go" {
+			modulePath = "example.com/widget"
+		}
+		profiles = append(profiles, struct {
+			name, releasePath string
+			config            Config
+		}{name: "CODE/" + stack, releasePath: "govna/build-release.md", config: Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: modulePath}})
+	}
+	for _, profile := range profiles {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertContract(t, profile.name, fileText(t, files, "AGENTS.md"), fileText(t, files, profile.releasePath))
+		})
+	}
+}
+
+func TestSupportedCODEStackContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for _, path := range []string{"govna/code-stacks.md", "internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl"} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(content)
+		if strings.Count(text, "- Use only Go, Rust, Swift, or Terraform as selectable CODE stacks.") != 1 {
+			t.Errorf("%s omits the supported-stack boundary", path)
+		}
+		for _, retired := range []string{"Prefer Swift over Node", "Infer Node", "Infer Python", "Infer Java"} {
+			if strings.Contains(text, retired) {
+				t.Errorf("%s retains unsupported inference language %q", path, retired)
+			}
+		}
+	}
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(readme), "CODE repositories can select only Go, Rust, Swift, and Terraform because those stacks have complete canonical build adapters.") {
+		t.Error("README omits the complete selectable CODE-stack set")
+	}
+	for _, stack := range Stacks() {
+		modulePath := ""
+		if stack == "Go" {
+			modulePath = "example.com/widget"
+		}
+		files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: modulePath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if build := fileText(t, files, "build.sh"); !strings.HasPrefix(build, "#!/usr/bin/env bash\n") {
+			t.Errorf("%s render lacks its canonical build adapter", stack)
+		}
+	}
+}
+
+func TestCandidateCanonReviewContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	agents, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range []string{
+		"- Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.",
+		"- Block canon-change Implement completion while that review has an unresolved Govna-canon finding.",
+	} {
+		if strings.Count(string(agents), rule) != 1 {
+			t.Errorf("AGENTS.md requires one maintainer gate: %s", rule)
+		}
+	}
+	for _, path := range []string{
+		"govna/canon-cycle.md",
+		"internal/canon/assets/overlays/code/files/govna/canon-cycle.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/canon-cycle.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range []string{
+			"- Render DOC and every registered CODE stack.",
+			"- Exercise every rendered profile through `govna audit` at least once.",
+			"- Audit every actionable emitted AC immediately.",
+			"- Map every provided command or executable artifact to its governing claims.",
+			"- Map every governing claim to a named behavioral regression.",
+			"- Verify every supported profile provides its required canonical command implementation.",
+			"- Block Implement completion on any unresolved Govna-canon finding.",
+		} {
+			if strings.Count(string(content), rule) != 1 {
+				t.Errorf("%s requires one candidate-canon rule: %s", path, rule)
 			}
 		}
 	}

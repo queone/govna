@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/queone/govna/internal/canon"
@@ -50,7 +51,10 @@ func Flavor(root, explicit string) (canon.Flavor, error) {
 	hasDoc := exists(filepath.Join(root, "_config.yml"))
 	hasCode := false
 	for _, name := range []string{"go.mod", "Cargo.toml", "Package.swift", ".terraform.lock.hcl"} {
-		hasCode = hasCode || exists(filepath.Join(root, name))
+		hasCode = hasCode || regularFile(filepath.Join(root, name))
+	}
+	if hasRegularMatch(filepath.Join(root, "*.tf")) {
+		hasCode = true
 	}
 	if hasCode && hasDoc {
 		return "", usererr.Errorf("Govna found both CODE and DOC evidence: the repository has _config.yml and a CODE project manifest; pass --flavor code or --flavor doc")
@@ -61,19 +65,36 @@ func Flavor(root, explicit string) (canon.Flavor, error) {
 	if hasDoc {
 		return canon.Doc, nil
 	}
+	if stack, manifest := unsupportedStackManifest(root); stack != "" {
+		return "", usererr.Errorf("Govna found %s for the unsupported %s CODE stack; use %s", manifest, stack, canon.SupportedStackChoices)
+	}
 	return "", usererr.Errorf("Govna could not determine whether this is a CODE or DOC repository; add govna/metadata.txt, pass --flavor code|doc, or add a recognized project manifest")
 }
 
 func Stack(root string) string {
-	for _, x := range []struct{ f, s string }{{"go.mod", "Go"}, {".terraform.lock.hcl", "Terraform"}, {"Cargo.toml", "Rust"}, {"Package.swift", "Swift"}, {"package.json", "Node"}, {"pyproject.toml", "Python"}, {"pom.xml", "Java"}, {"build.gradle", "Java"}} {
-		if exists(filepath.Join(root, x.f)) {
+	for _, x := range []struct{ f, s string }{{"go.mod", "Go"}, {".terraform.lock.hcl", "Terraform"}, {"Cargo.toml", "Rust"}, {"Package.swift", "Swift"}} {
+		if regularFile(filepath.Join(root, x.f)) {
 			return x.s
 		}
 	}
-	if m, _ := filepath.Glob(filepath.Join(root, "*.tf")); len(m) > 0 {
+	if hasRegularMatch(filepath.Join(root, "*.tf")) {
 		return "Terraform"
 	}
 	return ""
+}
+
+func unsupportedStackManifest(root string) (string, string) {
+	for _, item := range []struct{ file, stack string }{
+		{"package.json", "Node"},
+		{"pyproject.toml", "Python"},
+		{"pom.xml", "Java"},
+		{"build.gradle", "Java"},
+	} {
+		if regularFile(filepath.Join(root, item.file)) {
+			return item.stack, item.file
+		}
+	}
+	return "", ""
 }
 func ModulePath(root string) string {
 	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
@@ -147,3 +168,13 @@ func RequireGitWorktree(root string) error {
 	return nil
 }
 func exists(name string) bool { _, err := os.Lstat(name); return err == nil }
+
+func regularFile(name string) bool {
+	info, err := os.Stat(name)
+	return err == nil && info.Mode().IsRegular()
+}
+
+func hasRegularMatch(pattern string) bool {
+	matches, _ := filepath.Glob(pattern)
+	return slices.ContainsFunc(matches, regularFile)
+}

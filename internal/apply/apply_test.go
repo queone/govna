@@ -21,8 +21,8 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, "created")
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.44.0) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.44.0). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.45.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.45.0). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
 		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
@@ -34,7 +34,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.44.0", "Director reads", "review applied governance", "overlay", "consumer-owned"} {
+	for _, invalid := range []string{"Applied govna v0.45.0", "Director reads", "review applied governance", "overlay", "consumer-owned"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
@@ -255,5 +255,16 @@ func TestParseErrors(t *testing.T) {
 		if Run(args, &out, &err, t.TempDir(), testProgramVersion, nil) != 2 {
 			t.Fatalf("accepted %v", args)
 		}
+	}
+}
+
+func TestUnsupportedCODEStacksNameSupportedChoices(t *testing.T) {
+	for _, stack := range []string{"Java", "Node", "Python"} {
+		t.Run(stack, func(t *testing.T) {
+			_, stderr, code := runAt(t, t.TempDir(), "--flavor", "code", "--stack", stack)
+			if code != 1 || !strings.Contains(stderr, "use Go, Rust, Swift, or Terraform") {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+		})
 	}
 }
