@@ -114,7 +114,7 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Start every Package completion report with the plain, unbulleted, unindented line `Package complete.`.",
 		"Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report.",
 		"Present the exact drafted release command.",
-		"Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction.",
+		"Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction.",
 		"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
 		"Resume Refine after the Director resolves every blocking finding and decision.",
 		"Stop integrated audit adoption before Implement.",

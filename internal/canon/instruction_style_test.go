@@ -1055,7 +1055,7 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Stop when a request lacks authorization, scope, or required context.",
 			"- Ask for the missing authorization, scope, or context.",
 			"- Apply integrated audit adoption only when the Director explicitly requests govna audit.",
-			"- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction.",
+			"- Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction.",
 			"- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
 		},
@@ -1308,7 +1308,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 	}
 
 	const phaseHeading = "### Phase-Advancement Rules\n"
-	const refineException = "- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction."
+	const refineException = "- Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction."
 	const implementException = "- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction."
 	const retiredException = "Exempt only an eligible bounded completeness correction under `### Four-Phase Workflow` from a fresh Refine or Implement action instruction."
 	for _, path := range agentsRewrittenPaths {

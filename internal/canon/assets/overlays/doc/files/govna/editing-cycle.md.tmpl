@@ -17,7 +17,7 @@ The lifecycle makes recurring publishing checkpoints and their settled context r
 - Complete Ratify when that review is clean.
 - Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent post-Ratify release-preparation actions.
 - Do not infer Package from Ratify acceptance.
-- Start an AC cycle only after the Director identifies the AC and authorizes Audit or integrated audit adoption identifies the emitted AC.
+- Start an AC cycle only after the Director identifies the AC and authorizes Audit, integrated audit adoption identifies the emitted AC, or a completed Draft identifies the active AC.
 - Apply an unnumbered Audit, Refine, Implement, or Ratify instruction when exactly one AC can enter the requested phase.
 - Require the AC number when multiple ACs can enter the requested phase.
 - Ask the Director for the AC number and last completed lifecycle action when phase eligibility cannot be established.
@@ -42,7 +42,7 @@ The lifecycle makes recurring publishing checkpoints and their settled context r
 - Keep a clean audit result or pre-emission failure outside the AC phases.
 - Resume integrated Refine after the Director resolves every blocking finding and decision.
 - Stop integrated audit adoption before Implement.
-- Pause after each lifecycle action unless integrated audit adoption authorizes immediate Refine.
+- Pause after each lifecycle action unless integrated audit adoption, completed-Draft automatic Audit entry, or eligible automatic Refine entry authorizes the immediate next action.
 
 ## Required Artifacts
 

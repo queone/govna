@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.49.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.50.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -594,8 +594,18 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		text := string(content)
 		for _, rule := range append([]string{
 			"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
-			"- Pause after Audit until the Director requests Refine unless integrated audit adoption applies.",
+			"- Pause after Audit until the Director requests Refine unless integrated audit adoption or eligible automatic Refine entry applies.",
 			"- Treat a Director-resolved routing decision or explicit workflow override recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
+			"- Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.",
+			"- Keep an unscoped stub paused until the Director scopes it.",
+			"- Enter Refine automatically when Audit completes with only advancement-eligible findings.",
+			"- Define an advancement-eligible finding as one outside every Director-owned category in `### General Gates` and roles.md `What the Operator Must Defer` with exactly one materially valid correction.",
+			"- Block automatic Refine entry on any unresolved contract-integrity finding.",
+			"- Report every autonomously resolved Audit finding with its resolution in the Refine completion.",
+			"- Run Pre-Implementation Verification after eligible automatic Refine completion.",
+			"- Exempt completed-Draft automatic Audit entry from a fresh Audit action instruction.",
+			"- Pause immediately when an automatic-transition eligibility condition fails.",
+			"- Prevent automatic advancement from authorizing Implement, Ratify, Package, release preparation, publication, delegation, or commits.",
 		}, adoptionRules...) {
 			if count := strings.Count(text, rule); count != 1 {
 				t.Errorf("%s integrated-audit rule count=%d, want 1: %s", path, count, rule)
@@ -979,6 +989,9 @@ func TestGovernanceScenarios(t *testing.T) {
 		"- Run `./build.sh` only when required build evidence is missing or stale.",
 		"- Run each acceptance test in the active AC when its current disposition is unavailable.",
 		"- Report each current acceptance-test disposition.",
+		"- Pause after each lifecycle action unless integrated audit adoption, completed-Draft automatic Audit entry, or eligible automatic Refine entry authorizes the immediate next action.",
+		"- Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.",
+		"- Enter Refine automatically when Audit completes with only advancement-eligible findings.",
 		"## Why Clean Ratify Reuses Implement Evidence",
 	}
 	for _, profile := range profiles {
@@ -1013,7 +1026,7 @@ func TestGovernanceScenarios(t *testing.T) {
 
 func TestPhaseEligibleACRoutingRules(t *testing.T) {
 	rules := []string{
-		"- Start an AC cycle only after the Director identifies the AC and authorizes Audit or integrated audit adoption identifies the emitted AC.",
+		"- Start an AC cycle only after the Director identifies the AC and authorizes Audit, integrated audit adoption identifies the emitted AC, or a completed Draft identifies the active AC.",
 		"- Apply an unnumbered Audit, Refine, Implement, or Ratify instruction when exactly one AC can enter the requested phase.",
 		"- Require the AC number when multiple ACs can enter the requested phase.",
 		"- Ask the Director for the AC number and last completed lifecycle action when phase eligibility cannot be established.",
@@ -1037,6 +1050,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		"Use an unnumbered phase instruction when one AC is under `govna/`.",
 		"Require the AC number when multiple ACs are present.",
 		"Start an AC cycle only when the Director identifies the active AC and explicitly requests Audit.",
+		"Start an AC cycle only after the Director identifies the AC and authorizes Audit or integrated audit adoption identifies the emitted AC.",
 		"Apply an unnumbered Audit, Refine, Implement, Ratify, or Package instruction when exactly one AC can enter the requested action under its established lifecycle state.",
 		"Require the AC number when multiple ACs can enter the requested action.",
 		"Ask the Director for the AC number and last completed lifecycle action when eligibility cannot be established.",
@@ -1123,7 +1137,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 }
 
 func TestPhaseAuthorizationMatrix(t *testing.T) {
-	const refineRule = "- Exempt integrated audit adoption and an eligible bounded completeness correction from a fresh Refine action instruction."
+	const refineRule = "- Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction."
 	const implementRule = "- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction."
 	const retiredRule = "Exempt only an eligible bounded completeness correction under ### Four-Phase Workflow from a fresh Refine or Implement action instruction."
 
@@ -1171,13 +1185,14 @@ func TestPhaseAuthorizationMatrix(t *testing.T) {
 	}{
 		{name: "hand-authored AC", token: "hand-authored AC", wantRefine: false, wantImplement: false},
 		{name: "integrated audit adoption", token: "integrated audit adoption", wantRefine: true, wantImplement: false},
+		{name: "automatic Refine entry", token: "eligible automatic Refine entry", wantRefine: true, wantImplement: false},
 		{name: "bounded completeness correction", token: "eligible bounded completeness correction", wantRefine: true, wantImplement: true},
 	}
 	guards := []string{
 		"- Require fresh approval for every new action.",
 		"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
 		"- Continue Director-authorized Implement authority only for an eligible bounded completeness correction under ### Four-Phase Workflow.",
-		"- Pause after Audit until the Director requests Refine unless integrated audit adoption applies.",
+		"- Pause after Audit until the Director requests Refine unless integrated audit adoption or eligible automatic Refine entry applies.",
 		"- Pause after Refine and await explicit Director implementation-ready confirmation to Implement.",
 		"- Apply the bounded completeness exception only after the Director authorizes Implement.",
 		"- Prevent the exception from authorizing initial Implement, Audit, Ratify, Package, release preparation, publication, delegation, or commits.",
