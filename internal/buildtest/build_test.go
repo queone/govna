@@ -1067,6 +1067,7 @@ func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
 		name, message, want string
 	}{
 		{name: "table delimiter", message: "AC29 bad | cell", want: "one Markdown table cell"},
+		{name: "escaped table delimiter", message: `AC29 bad \| cell`, want: "one Markdown table cell"},
 		{name: "newline", message: "AC29 first\nsecond", want: "one line"},
 	} {
 		t.Run(bad.name, func(t *testing.T) {
@@ -1075,6 +1076,85 @@ func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
 				t.Fatalf("unsafe message accepted: %v: %s", err, out)
 			}
 		})
+	}
+}
+
+func TestChangelogShapeAcceptsEscapedPipesInHistory(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	history := "| 1.0.0 | `short\\|long` alias and a \\\\| edge |\n"
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"1.0.0\"\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"+history), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "govna/ac30-fixture.md"), []byte("fixture\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+
+	out, err := run(t, dir, "", "./build.sh", "prep", "v1.1.0", "AC30 fixture release")
+	if err != nil {
+		t.Fatalf("prep with escaped-pipe history: %v:\n%s", err, out)
+	}
+	changelog := string(mustRead(t, filepath.Join(dir, "CHANGELOG.md")))
+	if !strings.Contains(changelog, "| Unreleased | |\n| 1.1.0 | AC30 fixture release |\n"+history) {
+		t.Fatalf("prepared changelog=%s", changelog)
+	}
+
+	probe := "source ./build.sh\n" + strings.Join([]string{
+		`_validate_prepared_changelogs "$PWD" 1.1.0 "AC30 fixture release" || exit 10`,
+		"exit 0",
+	}, "\n") + "\n"
+	if out, err := run(t, dir, "", "-c", probe); err != nil {
+		t.Fatalf("release prepared-changelog validation rejected escaped-pipe history: %v: %s", err, out)
+	}
+	if out, err := run(t, dir, "", "./build.sh", "v1.1.1", `AC30 bad \| cell`); err == nil || !strings.Contains(out, "one Markdown table cell") {
+		t.Fatalf("release entry accepted escaped-pipe message: %v: %s", err, out)
+	}
+
+	shapes := []struct {
+		name, body string
+		accept     bool
+	}{
+		{name: "escaped pipe", body: "| 1.0.0 | uses a \\| literal |\n", accept: true},
+		{name: "backslash then escaped pipe", body: "| 1.0.0 | edge \\\\| case |\n", accept: true},
+		{name: "raw pipe in summary", body: "| 1.0.0 | raw | pipe |\n", accept: false},
+		{name: "pipe in version cell", body: "| 1.0\\|0 | summary |\n", accept: false},
+		{name: "malformed row", body: "not a table row\n", accept: false},
+	}
+	header := "# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"
+	for _, script := range []struct{ label, path string }{
+		{label: "root", path: "build.sh"},
+		{label: "rendered", path: "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"},
+	} {
+		for _, shape := range shapes {
+			t.Run(script.label+"/"+shape.name, func(t *testing.T) {
+				probeDir := t.TempDir()
+				writeBuildFixture(t, filepath.Join(probeDir, "build.sh"), mustRead(t, filepath.Join(root, script.path)), 0o755)
+				writeBuildFixture(t, filepath.Join(probeDir, "probe.md"), []byte(header+shape.body), 0o644)
+				out, err := run(t, probeDir, "", "-c", "source ./build.sh\n_validate_changelog_shape ./probe.md\n")
+				if shape.accept && err != nil {
+					t.Fatalf("valid shape rejected: %v: %s", err, out)
+				}
+				if !shape.accept && err == nil {
+					t.Fatalf("invalid shape accepted: %s", out)
+				}
+			})
+		}
+		for _, bad := range []string{
+			"bad heading\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n",
+			"# Changelog\n\n| Version | Summary |\n|--bad--|--bad--|\n| Unreleased | |\n",
+			"# Changelog\n\n| Version | Summary |\n|---------|---------|\n| 1.0.0 | no unreleased row |\n",
+		} {
+			probeDir := t.TempDir()
+			writeBuildFixture(t, filepath.Join(probeDir, "build.sh"), mustRead(t, filepath.Join(root, script.path)), 0o755)
+			writeBuildFixture(t, filepath.Join(probeDir, "probe.md"), []byte(bad), 0o644)
+			if out, err := run(t, probeDir, "", "-c", "source ./build.sh\n_validate_changelog_shape ./probe.md\n"); err == nil {
+				t.Fatalf("non-canonical changelog accepted for %s: %s", script.path, out)
+			}
+		}
 	}
 }
 

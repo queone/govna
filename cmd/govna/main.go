@@ -12,8 +12,8 @@ import (
 	"github.com/queone/govna/internal/render"
 )
 
-const programVersion = "0.13.0"
-const canonVersion = "0.48.0"
+const programVersion = "0.14.0"
+const canonVersion = "0.49.0"
 const sourceRepo = "github.com/queone/govna"
 
 type environment struct {

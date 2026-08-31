@@ -7,9 +7,9 @@ overlays/code/files/arch.md.tmpl	49	15
 overlays/code/files/govna/README.md.tmpl	16	4
 overlays/code/files/govna/ac-template.md.tmpl	69	10
 overlays/code/files/govna/audit.md.tmpl	308	155
-overlays/code/files/govna/build-release.md.tmpl	135	45
+overlays/code/files/govna/build-release.md.tmpl	136	46
 overlays/code/files/govna/canon-cycle.md.tmpl	123	65
-overlays/code/files/govna/code-stacks.md.tmpl	113	96
+overlays/code/files/govna/code-stacks.md.tmpl	115	98
 overlays/code/files/govna/development-cycle.md.tmpl	108	62
 overlays/code/files/govna/development-guidelines.md.tmpl	87	51
 overlays/code/files/govna/metadata.txt	4	0

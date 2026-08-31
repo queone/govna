@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.14.0 | AC30 accept escaped pipes in historical changelog rows |
 | 0.13.0 | AC29 release Ratified Go work without repeating full validation |
 | 0.12.0 | AC28 stop reprocessing current Audit and Ratify evidence |
 | 0.11.0 | AC27: make consumer audit and release batching executable |
