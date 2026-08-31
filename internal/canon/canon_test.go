@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.47.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.48.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -1300,6 +1300,21 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 	if !strings.Contains(goBuild, "validation-token options are unsupported for Go") {
 		t.Fatal("rendered Go build does not reject validation-token input")
 	}
+	for _, marker := range []string{
+		"_capture_worktree_tree()",
+		"Compile release utilities",
+		"go build -mod=readonly -buildvcs=true -o \"$compiled\" -ldflags '-s -w' \"./cmd/$target\"",
+		"resulting paths differ from the planned transformations",
+	} {
+		if !strings.Contains(goBuild, marker) {
+			t.Errorf("rendered Go release tooling omits %q", marker)
+		}
+	}
+	for _, retired := range []string{"prep: running pre-check build", "prep: running post-check build", "--no-build, -B", "-v, --verbose    print detailed prep"} {
+		if strings.Contains(goBuild, retired) {
+			t.Errorf("rendered Go prep retains %q", retired)
+		}
+	}
 	for _, rootOnly := range []string{"internal/canon.Version", "cmd/govna canonVersion", "_literal_const_value()", "_validate_root_canon_version()", "_install_compiled_utility()", "_release_rebuild_and_verify()"} {
 		if strings.Contains(goBuild, rootOnly) {
 			t.Errorf("rendered Go consumer contains root-only marker %q", rootOnly)
@@ -1313,6 +1328,9 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 	rustBuild := fileText(t, rustFiles, "build.sh")
 	if !strings.Contains(rustBuild, "refresh-validation-token") || strings.Contains(rustBuild, "cmd/govna canonVersion") {
 		t.Fatal("rendered Rust token behavior or canon-version boundary changed")
+	}
+	if strings.Contains(rustBuild, "Compile release utilities") || strings.Contains(rustBuild, "govna-go-release.XXXXXX") {
+		t.Fatal("rendered Rust build gained Go-only release compilation")
 	}
 
 	goAgents := fileText(t, goFiles, "AGENTS.md")

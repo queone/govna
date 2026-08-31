@@ -163,6 +163,12 @@ var currentInstructionReplacements = map[string]string{
 	"Confirm that `./build.sh` passes when the change touches code or build-relevant files.":                                            "Confirm that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
 	"Run each acceptance test in the active AC when it can be exercised.":                                                               "Run each acceptance test in the active AC when its current disposition is unavailable.",
 	"Report the result of each exercised acceptance test.":                                                                              "Report each current acceptance-test disposition.",
+	"Run ordinary canonical pre-change validation for Go prep.":                                                                         "Use the successful final full build and clean Ratify review as current Package evidence.",
+	"Run ordinary canonical post-change validation for Go prep.":                                                                        "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
+	"Rebuild a release from its clean tagged commit before publication.":                                                                "Compile every discovered Go utility once from clean committed `HEAD` before tagging.",
+	"Install the rebuilt release before publication.":                                                                                   "Install every validated utility atomically before tagging.",
+	"Run ordinary canonical pre-change validation during Go release prep.":                                                              "Keep Go prep limited to version, changelog, released-AC, and matching `plan.md` pointer bookkeeping.",
+	"Run ordinary canonical post-change validation during Go release prep.":                                                             "Run no canonical build, Go build, or Go dependency command during Go prep.",
 }
 
 func currentReviewedInstruction(review rewrittenInstructionReview) string {
@@ -1018,12 +1024,12 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Stop before Implement.",
 		},
 		"govna/build-release.md": {
-			"- Run ordinary canonical pre-change validation for Go prep.",
-			"- Run ordinary canonical post-change validation for Go prep.",
+			"- Use the successful final full build and clean Ratify review as current Package evidence.",
+			"- Keep Go prep free of canonical build, Go build, and Go dependency commands.",
 			"- Reserve validation-token evidence for Rust prep.",
 			"- Refresh validation-token evidence for Rust prep.",
-			"- Rebuild a release from its clean tagged commit before publication.",
-			"- Install the rebuilt release before publication.",
+			"- Compile every discovered Go utility once from clean committed `HEAD` before tagging.",
+			"- Install every validated utility atomically before tagging.",
 			"- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.",
 			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
 		},

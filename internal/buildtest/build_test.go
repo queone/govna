@@ -155,7 +155,7 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{"Validate compiled utility versions", "Install validated utilities", "prep: running pre-check build", "prep: running post-check build"} {
+	for _, marker := range []string{"Validate compiled utility versions", "Install validated utilities", "Compile release utilities", "resulting paths differ from the planned transformations"} {
 		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
 			t.Fatalf("root/rendered Go build scripts lack shared marker %q", marker)
 		}
@@ -173,6 +173,12 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	if !strings.Contains(string(a), "_validate_root_canon_version") || strings.Contains(string(b), "_validate_root_canon_version") {
 		t.Fatal("root-only canon-version boundary is incorrect")
 	}
+	releaseMarker := []byte("# Release path\n")
+	aRelease := bytes.Index(a, releaseMarker)
+	bRelease := bytes.Index(b, releaseMarker)
+	if aRelease < 0 || bRelease < 0 || !bytes.Equal(a[aRelease:], b[bRelease:]) {
+		t.Fatal("root and rendered Go prep/release implementations differ")
+	}
 }
 
 func TestRenderedGoHelperClosure(t *testing.T) {
@@ -183,14 +189,16 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 	if err := closure.validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, helper := range []string{"_build_signal_exit", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver"} {
+	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_release_compile_validate_install", "_validate_changelog_shape"} {
 		if closure.definitions[helper] != 1 {
 			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
 		}
 	}
 	wantReferences := []string{
 		"_byte_len",
+		"_capture_worktree_tree",
 		"_cleanup_build_owned",
+		"_cleanup_prep_owned",
 		"_collect_test_files",
 		"_color_init",
 		"_count_program_version_declarations",
@@ -199,6 +207,8 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_ensure_git_repo",
 		"_ensure_staticcheck",
 		"_extract_program_version",
+		"_extract_template_version",
+		"_failure",
 		"_go_quote",
 		"_install_validated_utility",
 		"_is_blank",
@@ -210,25 +220,41 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_next_patch_tag",
 		"_prep_apply_changelog_insert",
 		"_prep_apply_version_bump",
-		"_prep_build",
 		"_prep_detect_changelog_targets",
 		"_prep_detect_version_targets",
 		"_prep_emit_release_command",
+		"_prep_expected_paths",
 		"_prep_find_ac_files",
 		"_prep_find_ie_lines",
 		"_prep_module_basename",
 		"_prep_parse_ac_refs",
+		"_prep_prepare_expected_files",
 		"_prep_print_dry_run",
 		"_prep_remove_ie_lines",
+		"_prep_run_inner",
+		"_prep_validate_ac_selection",
 		"_prep_validate_git_state",
 		"_prep_validate_multi_utility_versions",
+		"_prep_validate_version_plan",
+		"_prep_verify_expected_files",
+		"_prep_verify_result",
 		"_print_coverage_summary",
 		"_recovery_error",
+		"_rel_run_inner",
 		"_rel_step",
+		"_release_compile_validate_install",
+		"_release_validate_prepared",
 		"_run_git",
 		"_scan_nested_fences",
+		"_shell_quote",
 		"_trim",
+		"_validate_binary_provenance",
+		"_validate_changelog_release_row",
+		"_validate_changelog_shape",
+		"_validate_prepared_changelogs",
+		"_validate_release_message",
 		"_validate_utility_version_output",
+		"_verify_release_commit",
 		"_wrap",
 	}
 	if got := closure.referenceNames(); strings.Join(got, "\n") != strings.Join(wantReferences, "\n") {
@@ -934,7 +960,8 @@ func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
 	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "cmd/alpha/main.go"), []byte("package main\nconst programVersion = \"1.2.3\"\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "cmd/beta/main.go"), []byte("package main\nconst (\n\tprogramVersion string = \"2.3.4\"\n)\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---|---|\n| Unreleased | |\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "govna/ac14-fixture.md"), []byte("fixture\n"), 0o644)
 	gitFixture(t, dir, "init", "-q")
 	gitFixture(t, dir, "config", "user.name", "Fixture")
 	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
@@ -944,7 +971,7 @@ func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, runErr := run(t, dir, "", "./build.sh", "prep", "v3.0.0", "AC14 fixture", "--dry-run", "--no-build")
+	out, runErr := run(t, dir, "", "./build.sh", "prep", "v3.0.0", "AC14 fixture", "--dry-run")
 	if runErr != nil {
 		t.Fatalf("prep dry-run: %v: %s", runErr, out)
 	}
@@ -959,6 +986,95 @@ func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
 	}
 	if string(before) != string(after) {
 		t.Fatalf("prep dry-run changed fixture: before=%q after=%q", before, after)
+	}
+}
+
+func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	message := "AC29 $HOME `uname` 'quoted'"
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"1.0.0\"\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | earlier |\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "govna/ac29-fixture.md"), []byte("fixture\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte("- IE-1: release → govna/ac29-fixture.md\n- keep\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+
+	fakeBin := filepath.Join(t.TempDir(), "fakebin")
+	trace := filepath.Join(t.TempDir(), "go.trace")
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte("#!/bin/bash\nprintf '%s\\n' \"$*\" >>\"$FAKE_TRACE\"\nexit 97\n"), 0o755)
+	cmd := exec.Command("/bin/bash", "./build.sh", "prep", "v1.2.3", message)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "FAKE_TRACE="+trace, "PATH="+fakeBin+":"+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Go prep: %v:\n%s", err, out)
+	}
+	if _, err := os.Stat(trace); !os.IsNotExist(err) {
+		t.Fatalf("Go prep invoked Go tooling: %v: %s", err, mustRead(t, trace))
+	}
+	output := string(out)
+	if strings.Contains(output, "pre-check build") || strings.Contains(output, "post-check build") {
+		t.Fatalf("Go prep ran canonical validation: %s", output)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/main.go"))); !strings.Contains(got, `programVersion = "1.2.3"`) {
+		t.Fatalf("prepared version=%s", got)
+	}
+	changelog := string(mustRead(t, filepath.Join(dir, "CHANGELOG.md")))
+	if !strings.Contains(changelog, "| Unreleased | |\n| 1.2.3 | "+message+" |\n") {
+		t.Fatalf("prepared changelog=%s", changelog)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "govna/ac29-fixture.md")); !os.IsNotExist(err) {
+		t.Fatalf("released AC remains: %v", err)
+	}
+	if plan := string(mustRead(t, filepath.Join(dir, "plan.md"))); plan != "- keep\n" {
+		t.Fatalf("prepared plan=%q", plan)
+	}
+
+	var commandLine string
+	for line := range strings.SplitSeq(output, "\n") {
+		if after, ok := strings.CutPrefix(line, "  ./build.sh "); ok {
+			commandLine = after
+		}
+	}
+	if commandLine == "" {
+		t.Fatalf("release command missing: %s", output)
+	}
+	probe := exec.Command("/bin/bash", "-c", `eval "set -- $REPRO"; printf '%s\n%s\n%s\n' "$#" "$1" "$2"`)
+	probe.Env = append(os.Environ(), "REPRO="+commandLine)
+	decoded, err := probe.CombinedOutput()
+	if err != nil || string(decoded) != "2\nv1.2.3\n"+message+"\n" {
+		t.Fatalf("shell-safe command decoded=%q err=%v command=%q", decoded, err, commandLine)
+	}
+	help, err := run(t, dir, "", "./build.sh", "prep", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, retired := range []string{"--no-build", "-B", "--verbose", "-v"} {
+		if strings.Contains(help, retired) {
+			t.Errorf("prep help retains %s: %s", retired, help)
+		}
+	}
+	if rejected, err := run(t, dir, "", "./build.sh", "prep", "--no-build", "v1.2.4", "AC29 again"); err == nil || !strings.Contains(rejected, "unsupported prep option") {
+		t.Fatalf("retired prep option accepted: %v: %s", err, rejected)
+	}
+	for _, bad := range []struct {
+		name, message, want string
+	}{
+		{name: "table delimiter", message: "AC29 bad | cell", want: "one Markdown table cell"},
+		{name: "newline", message: "AC29 first\nsecond", want: "one line"},
+	} {
+		t.Run(bad.name, func(t *testing.T) {
+			out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.4", bad.message)
+			if err == nil || !strings.Contains(out, bad.want) {
+				t.Fatalf("unsafe message accepted: %v: %s", err, out)
+			}
+		})
 	}
 }
 
@@ -1037,7 +1153,7 @@ func TestRenderedReleaseMessageByteBoundary(t *testing.T) {
 		"probe() {",
 		"  local reached=0",
 		"  _prep_validate_git_state() { reached=1; return 1; }",
-		"  prep_run 1 1 0 v1.2.3 \"$1\" >/dev/null 2>&1 || true",
+		"  prep_run 1 v1.2.3 \"$1\" >/dev/null 2>&1 || true",
 		"  [ \"$reached\" -eq \"$2\" ]",
 		"}",
 		"probe \"$1\" 1 || exit 10",
@@ -1111,15 +1227,9 @@ func TestRenderedReleaseMessageByteBoundary(t *testing.T) {
 func TestReleaseCancellationIsNonMutating(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()
-	script, _ := os.ReadFile(filepath.Join(root, "build.sh"))
-	if err := os.WriteFile(filepath.Join(dir, "build.sh"), script, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("init: %v: %s", err, out)
-	}
+	prepareReleaseFixture(t, root, dir, "1.0.0", "AC29 cancel", "")
 	before, _ := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
-	out, err := run(t, dir, "n\n", "./build.sh", "v1.0.0", "cancel")
+	out, err := run(t, dir, "n\n", "./build.sh", "v1.0.0", "AC29 cancel")
 	if err == nil || !strings.Contains(out, "release aborted") {
 		t.Fatalf("unexpected cancellation: %v: %s", err, out)
 	}
@@ -1129,65 +1239,112 @@ func TestReleaseCancellationIsNonMutating(t *testing.T) {
 	}
 }
 
+func TestReleaseRejectsCandidateChangeAfterApproval(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	prepareReleaseFixture(t, root, dir, "1.0.0", "AC29 changed", "")
+	beforeIndex := strings.TrimSpace(string(gitFixtureOutput(t, dir, "write-tree")))
+	command := `source ./build.sh
+_color_init
+read() {
+  if [ "$#" -eq 2 ] && [ "$2" = answer ]; then
+    printf '\n// changed after approval\n' >> cmd/widget/main.go
+    printf -v "$2" '%s' y
+    return 0
+  fi
+  builtin read "$@"
+}
+rel_run v1.0.0 'AC29 changed'
+`
+	out, err := run(t, dir, "", "-c", command)
+	if err == nil || !strings.Contains(out, "candidate tree changed after approval; nothing was staged") {
+		t.Fatalf("changed candidate accepted: %v: %s", err, out)
+	}
+	afterIndex := strings.TrimSpace(string(gitFixtureOutput(t, dir, "write-tree")))
+	if afterIndex != beforeIndex {
+		t.Fatalf("candidate rejection changed the repository index: before=%s after=%s", beforeIndex, afterIndex)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "show", "-s", "--format=%B", "HEAD"))); got != "baseline" {
+		t.Fatalf("candidate rejection created a commit: %q", got)
+	}
+}
+
 func TestReleaseApprovalAndFailureOrdering(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()
-	script, _ := os.ReadFile(filepath.Join(root, "build.sh"))
-	if err := os.WriteFile(filepath.Join(dir, "build.sh"), script, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("init: %v: %s", err, out)
-	}
-	approved := `source ./build.sh
-_run_git() { shift; printf '%s\n' "$*" >> operations; return 0; }
-_release_rebuild_and_verify() { printf '%s\n' provenance >> operations; return 0; }
-printf 'y\n' | rel_run v1.2.3 release
-`
-	out, err := run(t, dir, "", "-c", approved)
-	if err != nil {
-		t.Fatalf("approved release fixture: %v: %s", err, out)
-	}
-	operations, err := os.ReadFile(filepath.Join(dir, "operations"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "status --short\nadd .\ncommit -m release\ntag v1.2.3\nprovenance\npush origin v1.2.3\npush origin\n"
-	if string(operations) != want {
-		t.Fatalf("operations:\n%s\nwant:\n%s", operations, want)
-	}
+	remote := filepath.Join(t.TempDir(), "origin.git")
+	prepareReleaseFixture(t, root, dir, "1.2.3", "AC29 release", remote)
 
 	failing := `source ./build.sh
-_run_git() { name="$1"; shift; printf '%s\n' "$*" >> failed-operations; if [ "$name" = 'git tag' ]; then _git_err='git tag failed: exit status 9'; return 1; fi; return 0; }
-printf 'y\n' | rel_run v1.2.3 release
+_color_init
+_release_compile_validate_install() { return 9; }
+printf 'y\n' | rel_run v1.2.3 'AC29 release'
 `
-	out, err = run(t, dir, "", "-c", failing)
-	if err == nil || !strings.Contains(out, "completed before failure: git add, git commit") {
-		t.Fatalf("failed release fixture: %v: %s", err, out)
+	out, err := run(t, dir, "", "-c", failing)
+	if err == nil || !strings.Contains(out, "no tag or push was attempted") || !strings.Contains(out, "rerun the same two-argument release command") {
+		t.Fatalf("release compilation failure: %v: %s", err, out)
 	}
-	failed, err := os.ReadFile(filepath.Join(dir, "failed-operations"))
-	if err != nil {
-		t.Fatal(err)
+	if tags := strings.TrimSpace(string(gitFixtureOutput(t, dir, "tag", "--list", "v1.2.3"))); tags != "" {
+		t.Fatalf("tag created after compilation failure: %s", tags)
 	}
-	if strings.Contains(string(failed), "push origin") {
-		t.Fatalf("release continued after failure: %s", failed)
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "show", "-s", "--format=%B", "HEAD"))); got != "AC29 release" {
+		t.Fatalf("release commit message=%q", got)
 	}
+	committed := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
 
-	provenanceFailure := `source ./build.sh
-_run_git() { shift; printf '%s\n' "$*" >> provenance-failed-operations; return 0; }
-_release_rebuild_and_verify() { return 1; }
-printf 'y\n' | rel_run v1.2.3 release
+	retry := `source ./build.sh
+_color_init
+_release_compile_validate_install() { return 0; }
+printf 'y\n' | rel_run v1.2.3 'AC29 release'
 `
-	if out, err = run(t, dir, "", "-c", provenanceFailure); err == nil {
-		t.Fatalf("provenance failure accepted: %s", out)
-	}
-	provenanceFailed, err := os.ReadFile(filepath.Join(dir, "provenance-failed-operations"))
+	out, err = run(t, dir, "", "-c", retry)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("release retry: %v: %s", err, out)
 	}
-	if strings.Contains(string(provenanceFailed), "push origin") {
-		t.Fatalf("release pushed after provenance failure: %s", provenanceFailed)
+	if !strings.Contains(out, "Retry commit files:") || !strings.Contains(out, "reuse the displayed clean HEAD commit") {
+		t.Fatalf("retry approval details missing: %s", out)
 	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD"))); got != committed {
+		t.Fatalf("retry created another commit: got %s want %s", got, committed)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "v1.2.3^{commit}"))); got != committed {
+		t.Fatalf("tag commit=%s want %s", got, committed)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/tags/v1.2.3^{commit}"))); got != committed {
+		t.Fatalf("remote tag commit=%s want %s", got, committed)
+	}
+}
+
+func prepareReleaseFixture(t *testing.T, root, dir, version, message, remote string) {
+	t.Helper()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "build.sh")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"0.9.0\"\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+	if remote != "" {
+		if err := os.MkdirAll(remote, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gitFixture(t, remote, "init", "--bare", "-q")
+		gitFixture(t, dir, "remote", "add", "origin", remote)
+		gitFixture(t, dir, "push", "-qu", "origin", "HEAD")
+	}
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte(fmt.Sprintf("package main\nconst programVersion = %q\nfunc main() {}\n", version)), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte(fmt.Sprintf("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| %s | %s |\n", version, message)), 0o644)
+}
+
+func gitFixtureOutput(t *testing.T, dir string, args ...string) []byte {
+	t.Helper()
+	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, out)
+	}
+	return out
 }
 
 func TestCanonAssetChangesRequireVersionIncrease(t *testing.T) {
@@ -1231,23 +1388,18 @@ func TestCanonAssetChangesRequireVersionIncrease(t *testing.T) {
 	}
 }
 
-func TestTaggedBinaryProvenanceVerification(t *testing.T) {
+func TestReleaseBinaryProvenanceVerification(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()
 	tooling := mustRead(t, filepath.Join(root, "build.sh"))
 	if err := os.WriteFile(filepath.Join(dir, "tooling.sh"), tooling, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gopath := filepath.Join(dir, "gopath")
 	fakebin := filepath.Join(dir, "fakebin")
 	if err := os.MkdirAll(fakebin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	build := "#!/bin/bash\nmkdir -p \"$FAKE_GOPATH/bin\"\nprintf '#!/bin/bash\\nprintf \\\"govna v1.2.3\\\\n\\\"\\n' > \"$FAKE_GOPATH/bin/govna\"\nchmod +x \"$FAKE_GOPATH/bin/govna\"\n"
-	if err := os.WriteFile(filepath.Join(dir, "build.sh"), []byte(build), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	goTool := "#!/bin/bash\nif [ \"$1\" = env ]; then printf '%s\\n' \"$FAKE_GOPATH\"; exit; fi\nif [ \"$1\" = version ]; then printf 'path\\tgovna\\nbuild\\tvcs.revision=%s\\nbuild\\tvcs.modified=false\\n' \"$(git rev-parse HEAD)\"; exit; fi\nexit 1\n"
+	goTool := "#!/bin/bash\nif [ \"$1\" = version ]; then printf 'path\\twidget\\nbuild\\tvcs.revision=%s\\nbuild\\tvcs.modified=false\\n' \"$(git rev-parse HEAD)\"; exit; fi\nexit 1\n"
 	if err := os.WriteFile(filepath.Join(fakebin, "go"), []byte(goTool), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1256,11 +1408,181 @@ func TestTaggedBinaryProvenanceVerification(t *testing.T) {
 	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
 	gitFixture(t, dir, "add", ".")
 	gitFixture(t, dir, "commit", "-qm", "release")
-	cmd := exec.Command("/bin/bash", "-c", "source ./tooling.sh; _color_init; _release_rebuild_and_verify v1.2.3")
+	cmd := exec.Command("/bin/bash", "-c", "source ./tooling.sh; _color_init; revision=$(git rev-parse HEAD); _validate_binary_provenance ./widget \"$revision\" fixture")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "FAKE_GOPATH="+gopath, "PATH="+fakebin+":"+os.Getenv("PATH"))
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "PATH="+fakebin+":"+os.Getenv("PATH"))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("provenance rejected: %v: %s", err, out)
+	}
+}
+
+func TestGoReleaseCompilesEachUtilityOnceBeforeInstall(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "tooling.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/alpha/main.go"), []byte("package main\nconst programVersion = \"1.0.0\"\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"1.2.3\"\nfunc main() {}\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "release")
+	revision := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
+
+	external := t.TempDir()
+	fakeBin := filepath.Join(external, "fakebin")
+	gopath := filepath.Join(external, "gopath")
+	tmpRoot := filepath.Join(external, "tmp")
+	trace := filepath.Join(external, "go.trace")
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeGo := `#!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FAKE_TRACE"
+case "$1" in
+env)
+  case "$2" in
+  GOPATH) printf '%s\n' "$FAKE_GOPATH" ;;
+  GOEXE) printf '\n' ;;
+  *) exit 2 ;;
+  esac
+  ;;
+build)
+  shift
+  output=''
+  target=''
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    -o) shift; output="$1" ;;
+    -ldflags) shift; [ "$1" = '-s -w' ] ;;
+    ./cmd/*) target="${1#./cmd/}" ;;
+    esac
+    shift
+  done
+  case "$target" in
+  alpha) version=1.0.0 ;;
+  widget) version=1.2.3 ;;
+  *) exit 3 ;;
+  esac
+  mkdir -p "$(dirname "$output")"
+  printf '#!/bin/bash\nprintf '\''%s %s\\n'\''\n' "$target" "$version" >"$output"
+  chmod +x "$output"
+  ;;
+version)
+  [ "$2" = -m ]
+  modified=false
+  [ "${FAKE_DIRTY:-0}" != 1 ] || modified=true
+  printf 'path\tfixture\nbuild\tvcs.revision=%s\nbuild\tvcs.modified=%s\n' "$FAKE_REVISION" "$modified"
+  ;;
+*) exit 4 ;;
+esac
+`
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGo), 0o755)
+
+	command := `source ./tooling.sh
+_color_init
+_build_install_temps=()
+_build_owned_dir=$(mktemp -d "$TMPDIR/release-test.XXXXXX")
+rc=0
+_release_compile_validate_install v1.2.3 || rc=$?
+_cleanup_build_owned
+exit "$rc"
+`
+	cmd := exec.Command("/bin/bash", "-c", command)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"NO_COLOR=1",
+		"TERM=dumb",
+		"FAKE_TRACE="+trace,
+		"FAKE_GOPATH="+gopath,
+		"FAKE_REVISION="+revision,
+		"TMPDIR="+tmpRoot,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("release compilation: %v:\n%s", err, out)
+	}
+	traceBody := string(mustRead(t, trace))
+	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget" {
+		t.Fatalf("release utility order=%v trace:\n%s", got, traceBody)
+	}
+	for line := range strings.SplitSeq(traceBody, "\n") {
+		if strings.HasPrefix(line, "build ") && !strings.Contains(line, "build -mod=readonly -buildvcs=true -o ") {
+			t.Fatalf("release build command=%q", line)
+		}
+	}
+	for _, forbidden := range []string{"fmt ", "fix ", "vet ", "test ", "mod tidy", "install "} {
+		if strings.Contains(traceBody, forbidden) {
+			t.Fatalf("release ran canonical validation %q:\n%s", forbidden, traceBody)
+		}
+	}
+	for utility, version := range map[string]string{"alpha": "1.0.0", "widget": "1.2.3"} {
+		binary := filepath.Join(gopath, "bin", utility)
+		out, err := exec.Command(binary, "--version").CombinedOutput()
+		if err != nil || string(out) != utility+" "+version+"\n" {
+			t.Fatalf("installed %s: %v: %s", utility, err, out)
+		}
+	}
+	if matches, err := filepath.Glob(filepath.Join(tmpRoot, "release-test.*")); err != nil || len(matches) != 0 {
+		t.Fatalf("release scratch remains: %v err=%v", matches, err)
+	}
+
+	dirtyGopath := filepath.Join(external, "dirty-gopath")
+	dirtyTrace := filepath.Join(external, "dirty.trace")
+	dirty := exec.Command("/bin/bash", "-c", command)
+	dirty.Dir = dir
+	dirty.Env = append(os.Environ(),
+		"NO_COLOR=1",
+		"TERM=dumb",
+		"FAKE_TRACE="+dirtyTrace,
+		"FAKE_GOPATH="+dirtyGopath,
+		"FAKE_REVISION="+revision,
+		"FAKE_DIRTY=1",
+		"TMPDIR="+tmpRoot,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	if out, err := dirty.CombinedOutput(); err == nil || !bytes.Contains(out, []byte("build information is dirty")) {
+		t.Fatalf("dirty provenance accepted: %v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dirtyGopath, "bin", "alpha")); !os.IsNotExist(err) {
+		t.Fatalf("utility installed before every provenance check passed: %v", err)
+	}
+}
+
+func TestGoReleaseSignalCleansOwnedOutputs(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "tooling.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o644)
+	owned := filepath.Join(dir, "owned-release")
+	staging := filepath.Join(dir, ".govna-install-widget.fixture")
+	if err := os.Mkdir(owned, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeBuildFixture(t, filepath.Join(owned, "widget"), []byte("compiled\n"), 0o755)
+	writeBuildFixture(t, staging, []byte("staged\n"), 0o600)
+	command := `source ./tooling.sh
+_build_owned_dir="$OWNED_RELEASE"
+_build_install_temps=("$INSTALL_STAGING")
+trap '_release_signal_exit 143' TERM
+kill -TERM $$
+exit 99
+`
+	cmd := exec.Command("/bin/bash", "-c", command)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "OWNED_RELEASE="+owned, "INSTALL_STAGING="+staging)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("release signal returned success: %s", out)
+	}
+	if exit := cmd.ProcessState.ExitCode(); exit != 143 {
+		t.Fatalf("release signal exit=%d want=143 output=%s", exit, out)
+	}
+	for _, path := range []string{owned, staging} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("release-owned output remains after signal: %s: %v", path, err)
+		}
 	}
 }
 

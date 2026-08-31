@@ -1,4 +1,2 @@
-prep: running pre-check build
-prep: running post-check build
 release command:
-  ./build.sh <version> <message>
+  ./build.sh '<version>' '<message>'
