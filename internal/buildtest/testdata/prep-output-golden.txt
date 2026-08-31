@@ -1,2 +1,2 @@
 release command:
-  ./build.sh '<version>' '<message>'
+  ./build.sh <version> '<message>'

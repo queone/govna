@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.16.0 | AC32 standardize release-command quoting across stacks |
 | 0.15.0 | AC31 auto-advance Draft into Audit and clean Audit into Refine |
 | 0.14.0 | AC30 accept escaped pipes in historical changelog rows |
 | 0.13.0 | AC29 release Ratified Go work without repeating full validation |

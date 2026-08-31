@@ -168,7 +168,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.50.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.51.0.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -178,7 +178,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.50.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.51.0.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}

@@ -818,7 +818,7 @@ prep_main() {
     esac
   done
   [ "$#" -eq 2 ] || { prep_usage >&2; return 2; }
-  local version="$1" message="$2" quoted_message
+  local version="$1" message="$2"
   _validate_release_inputs prep "$version" "$message"
   _validate_git_state prep "$version"
   _require_swift
@@ -841,9 +841,18 @@ prep_main() {
     [ "$no_build" -eq 1 ] ||
       GOVERNA_SWIFT_PREP=1 GOVERNA_SWIFT_INSTALL=1 build_main
   fi
-  quoted_message=$(_quote "$message")
+  _prep_emit_release_command "$version" "$message"
+}
+
+_shell_quote() { # $1=single shell argument
+  local value="$1"
+  value=${value//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
+_prep_emit_release_command() { # $1=version $2=message
   printf '\n%s\n' "$(yel7 'release command:')"
-  printf '  %s\n' "$(grn3 "./build.sh $version $quoted_message")"
+  printf '  %s\n' "$(grn3 "./build.sh $1 $(_shell_quote "$2")")"
 }
 
 release_usage() {

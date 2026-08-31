@@ -1304,6 +1304,58 @@ func TestRenderedReleaseMessageByteBoundary(t *testing.T) {
 	}
 }
 
+func TestReleaseCommandEmissionStandardized(t *testing.T) {
+	root := repoRoot(t)
+	sourceLoader := "source ./build.sh\n"
+	swiftLoader := "eval \"$(sed '/^main \\\"$@\\\"/,$d' ./build.sh)\"\n"
+	probe := strings.Join([]string{
+		"type _color_init >/dev/null 2>&1 && _color_init",
+		`msg="$1"`,
+		`out=$(_prep_emit_release_command v1.2.3 "$msg") || exit 10`,
+		`line=$(printf '%s\n' "$out" | grep -F './build.sh ' | head -n 1) || exit 11`,
+		`line="./build.sh ${line#*./build.sh }"`,
+		`case "$line" in "./build.sh v1.2.3 '"*) ;; *) exit 12 ;; esac`,
+		`eval "set -- ${line#./build.sh }"`,
+		`[ "$#" -eq 2 ] || exit 13`,
+		`[ "$1" = v1.2.3 ] || exit 14`,
+		`[ "$2" = "$msg" ] || exit 15`,
+		"exit 0",
+	}, "\n") + "\n"
+	message := "AC1 $HOME `uname` 'sq' \"dq\" \\ ; *"
+	profiles := []struct {
+		name, path, loader string
+		helperCount        int
+	}{
+		{name: "root Go", path: "build.sh", loader: sourceLoader, helperCount: 3},
+		{name: "Go", path: "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl", loader: sourceLoader, helperCount: 3},
+		{name: "Rust", path: "internal/canon/assets/overlays/code/stacks/rust/build.sh.tmpl", loader: sourceLoader, helperCount: 3},
+		{name: "Swift", path: "internal/canon/assets/overlays/code/stacks/swift/build.sh.tmpl", loader: swiftLoader, helperCount: 2},
+		{name: "Terraform", path: "internal/canon/assets/overlays/code/stacks/terraform/build.sh.tmpl", loader: sourceLoader, helperCount: 3},
+		{name: "DOC", path: "internal/canon/assets/overlays/doc/files/build.sh.tmpl", loader: sourceLoader, helperCount: 3},
+	}
+	for _, profile := range profiles {
+		t.Run(profile.name, func(t *testing.T) {
+			script := mustRead(t, filepath.Join(root, profile.path))
+			text := string(script)
+			if got := strings.Count(text, "_prep_emit_release_command"); got != profile.helperCount {
+				t.Errorf("release-command emit routing count=%d, want %d (one helper definition plus call sites)", got, profile.helperCount)
+			}
+			if !strings.Contains(text, `_shell_quote "$2"`) {
+				t.Error("emit helper does not single-quote the message")
+			}
+			if !strings.Contains(text, `v[0-9]+\.[0-9]+\.[0-9]+`) && !strings.Contains(text, "_is_strict_stable_semver") {
+				t.Error("adapter lacks tag validation confining the tag to v, digits, and dots")
+			}
+			dir := t.TempDir()
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+			out, err := run(t, dir, "", "-c", profile.loader+probe, "_", message)
+			if err != nil {
+				t.Fatalf("standardized emission probe: %v: %s", err, out)
+			}
+		})
+	}
+}
+
 func TestReleaseCancellationIsNonMutating(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()

@@ -77,7 +77,7 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 Example release command:
 
 ```
-./build.sh vX.Y.Z "derived message"
+./build.sh vX.Y.Z 'derived message'
 ```
 
 The agent never runs the release command. Only the director does.

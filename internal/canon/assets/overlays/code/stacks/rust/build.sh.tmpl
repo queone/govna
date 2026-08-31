@@ -16,6 +16,16 @@ _quote() {
   printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 
+_shell_quote() { # $1=single shell argument
+  local value="$1"
+  value=${value//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
+_prep_emit_release_command() { # $1=version $2=message
+  printf '%s\n' "$(grn3 "$(printf './build.sh %s %s' "$1" "$(_shell_quote "$2")")")"
+}
+
 # ── color ────────────────────────────────────────────────────────────────────
 # A sequence is emitted only when color is both enabled (NO_COLOR unset,
 # TERM != dumb, stdout a TTY) and 256-color capable (COLORTERM truecolor/24bit,
@@ -1325,7 +1335,7 @@ prep_run() {
     done <<EOF
 $acfiles
 EOF
-    printf '%s\n' "$(grn3 "$(printf './build.sh %s %s' "$version" "$(_quote "$message")")")"
+    _prep_emit_release_command "$version" "$message"
     return 0
   fi
 
@@ -1346,7 +1356,7 @@ EOF
   _prep_phase_index=0
   GOVNA_PREP_CARGO_TARGET_DIR='' _run_isolated \
     _prep_apply "$stripped" "$message" "$refs" "$acfiles" "$fallback" || return 1
-  printf '%s\n' "$(grn3 "$(printf './build.sh %s %s' "$version" "$(_quote "$message")")")"
+  _prep_emit_release_command "$version" "$message"
 }
 
 prep_main() {

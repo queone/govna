@@ -328,8 +328,14 @@ _prep_remove_ie_lines() {
   rm -f "$tmp"
 }
 
+_shell_quote() { # $1=single shell argument
+  local value="$1"
+  value=${value//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
 _prep_emit_release_command() {
-  printf '\nrelease command:\n  ./build.sh %s %s\n' "$1" "$(_go_quote "$2")"
+  printf '\nrelease command:\n  ./build.sh %s %s\n' "$1" "$(_shell_quote "$2")"
 }
 
 _prep_print_dry_run() {
