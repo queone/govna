@@ -1212,6 +1212,9 @@ func writeAuditReview(b *strings.Builder, groups ...[]FileResult) {
 				fmt.Fprintf(b, "- Verify `%s` is absent from the selected scratch render with `test ! -e <scratch>/%s`.\n", file.Path, file.Path)
 			case !auditReviewTargetPresent(file):
 				fmt.Fprintf(b, "- Compare `%s` with `diff -u /dev/null <scratch>/%s`.\n", file.Path, file.Path)
+			case auditReviewHasExactBoundary(file):
+				command := auditReviewCanonZoneCommand(file.Boundary, "<scratch>/"+file.Path, file.Path)
+				fmt.Fprintf(b, "- Compare the canon zone of `%s` above exact boundary `%s` with `%s`.\n", file.Path, file.Boundary, command)
 			default:
 				fmt.Fprintf(b, "- Compare `%s` with `diff -ru <scratch>/%s %s`.\n", file.Path, file.Path, file.Path)
 			}
@@ -1246,6 +1249,32 @@ func auditReviewTargetPresent(file FileResult) bool {
 		return true
 	}
 	return file.Classification != "missing-in-target" && file.Classification != "migration-required"
+}
+
+func auditReviewHasExactBoundary(file FileResult) bool {
+	boundary, mixed := canon.Boundary(file.Path)
+	return mixed && file.Boundary == boundary
+}
+
+func auditReviewCanonZoneCommand(boundary, scratchPath, targetPath string) string {
+	project := func(filePath string) string {
+		return fmt.Sprintf(
+			"awk -v boundary=%s '{ line = $0; sub(/\\r$/, \"\", line); if (line == boundary) exit; print }' %s",
+			shellSingleQuote(boundary),
+			shellSingleQuote(filePath),
+		)
+	}
+	return fmt.Sprintf(
+		"diff -u --label %s --label %s <(%s) <(%s)",
+		shellSingleQuote(scratchPath),
+		shellSingleQuote(targetPath),
+		project(scratchPath),
+		project(targetPath),
+	)
+}
+
+func shellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func countPhrase(count int, singular, plural string) string {

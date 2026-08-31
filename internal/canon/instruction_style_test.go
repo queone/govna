@@ -157,8 +157,12 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 }
 
 var currentInstructionReplacements = map[string]string{
-	"Place the count paragraph first under `## Summary`.":    "Place the repository paragraph first under `## Summary`.",
-	"Start the count paragraph with `This adoption covers`.": "Start the count paragraph with `Govna found`.",
+	"Place the count paragraph first under `## Summary`.":                                                                               "Place the repository paragraph first under `## Summary`.",
+	"Start the count paragraph with `This adoption covers`.":                                                                            "Start the count paragraph with `Govna found`.",
+	"Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).": "Run `./build.sh` when the change touches code or build-relevant files and current build evidence is unavailable (skip for AC critique, doc-only review, design discussion).",
+	"Confirm that `./build.sh` passes when the change touches code or build-relevant files.":                                            "Confirm that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
+	"Run each acceptance test in the active AC when it can be exercised.":                                                               "Run each acceptance test in the active AC when its current disposition is unavailable.",
+	"Report the result of each exercised acceptance test.":                                                                              "Report each current acceptance-test disposition.",
 }
 
 func currentReviewedInstruction(review rewrittenInstructionReview) string {
@@ -246,6 +250,7 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I70", "Keep this emitted AC and every consumer file unchanged."},
 	{"I71", "Remove the exact scratch directory before reporting Audit completion or a blocker."},
 	{"I72", "Use no JSON diff field as required review evidence."},
+	{"I73", "Compare the canon zone of <path> above exact boundary <boundary> with <diff-command>."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -256,6 +261,7 @@ var (
 	notApplicableInstruction   = regexp.MustCompile("^Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
 	renderRemovalInstruction   = regexp.MustCompile("^Create a temporary copy of the selected Govna files with `govna render --flavor (?:doc|code(?: --stack [^`]+)?) <scratch>`\\.$")
 	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff (?:-ru <scratch>/[^`]+ [^`]+|-u /dev/null <scratch>/[^`]+)`\\.$")
+	auditCanonZoneInstruction  = regexp.MustCompile("^Compare the canon zone of `[^`]+` above exact boundary `[^`]+` with `diff -u .+`\\.$")
 	auditAbsentInstruction     = regexp.MustCompile("^Verify `[^`]+` is absent from the selected scratch render with `test ! -e <scratch>/[^`]+`\\.$")
 	chooseRemovalInstruction   = regexp.MustCompile("^Choose what to remove from `[^`]+`: only its Govna-managed section, nothing, or the whole file\\.$")
 	otherMigrationInstruction  = regexp.MustCompile("^Create `[^`]+` from the selected temporary render\\.$")
@@ -308,8 +314,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 72 {
-		t.Fatalf("generated instruction manifest has %d entries, want 72", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 73 {
+		t.Fatalf("generated instruction manifest has %d entries, want 73", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -416,10 +422,10 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 			"I69": 1, "I70": 1, "I71": 1, "I72": 1,
 		},
 		"internal/audit/testdata/unresolved-validation-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 3, "I28": 1, "I29": 1,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 2, "I28": 1, "I29": 1,
 			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
 			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
-			"I70": 1, "I71": 1, "I72": 1,
+			"I70": 1, "I71": 1, "I72": 1, "I73": 1,
 		},
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
@@ -853,6 +859,8 @@ func normalizeGeneratedInstruction(instruction string) string {
 		return "Create a temporary copy of the selected Govna files with <render-command>."
 	case compareRemovalInstruction.MatchString(trimmed):
 		return "Compare <path> with <diff-command>."
+	case auditCanonZoneInstruction.MatchString(trimmed):
+		return "Compare the canon zone of <path> above exact boundary <boundary> with <diff-command>."
 	case chooseRemovalInstruction.MatchString(trimmed):
 		return "Choose what to remove from <path>: only its Govna-managed section, nothing, or the whole file."
 	case otherMigrationInstruction.MatchString(trimmed):
@@ -1031,8 +1039,8 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Fail explicitly when migration logic is unavailable.",
 		},
 		"govna/roles.md": {
-			"- Run each acceptance test in the active AC when it can be exercised.",
-			"- Report the result of each exercised acceptance test.",
+			"- Run each acceptance test in the active AC when its current disposition is unavailable.",
+			"- Report each current acceptance-test disposition.",
 			"- State explicitly why each unexercised acceptance test was only reasoned about.",
 		},
 		"AGENTS.md": {

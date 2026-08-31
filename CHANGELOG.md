@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.12.0 | AC28 stop reprocessing current Audit and Ratify evidence |
 | 0.11.0 | AC27: make consumer audit and release batching executable |
 | 0.10.0 | AC26: catch consumer-visible canon faults before release |
 | 0.9.1 | AC25: allow integrated audit to enter Refine without another instruction |

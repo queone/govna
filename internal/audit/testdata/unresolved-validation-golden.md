@@ -1,8 +1,8 @@
-# AC7 Adopt Govna Governance Files v0.46.0
+# AC7 Adopt Govna Governance Files v0.47.0
 
 ## Summary
 
-This AC updates `widget` to Govna's embedded governance files (canon v0.46.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
+This AC updates `widget` to Govna's embedded governance files (canon v0.47.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.
 
 Govna found 2 files ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.
 
@@ -28,7 +28,7 @@ Govna found 2 files ready to update, 0 required control files to add, 1 file nee
 - Create one unique system-temporary scratch directory outside this repository.
 - Render the selected canon into that directory once with the resolved executable.
 - Verify the rendered `govna/canon-baseline.txt` canon version matches this AC's guarded marker.
-- Compare `AGENTS.md` with `diff -ru <scratch>/AGENTS.md AGENTS.md`.
+- Compare the canon zone of `AGENTS.md` above exact boundary `## Project Rules` with `diff -u --label '<scratch>/AGENTS.md' --label 'AGENTS.md' <(awk -v boundary='## Project Rules' '{ line = $0; sub(/\r$/, "", line); if (line == boundary) exit; print }' '<scratch>/AGENTS.md') <(awk -v boundary='## Project Rules' '{ line = $0; sub(/\r$/, "", line); if (line == boundary) exit; print }' 'AGENTS.md')`.
 - Compare `govna/canon-baseline.txt` with `diff -ru <scratch>/govna/canon-baseline.txt govna/canon-baseline.txt`.
 - Compare `local.md` with `diff -ru <scratch>/local.md local.md`.
 - Review the exact proposed rules.

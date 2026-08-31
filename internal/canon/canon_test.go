@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.46.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.47.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -819,22 +819,195 @@ func TestFlavorSpecificRolesAndDotfiles(t *testing.T) {
 	}
 }
 
+type ratifyEvidenceState struct {
+	snapshotPresent      bool
+	snapshotComplete     bool
+	identitiesMatch      bool
+	unrecordedReadable   bool
+	uncertainRelevance   bool
+	excludedInputChanged bool
+	excludedProvenUnread bool
+	inlineCorrection     bool
+	nonCleanDisposition  bool
+}
+
+type ratifyExpectedActions struct {
+	reuseCurrentEvidence bool
+	revalidateEvidence   bool
+	repeatCurrentWork    bool
+	applyFindingRouting  bool
+	performFinalReview   bool
+	requestSecondSignal  bool
+}
+
+func ratifyActions(state ratifyEvidenceState) ratifyExpectedActions {
+	current := state.snapshotPresent && state.snapshotComplete && state.identitiesMatch
+	current = current && !state.unrecordedReadable && !state.uncertainRelevance
+	if state.excludedInputChanged && !state.excludedProvenUnread {
+		current = false
+	}
+	if state.inlineCorrection {
+		current = false
+	}
+	return ratifyExpectedActions{
+		reuseCurrentEvidence: current,
+		revalidateEvidence:   !current,
+		applyFindingRouting:  current && state.nonCleanDisposition,
+		performFinalReview:   true,
+	}
+}
+
 func TestGovernanceScenarios(t *testing.T) {
-	for _, flavor := range []Flavor{Code, Doc} {
-		stack := ""
-		if flavor == Code {
-			stack = "Rust"
-		}
-		files, err := Render(Config{Flavor: flavor, RepoName: "widget", Stack: stack})
-		if err != nil {
-			t.Fatal(err)
-		}
-		agents := fileText(t, files, "AGENTS.md")
-		for _, required := range []string{"Audit", "Refine", "Implement", "Ratify", "Package", "bounded completeness", "Primary And Ancillary Scope", "Contract Integrity"} {
-			if !strings.Contains(agents, required) {
-				t.Errorf("%s AGENTS lacks scenario marker %q", flavor, required)
+	scenarios := []struct {
+		name  string
+		state ratifyEvidenceState
+		want  ratifyExpectedActions
+	}{
+		{
+			name:  "clean current evidence",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true},
+			want:  ratifyExpectedActions{reuseCurrentEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "missing snapshot",
+			state: ratifyEvidenceState{},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "incomplete snapshot",
+			state: ratifyEvidenceState{snapshotPresent: true, identitiesMatch: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "changed recorded input",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "unrecorded readable input",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true, unrecordedReadable: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "uncertain relevance",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true, uncertainRelevance: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "irrelevant change proved unreadable",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true, excludedInputChanged: true, excludedProvenUnread: true},
+			want:  ratifyExpectedActions{reuseCurrentEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "unproved excluded change",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true, excludedInputChanged: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "inline correction",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true, inlineCorrection: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+		{
+			name:  "current non-clean disposition",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, identitiesMatch: true, nonCleanDisposition: true},
+			want:  ratifyExpectedActions{reuseCurrentEvidence: true, applyFindingRouting: true, performFinalReview: true},
+		},
+		{
+			name:  "stale non-clean disposition",
+			state: ratifyEvidenceState{snapshotPresent: true, snapshotComplete: true, nonCleanDisposition: true},
+			want:  ratifyExpectedActions{revalidateEvidence: true, performFinalReview: true},
+		},
+	}
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			got := ratifyActions(scenario.state)
+			if got.repeatCurrentWork {
+				t.Error("Ratify scenario repeats current work")
 			}
+			if got.requestSecondSignal {
+				t.Error("Ratify scenario requests a second acceptance signal")
+			}
+			if got != scenario.want {
+				t.Fatalf("Ratify actions=%+v want=%+v", got, scenario.want)
+			}
+		})
+	}
+
+	profiles := []struct {
+		name      string
+		config    Config
+		cyclePath string
+	}{
+		{name: "DOC", config: Config{Flavor: Doc, RepoName: "handbook"}, cyclePath: "govna/editing-cycle.md"},
+	}
+	for _, stack := range Stacks() {
+		config := Config{Flavor: Code, RepoName: "widget", Stack: stack}
+		if stack == "Go" {
+			config.ModulePath = "example.com/widget"
 		}
+		profiles = append(profiles, struct {
+			name      string
+			config    Config
+			cyclePath string
+		}{name: "CODE/" + stack, config: config, cyclePath: "govna/development-cycle.md"})
+	}
+
+	required := []string{
+		"- Capture one deterministic Implement evidence snapshot in the closure-audit working record.",
+		"- Capture the snapshot after final validation and the last repository mutation.",
+		"- Treat standalone `Ratify` or `ratify` after successful Implement completion as the Director's acceptance action.",
+		"- Check the Implement evidence snapshot with non-mutating state, version, content-identity, and diff checks.",
+		"- Treat evidence as current only when the snapshot is present, complete, and identity-matching.",
+		"- Treat every non-current snapshot as stale evidence.",
+		"- Treat an unrecorded input as stale when a reused validation or acceptance check can read it.",
+		"- Treat uncertainty about an input's relevance as stale evidence.",
+		"- Distinguish evidence currentness from acceptance-test outcome.",
+		"- Preserve each recorded acceptance-test disposition exactly during reuse.",
+		"- Apply existing Ratify routing to every current non-clean disposition.",
+		"- Reuse current closure-audit findings, acceptance-test dispositions, render evidence, and final validation during Ratify.",
+		"- Prohibit a new scratch directory, canon render, build, or test solely to repeat current evidence.",
+		"- Rerun applicable validation when Ratify evidence is missing or stale.",
+		"- Rerun applicable validation after an inline Ratify correction.",
+		"- Perform the final review during the same Ratify turn.",
+		"- Recheck new or unresolved contract-integrity findings during Ratify.",
+		"- Skip requests for a second acceptance signal after a clean Ratify review.",
+		"- Use the complete primary-repository state as the default dependency boundary.",
+		"- Narrow the dependency boundary only when repository evidence proves that a reused check cannot read the excluded state.",
+		"- Treat the snapshot as incomplete when a relevant ignored or external input cannot be identified.",
+		"- Apply `AGENTS.md` evidence-currentness rules before repeating validation.",
+		"- Run `./build.sh` only when required build evidence is missing or stale.",
+		"- Run each acceptance test in the active AC when its current disposition is unavailable.",
+		"- Report each current acceptance-test disposition.",
+		"## Why Clean Ratify Reuses Implement Evidence",
+	}
+	for _, profile := range profiles {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contract := strings.Join([]string{
+				fileText(t, files, "AGENTS.md"),
+				fileText(t, files, "govna/roles.md"),
+				fileText(t, files, profile.cyclePath),
+				fileText(t, files, "govna/operator-contract-rationale.md"),
+			}, "\n")
+			for _, rule := range required {
+				if !strings.Contains(contract, rule) {
+					t.Errorf("rendered contract omits scenario rule %q", rule)
+				}
+			}
+			for _, retired := range []string{
+				"- Run `./build.sh` only when reviewing code changes or build-output claims.",
+				"- Run each acceptance test in the active AC when it can be exercised.",
+				"- Report the result of each exercised acceptance test.",
+			} {
+				if strings.Contains(contract, retired) {
+					t.Errorf("rendered contract retains conflicting rule %q", retired)
+				}
+			}
+		})
 	}
 }
 
