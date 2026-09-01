@@ -23,6 +23,7 @@ import (
 
 const baselinePath = "govna/canon-baseline.txt"
 const preservePath = "govna/preserve.txt"
+const repoCheckPath = "govna/repo-check.txt"
 
 type Config struct {
 	Flavor, Stack, RepoName string
@@ -70,12 +71,14 @@ type Report struct {
 	Files         []FileResult `json:"files"`
 	Emitted       *Emitted     `json:"emitted"`
 	selectedStack string
+	repoCheck     string
 }
 
 type validationOutcomeKind uint8
 
 const (
 	validationUnresolved validationOutcomeKind = iota
+	validationConfigured
 	validationInferred
 	validationNotApplicable
 )
@@ -341,6 +344,11 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	if err != nil {
 		return report, false, err
 	}
+	repoCheck, err := ParseRepoCheck(root)
+	if err != nil {
+		return report, false, err
+	}
+	report.repoCheck = repoCheck
 	baseBytes, basePresent, err := readOptional(filepath.Join(root, filepath.FromSlash(baselinePath)))
 	if err != nil {
 		return report, false, err
@@ -662,6 +670,35 @@ func ParsePreserve(root string) (map[string]bool, error) {
 	return out, nil
 }
 
+// ParseRepoCheck validates and returns the optional configured repository check.
+func ParseRepoCheck(root string) (string, error) {
+	data, present, err := readOptional(filepath.Join(root, filepath.FromSlash(repoCheckPath)))
+	if err != nil || !present {
+		return "", err
+	}
+	bad := func(s string) (string, error) {
+		return "", fmt.Errorf("invalid %s: %s; set the first line to govna-repo-check-v1 and the second line to one command, or delete the file to restore the unresolved repository-check question", repoCheckPath, s)
+	}
+	if len(data) == 0 || data[len(data)-1] != '\n' {
+		return bad("require a final newline")
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if lines[0] != "govna-repo-check-v1" {
+		return bad("first line must be govna-repo-check-v1")
+	}
+	if len(lines) != 2 {
+		return bad("require exactly one command line after the header")
+	}
+	command := strings.TrimSpace(lines[1])
+	if command == "" {
+		return bad("require one non-empty command")
+	}
+	if strings.Contains(command, "`") {
+		return bad("command cannot contain a backtick")
+	}
+	return command, nil
+}
+
 func classify(root, path string, want []byte, base *baseline, preserve map[string]bool, limit int) FileResult {
 	fr := FileResult{Path: path, CanonReference: "govna @ v" + canon.Version + ": " + path, canonPresent: true, targetInspected: true}
 	if preserve[path] {
@@ -758,7 +795,7 @@ func gitLog(root, path string) []string {
 func targetOnly(root string, current map[string][]byte, base *baseline, flavor canon.Flavor, name string) map[string]string {
 	out := map[string]string{}
 	add := func(path, evidence string) {
-		if path == preservePath {
+		if path == preservePath || path == repoCheckPath {
 			return
 		}
 		if _, ok := current[path]; ok {
@@ -1183,6 +1220,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		at++
 		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the chosen repository check succeeds before `govna/canon-baseline.txt` installation.\n\n", at)
 		at++
+	} else if validation.kind == validationConfigured {
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Run `%s` after the selected file updates and before `govna/canon-baseline.txt` installation (configured standing resolution in `govna/repo-check.txt`).\n\n", at, validation.reason)
+		at++
 	} else if validation.kind == validationInferred {
 		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Run `./build.sh` after the selected file updates and before `govna/canon-baseline.txt` installation (selected from exact AGENTS.md declarations).\n\n", at)
 		at++
@@ -1293,6 +1333,9 @@ func validationDisposition(root string, report Report) validationOutcome {
 	}
 	if !baselineUpdate {
 		return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` because no baseline migration is present", reason: "no baseline migration is present"}
+	}
+	if report.repoCheck != "" {
+		return validationOutcome{kind: validationConfigured, evidence: "`" + report.repoCheck + "` configured standing resolution in `govna/repo-check.txt`", reason: report.repoCheck}
 	}
 	agents, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
 	first := regexp.MustCompile(`(?m)^- Run `+"`"+`([^`+"`"+`\n]+)`+"`"+` as the first validation command(?:\s|\.|$)[^\n]*$`).FindAllSubmatch(agents, -1)
