@@ -49,7 +49,7 @@ Audit validates a repository that has adopted Govna, reads metadata, the baselin
 
 Removal reads the same repository identity and preserve information. It compares current Govna files and examines repository-only entries without following symlinks. It sorts files into remove, keep, and Director-choice groups, removes preserve control state last, and writes or safely reuses one canon-version-keyed removal AC. The removal marker records executable and canon versions separately and upgrades unedited legacy markers. The command carries out no removal choice.
 
-The canonical Go build discovers regular command entry points, checks their literal versions, compiles into invocation-owned external storage, validates the compiled programs, and only then replaces safe install destinations. Go release prep validates before and after its edits and prints the release command without running it. Validation-token and baseline-refresh behavior remains specific to Rust tooling.
+The canonical Go build discovers regular command entry points, checks their literal versions, compiles into invocation-owned external storage, validates the compiled programs, and only then replaces safe install destinations. Go release prep performs bookkeeping only, rejects any result outside its planned transformations, and prints the release command without running it. Validation-token and baseline-refresh behavior remains specific to Rust tooling.
 
 ## AC Lifecycle Control Flow
 
