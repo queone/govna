@@ -63,6 +63,7 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
    - Bump from the latest tag.
 3. **Derive the release message.**
    - Summarize the delivered user-visible result in no more than 80 bytes.
+   - Name each direct-handled companion change inside that user-visible result without an AC reference.
    - Include every established release-batch AC reference.
    - Exclude every AC reference outside the established release batch.
    - Lead with the plus-joined release-batch AC references.

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.52.0). This AC removes Govna-managed content without deleting repository-owned content. Files needing a choice stay unchanged until the Director decides what to do.
+Govna executable v9.8.7 created this removal plan from its embedded governance files (canon v0.53.0). This AC removes Govna-managed content without deleting repository-owned content. Files needing a choice stay unchanged until the Director decides what to do.
 
 ### Removal Instructions
 
