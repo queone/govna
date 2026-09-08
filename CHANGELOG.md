@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.19.0 | AC35 pass swept plan.md lines to grep as patterns, not options |
 | 0.18.0 | AC34 name direct-handled companion changes in release messages; align arch.md |
 | 0.17.0 | AC33 emit the audit repository check pre-resolved from repo config |
 | 0.16.0 | AC32 standardize release-command quoting across stacks |

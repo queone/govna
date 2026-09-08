@@ -990,20 +990,8 @@ func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
 }
 
 func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
-	root := repoRoot(t)
-	dir := t.TempDir()
+	dir := writeGoPrepBookkeepingFixture(t)
 	message := "AC29 $HOME `uname` 'quoted'"
-	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
-	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"1.0.0\"\nfunc main() {}\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | earlier |\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "govna/ac29-fixture.md"), []byte("fixture\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte("- IE-1: release → govna/ac29-fixture.md\n- keep\n"), 0o644)
-	gitFixture(t, dir, "init", "-q")
-	gitFixture(t, dir, "config", "user.name", "Fixture")
-	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
-	gitFixture(t, dir, "add", ".")
-	gitFixture(t, dir, "commit", "-qm", "baseline")
 
 	fakeBin := filepath.Join(t.TempDir(), "fakebin")
 	trace := filepath.Join(t.TempDir(), "go.trace")
@@ -1021,6 +1009,9 @@ func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
 	output := string(out)
 	if strings.Contains(output, "pre-check build") || strings.Contains(output, "post-check build") {
 		t.Fatalf("Go prep ran canonical validation: %s", output)
+	}
+	if strings.Contains(output, "grep:") {
+		t.Fatalf("Go prep leaked a grep diagnostic while checking the plan.md sweep: %s", output)
 	}
 	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/main.go"))); !strings.Contains(got, `programVersion = "1.2.3"`) {
 		t.Fatalf("prepared version=%s", got)
@@ -1077,6 +1068,58 @@ func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGoPrepRejectsPlanPointerThatSurvivesSweep(t *testing.T) {
+	dir := writeGoPrepBookkeepingFixture(t)
+	// Replace the sweep with a stub that rewrites plan.md to only the pointer
+	// line. plan.md stays inside prep's planned path set and byte-identical to
+	// its expected copy, so the pointer guard is the only check left to fail.
+	script := strings.Join([]string{
+		"source ./build.sh",
+		"_color_init",
+		"_prep_remove_ie_lines() { printf '%s\\n' '" + goPrepPlanPointer + "' >\"$1/plan.md\"; }",
+		"prep_run 0 v1.2.3 'AC29 fixture'",
+	}, "\n")
+	out, err := run(t, dir, "", "-c", script)
+	if err == nil {
+		t.Fatalf("prep accepted a plan.md pointer that survived the sweep:\n%s", out)
+	}
+	if !strings.Contains(out, "prep: planned plan.md pointer remains: "+goPrepPlanPointer) {
+		t.Fatalf("prep did not report the surviving pointer: %v:\n%s", err, out)
+	}
+	if strings.Contains(out, "grep:") {
+		t.Fatalf("prep leaked a grep diagnostic instead of reading plan.md:\n%s", out)
+	}
+	if plan := string(mustRead(t, filepath.Join(dir, "plan.md"))); plan != goPrepPlanPointer+"\n" {
+		t.Fatalf("stubbed plan=%q", plan)
+	}
+}
+
+// goPrepPlanPointer is the plan.md AC-pointer line the Go prep fixtures sweep.
+// It starts with a dash, so a grep that receives it as a pattern without `--`
+// treats it as options.
+const goPrepPlanPointer = "- IE-1: release → govna/ac29-fixture.md"
+
+// writeGoPrepBookkeepingFixture stages a committed Go module built from the
+// rendered Go build.sh template whose plan.md carries one AC-pointer line for
+// the fixture AC file, and returns the module directory.
+func writeGoPrepBookkeepingFixture(t *testing.T) string {
+	t.Helper()
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"1.0.0\"\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | earlier |\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "govna/ac29-fixture.md"), []byte("fixture\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte(goPrepPlanPointer+"\n- keep\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+	return dir
 }
 
 func TestChangelogShapeAcceptsEscapedPipesInHistory(t *testing.T) {

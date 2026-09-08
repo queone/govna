@@ -1872,7 +1872,7 @@ $acfiles
 EOF
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    if [ -f "$root/plan.md" ] && grep -Fqx "$line" "$root/plan.md"; then
+    if [ -f "$root/plan.md" ] && grep -Fqx -- "$line" "$root/plan.md"; then
       printf 'prep: planned plan.md pointer remains: %s\n' "$(_trim "$line")" >&2
       return 1
     fi
