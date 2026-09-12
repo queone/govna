@@ -17,6 +17,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 ## Major Components
 
 - `cmd/govna`: accepts commands and prints help, versions, colored terminal text, and command results.
+- `internal/help`: renders every help page in the shared layout: three header lines, capitalized headings, rows aligned per section, the appended version and help rows, and single-sequence color only when the written stream supports it.
 - `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, and creates deterministic baselines.
 - `internal/render`: writes a selected file set to a directory after resolving and validating command options.
 - `internal/repository`: determines repository type, stack, module path, name, adoption state, and source-checkout identity.

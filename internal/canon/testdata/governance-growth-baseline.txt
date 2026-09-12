@@ -11,7 +11,7 @@ overlays/code/files/govna/build-release.md.tmpl	137	46
 overlays/code/files/govna/canon-cycle.md.tmpl	123	65
 overlays/code/files/govna/code-stacks.md.tmpl	122	102
 overlays/code/files/govna/development-cycle.md.tmpl	110	62
-overlays/code/files/govna/development-guidelines.md.tmpl	87	51
+overlays/code/files/govna/development-guidelines.md.tmpl	116	78
 overlays/code/files/govna/metadata.txt	4	0
 overlays/code/files/govna/operator-contract-rationale.md.tmpl	55	0
 overlays/code/files/govna/roles.md.tmpl	99	63

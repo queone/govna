@@ -70,20 +70,28 @@ The build installs `govna` into `$(go env GOPATH)/bin` after validation succeeds
 
 ```text
 govna v<version>
-Add and maintain Govna governance files — github.com/queone/govna
+Add and maintain Govna governance files
+github.com/queone/govna
 
-Usage: govna <command> [options]
+Usage
+  govna COMMAND [options]
 
-  apply                         add Govna governance files to a repository
-  audit                         check a repository with Govna for updates and local changes
-  rm                            write a reviewable AC for removing Govna files
-  render                        write the selected built-in Govna files to a directory
-  version                       print executable and embedded governance-file versions
-  ver, v, --version             print executable version
-  help, h                       show this help
+Commands
+  apply    add Govna governance files to a repository
+  audit    check a repository with Govna for updates and local changes
+  rm       write a reviewable AC for removing Govna files
+  render   write the selected built-in Govna files to a directory
+  version  print executable and embedded governance-file versions
+  help     show this help
+
+  Run 'govna COMMAND -h' for command-specific options.
+
+Options
+  -v, --version   print executable version
+  -h, -?, --help  show this help
 ```
 
-Run `govna <command> -h` for command-specific flags.
+Run `govna COMMAND -h` for command-specific options.
 
 ### `apply`
 
@@ -155,7 +163,7 @@ Inspect both version axes. The executable version identifies the installed progr
 
 ```text
 $ govna version
-Govna executable version: v<executable-version>
+govna v<executable-version>
 Embedded governance-file version (canon version): v<canon-version>
 ```
 

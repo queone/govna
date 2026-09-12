@@ -12,6 +12,7 @@ import (
 	"github.com/queone/govna/internal/audit"
 	"github.com/queone/govna/internal/canon"
 	"github.com/queone/govna/internal/emission"
+	"github.com/queone/govna/internal/help"
 	"github.com/queone/govna/internal/repository"
 )
 
@@ -28,7 +29,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 	cfg, err := parse(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		fmt.Fprint(stderr, Help())
+		fmt.Fprint(stderr, Page(programVersion).Render(false))
 		return 2
 	}
 	if repository.IsSource(cwd) {
@@ -124,15 +125,16 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 	return 0
 }
 
-func Help() string {
-	return "Usage: govna rm [flags]\n\n" +
-		"Write an AC that lists which Govna files can be removed and which files\n" +
-		"need a Director choice. Run from the repository root with no positional\n" +
-		"arguments. This command deletes nothing.\n\nFlags:\n" +
-		"  -f, --flavor code|doc      Govna file set (CODE or DOC; default: auto-detect)\n" +
-		"  -s, --stack <name>         CODE stack (default: inferred from manifests)\n" +
-		"  -n, --repo-name <name>     override repo name (default: basename of cwd)\n" +
-		"  -h, --help                 show this help\n"
+// Page returns the rm help page rendered through the shared help layout.
+func Page(version string) help.Page {
+	return help.Utility(version,
+		help.Section{Title: "Usage", Rows: []help.Row{{Form: "govna rm [options]"}}, Note: "Write an AC that lists which Govna files can be removed and which files\nneed a Director choice. Run from the repository root with no positional\narguments. This command deletes nothing."},
+		help.Section{Title: "Options", Rows: []help.Row{
+			{Form: "-f, --flavor code|doc", Meaning: "Govna file set (CODE or DOC; default: auto-detect)"},
+			{Form: "-s, --stack NAME", Meaning: "CODE stack (default: inferred from manifests)"},
+			{Form: "-n, --repo-name NAME", Meaning: "override repo name (default: basename of cwd)"},
+		}},
+	)
 }
 
 func parse(args []string) (Config, error) {
