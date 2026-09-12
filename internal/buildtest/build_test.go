@@ -173,6 +173,9 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	if !strings.Contains(string(a), "_validate_root_canon_version") || strings.Contains(string(b), "_validate_root_canon_version") {
 		t.Fatal("root-only canon-version boundary is incorrect")
 	}
+	if strings.Contains(string(a), "_install_compiled_utility") || strings.Contains(string(b), "_install_compiled_utility") {
+		t.Fatal("retired root-only install wrapper remains")
+	}
 	releaseMarker := []byte("# Release path\n")
 	aRelease := bytes.Index(a, releaseMarker)
 	bRelease := bytes.Index(b, releaseMarker)
@@ -189,7 +192,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 	if err := closure.validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_release_compile_validate_install", "_validate_changelog_shape"} {
+	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_release_compile_validate_install", "_tmp_root", "_utility_count_label", "_validate_changelog_shape"} {
 		if closure.definitions[helper] != 1 {
 			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
 		}
@@ -247,7 +250,9 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_run_git",
 		"_scan_nested_fences",
 		"_shell_quote",
+		"_tmp_root",
 		"_trim",
+		"_utility_count_label",
 		"_validate_binary_provenance",
 		"_validate_changelog_release_row",
 		"_validate_changelog_shape",
@@ -483,7 +488,7 @@ esac
 		"GOVNA_FORCE_TTY=0",
 		"FAKE_GOPATH="+gopath,
 		"FAKE_TRACE="+trace,
-		"TMPDIR="+tmpRoot,
+		"TMPDIR="+tmpRoot+"/", // macOS exports TMPDIR with a trailing slash
 		"PATH="+fakeBin+":"+os.Getenv("PATH"),
 	)
 	out, err := cmd.CombinedOutput()
@@ -491,7 +496,7 @@ esac
 		t.Fatalf("rendered build: %v:\n%s", err, out)
 	}
 	output := string(out)
-	for _, want := range []string{"domain coverage: 100.0%", `programVersion = "1.0.0"`, `programVersion = "1.2.3"`, `programVersion = "2.0.0"`, "installed:"} {
+	for _, want := range []string{"domain coverage: 100.0%", `programVersion = "1.0.0"`, `programVersion = "1.2.3"`, `programVersion = "2.0.0"`, "installed: " + filepath.Join(gopath, "bin", "alpha"), "installed: " + filepath.Join(gopath, "bin", "widget"), "installed: " + filepath.Join(gopath, "bin", "zeta")} {
 		if !strings.Contains(output, want) {
 			t.Errorf("rendered build output omits %q:\n%s", want, output)
 		}
@@ -514,6 +519,11 @@ esac
 	buildOutputs := utilityBuildOutputs(traceBody)
 	if len(buildOutputs) != 3 {
 		t.Fatalf("full-build outputs=%v trace:\n%s", buildOutputs, traceBody)
+	}
+	for _, buildOutput := range buildOutputs {
+		if strings.Contains(buildOutput, "//") {
+			t.Fatalf("trailing slash in TMPDIR doubled a slash in the build output path: %s", buildOutput)
+		}
 	}
 	ownedDir := filepath.Dir(buildOutputs[0])
 	if filepath.Dir(ownedDir) != tmpRoot || !strings.HasPrefix(filepath.Base(ownedDir), "govna-go-build.") {
@@ -950,6 +960,24 @@ func TestRenderedGoVersionHelpers(t *testing.T) {
 		if _, err := run(t, dir, "", "-c", `source ./build.sh; _is_strict_stable_semver "$1"`, "fixture", version); err == nil {
 			t.Errorf("invalid SemVer %q accepted", version)
 		}
+	}
+}
+
+func TestRenderedGoTempRootAndUtilityCountHelpers(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	probe := `source ./build.sh
+printf '%s\n' "$(TMPDIR=/x/y// _tmp_root)" "$(TMPDIR=/ _tmp_root)" "$(TMPDIR='' _tmp_root)"
+unset TMPDIR
+printf '%s\n' "$(_tmp_root)" "$(_utility_count_label 1)" "$(_utility_count_label 34)"
+`
+	out, err := run(t, dir, "", "-c", probe)
+	if err != nil {
+		t.Fatalf("helper probe: %v: %s", err, out)
+	}
+	if want := "/x/y\n\n/tmp\n/tmp\n1 utility\n34 utilities\n"; out != want {
+		t.Fatalf("helper probe output=%q want=%q", out, want)
 	}
 }
 
@@ -1676,8 +1704,21 @@ exit "$rc"
 		"TMPDIR="+tmpRoot,
 		"PATH="+fakeBin+":"+os.Getenv("PATH"),
 	)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("release compilation: %v:\n%s", err, out)
+	}
+	output := string(out)
+	binDir := filepath.Join(gopath, "bin")
+	for _, summary := range []string{"verified: 2 utilities\n", "installed: 2 utilities to " + binDir + "\n", "verified installed: 2 utilities\n"} {
+		if count := strings.Count(output, summary); count != 1 {
+			t.Fatalf("release summary line %q count=%d:\n%s", summary, count, output)
+		}
+	}
+	for _, perUtility := range []string{"verified: alpha", "installed: " + filepath.Join(binDir, "alpha"), "verified installed: " + filepath.Join(binDir, "alpha")} {
+		if strings.Contains(output, perUtility) {
+			t.Fatalf("release printed a per-utility line %q:\n%s", perUtility, output)
+		}
 	}
 	traceBody := string(mustRead(t, trace))
 	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget" {
@@ -1704,6 +1745,35 @@ exit "$rc"
 		t.Fatalf("release scratch remains: %v err=%v", matches, err)
 	}
 
+	colorGopath := filepath.Join(external, "color-gopath")
+	colorTrace := filepath.Join(external, "color.trace")
+	colored := exec.Command("/bin/bash", "-c", command)
+	colored.Dir = dir
+	colored.Env = append(environWithout("NO_COLOR", "TERM", "COLORTERM"),
+		"GOVNA_FORCE_TTY=1",
+		"COLORTERM=truecolor",
+		"TERM=xterm-256color",
+		"FAKE_TRACE="+colorTrace,
+		"FAKE_GOPATH="+colorGopath,
+		"FAKE_REVISION="+revision,
+		"TMPDIR="+tmpRoot,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	coloredOut, err := colored.CombinedOutput()
+	if err != nil {
+		t.Fatalf("colored release compilation: %v:\n%s", err, coloredOut)
+	}
+	const cyan, reset = "\x1b[38;5;44m", "\x1b[0m"
+	for _, summary := range []string{
+		"verified: " + cyan + "2 utilities" + reset + "\n",
+		"installed: " + cyan + "2 utilities" + reset + " to " + cyan + filepath.Join(colorGopath, "bin") + reset + "\n",
+		"verified installed: " + cyan + "2 utilities" + reset + "\n",
+	} {
+		if count := strings.Count(string(coloredOut), summary); count != 1 {
+			t.Fatalf("colored release summary line %q count=%d:\n%s", summary, count, coloredOut)
+		}
+	}
+
 	dirtyGopath := filepath.Join(external, "dirty-gopath")
 	dirtyTrace := filepath.Join(external, "dirty.trace")
 	dirty := exec.Command("/bin/bash", "-c", command)
@@ -1718,7 +1788,7 @@ exit "$rc"
 		"TMPDIR="+tmpRoot,
 		"PATH="+fakeBin+":"+os.Getenv("PATH"),
 	)
-	if out, err := dirty.CombinedOutput(); err == nil || !bytes.Contains(out, []byte("build information is dirty")) {
+	if out, err := dirty.CombinedOutput(); err == nil || !bytes.Contains(out, []byte("release: compiled alpha build information is dirty")) {
 		t.Fatalf("dirty provenance accepted: %v: %s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(dirtyGopath, "bin", "alpha")); !os.IsNotExist(err) {
@@ -1778,7 +1848,7 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	if err := os.Mkdir(filepath.Dir(destination), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	script := "source ./tooling.sh; _color_init; [ \"$(_extract_program_version main.go)\" = 1.2.3 ]; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"
+	script := "source ./tooling.sh; _color_init; [ \"$(_extract_program_version main.go)\" = 1.2.3 ]; _validate_utility_version_output ./compiled widget 1.2.3 && _install_validated_utility ./compiled ./bin/widget widget"
 	if out, err := run(t, dir, "", "-c", script); err != nil {
 		t.Fatalf("install failed: %v: %s", err, out)
 	}
@@ -1789,7 +1859,7 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 9.9.9\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"); err == nil || !strings.Contains(out, "--version output") {
+	if out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _validate_utility_version_output ./compiled widget 1.2.3 && _install_validated_utility ./compiled ./bin/widget widget"); err == nil || !strings.Contains(out, "--version output") {
 		t.Fatalf("invalid compiled version accepted: %v: %s", err, out)
 	}
 	if installedAfterFailure := string(mustRead(t, destination)); installedAfterFailure != installedBeforeFailure {
@@ -1807,7 +1877,7 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 		{"atomic rename", "mv"},
 	} {
 		t.Run(failure.name, func(t *testing.T) {
-			fixture := "source ./tooling.sh; _color_init; " + failure.command + "() { return 9; }; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"
+			fixture := "source ./tooling.sh; _color_init; " + failure.command + "() { return 9; }; _validate_utility_version_output ./compiled widget 1.2.3 && _install_validated_utility ./compiled ./bin/widget widget"
 			if out, err := run(t, dir, "", "-c", fixture); err == nil {
 				t.Fatalf("injected %s failure accepted: %s", failure.name, out)
 			}
@@ -1826,7 +1896,7 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	if err := os.Symlink("compiled", destination); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _install_compiled_utility ./compiled ./bin/widget widget 1.2.3"); err == nil || !strings.Contains(out, "must be absent or a regular file") {
+	if out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _validate_utility_version_output ./compiled widget 1.2.3 && _install_validated_utility ./compiled ./bin/widget widget"); err == nil || !strings.Contains(out, "must be absent or a regular file") {
 		t.Fatalf("unsafe destination accepted: %v: %s", err, out)
 	}
 }
@@ -2165,6 +2235,23 @@ func shellHeredocStart(line, code string) (string, bool, bool, bool) {
 		}
 	}
 	return "", false, false, false
+}
+
+// environWithout returns the current environment minus the named variables so a
+// fixture can set them explicitly.
+func environWithout(names ...string) []string {
+	skip := map[string]bool{}
+	for _, name := range names {
+		skip[name] = true
+	}
+	environ := []string{}
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if !skip[key] {
+			environ = append(environ, entry)
+		}
+	}
+	return environ
 }
 
 func writeBuildFixture(t *testing.T, path string, content []byte, mode os.FileMode) {

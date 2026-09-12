@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.54.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.55.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -964,6 +964,10 @@ func TestGovernanceScenarios(t *testing.T) {
 	}
 
 	required := []string{
+		"- Treat the person in the session as the Director.",
+		"- Address the Director as `you` in chat.",
+		"- Reserve third-person `the Director` for rules and records.",
+		"- Ask the Director for each decision as a direct question with a recommendation.",
 		"- Capture one deterministic Implement evidence snapshot in the closure-audit working record.",
 		"- Capture the snapshot after final validation and the last repository mutation.",
 		"- Treat standalone `Ratify` or `ratify` after successful Implement completion as the Director's acceptance action.",
@@ -1330,7 +1334,7 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 			t.Errorf("rendered Go prep retains %q", retired)
 		}
 	}
-	for _, rootOnly := range []string{"internal/canon.Version", "cmd/govna canonVersion", "_literal_const_value()", "_validate_root_canon_version()", "_install_compiled_utility()", "_release_rebuild_and_verify()"} {
+	for _, rootOnly := range []string{"internal/canon.Version", "cmd/govna canonVersion", "_literal_const_value()", "_validate_root_canon_version()", "_release_rebuild_and_verify()"} {
 		if strings.Contains(goBuild, rootOnly) {
 			t.Errorf("rendered Go consumer contains root-only marker %q", rootOnly)
 		}

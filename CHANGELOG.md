@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.20.0 | AC36+AC37 summarize release checks, fix TMPDIR slashes, address Director as you |
 | 0.19.0 | AC35 pass swept plan.md lines to grep as patterns, not options |
 | 0.18.0 | AC34 name direct-handled companion changes in release messages; align arch.md |
 | 0.17.0 | AC33 emit the audit repository check pre-resolved from repo config |
