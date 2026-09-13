@@ -56,6 +56,9 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			bindings: []binding{
 				{claim: "Compile each selected utility once in an invocation-owned external temporary directory.", implementation: "go build -o \"$compiled_path\"", regression: "TestRenderedGoBuildExecutesWithoutNetwork"},
 				{claim: "Terminate after handling HUP, INT, or TERM.", implementation: "_build_signal_exit", regression: "TestGoBuildSignalsTerminateAndCleanOwnedArtifacts"},
+				{claim: "Validate every selected compiled utility's help output against `## CLI Usage Formatting` before installing any selected utility.", implementation: "_validate_utility_help_output \"$compiled_path\"", regression: "TestRenderedGoHelpProbeRejectsEachDefect"},
+				{claim: "Validate every compiled utility's help output before installation during release compilation.", implementation: "_validate_utility_help_output \"$compiled\" \"$target\" \"$version\"", regression: "TestGoReleaseCompilesEachUtilityOnceBeforeInstall"},
+				{claim: "Recheck every installed utility's help output before tagging.", implementation: "_validate_utility_help_output \"$output\" \"$target\" \"$version\"", regression: "TestGoReleaseCompilesEachUtilityOnceBeforeInstall"},
 			},
 		},
 		{
@@ -213,6 +216,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_extract_template_version",
 		"_failure",
 		"_go_quote",
+		"_help_probe_fail",
 		"_install_validated_utility",
 		"_is_blank",
 		"_is_strict_stable_semver",
@@ -220,6 +224,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_lint_regex_hits",
 		"_lint_test_naming",
 		"_md_files",
+		"_module_path",
 		"_next_patch_tag",
 		"_prep_apply_changelog_insert",
 		"_prep_apply_version_bump",
@@ -258,6 +263,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_validate_changelog_shape",
 		"_validate_prepared_changelogs",
 		"_validate_release_message",
+		"_validate_utility_help_output",
 		"_validate_utility_version_output",
 		"_verify_release_commit",
 		"_wrap",
@@ -457,6 +463,12 @@ if [ "\${1:-}" = --version ]; then
   printf '$utility $reported_version\n'
   exit 0
 fi
+case "\${1:-}" in
+-h | '-?' | --help)
+  printf '%s\n' '$utility v$reported_version' 'Fake $utility utility' 'example.com/widget' '' 'Usage' '  $utility [options]' '' 'Options' '  -v, --version   print executable version' '  -h, -?, --help  show this help'
+  exit 0
+  ;;
+esac
 exit 2
 EOF
   chmod +x "$output"
@@ -804,6 +816,12 @@ if [ "${1:-}" = --version ]; then
   printf 'widget 1.2.3\n'
   exit 0
 fi
+case "${1:-}" in
+-h | '-?' | --help)
+  printf '%s\n' 'widget v1.2.3' 'Fake widget utility' 'example.com/widget' '' 'Usage' '  widget [options]' '' 'Options' '  -v, --version   print executable version' '  -h, -?, --help  show this help'
+  exit 0
+  ;;
+esac
 exit 2
 EOF
   chmod 0755 "$output"
@@ -1670,7 +1688,24 @@ build)
   *) exit 3 ;;
   esac
   mkdir -p "$(dirname "$output")"
-  printf '#!/bin/bash\nprintf '\''%s %s\\n'\''\n' "$target" "$version" >"$output"
+  help_tail='Options
+  -v, --version   print executable version
+  -h, -?, --help  show this help'
+  if [ "${FAKE_BAD_HELP_TARGET:-}" = "$target" ]; then
+    help_tail='Notes
+  drifted help'
+  fi
+  cat >"$output" <<EOF
+#!/bin/bash
+case "\${1:-}" in
+-h | '-?' | --help)
+  printf '%s\n' '$target v$version' 'Fake $target utility' 'example.com/widget' '' 'Usage' '  $target [options]' ''
+  printf '%s\n' '$help_tail'
+  exit 0
+  ;;
+esac
+printf '$target $version\n'
+EOF
   chmod +x "$output"
   ;;
 version)
@@ -1793,6 +1828,27 @@ exit "$rc"
 	}
 	if _, err := os.Stat(filepath.Join(dirtyGopath, "bin", "alpha")); !os.IsNotExist(err) {
 		t.Fatalf("utility installed before every provenance check passed: %v", err)
+	}
+
+	badHelpGopath := filepath.Join(external, "bad-help-gopath")
+	badHelpTrace := filepath.Join(external, "bad-help.trace")
+	badHelp := exec.Command("/bin/bash", "-c", command)
+	badHelp.Dir = dir
+	badHelp.Env = append(os.Environ(),
+		"NO_COLOR=1",
+		"TERM=dumb",
+		"FAKE_TRACE="+badHelpTrace,
+		"FAKE_GOPATH="+badHelpGopath,
+		"FAKE_REVISION="+revision,
+		"FAKE_BAD_HELP_TARGET=widget",
+		"TMPDIR="+tmpRoot,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	if out, err := badHelp.CombinedOutput(); err == nil || !bytes.Contains(out, []byte("utility widget: heading Notes: Usage appears once; Overview and Notes belong in the README")) {
+		t.Fatalf("nonconforming release help accepted: %v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(badHelpGopath, "bin", "alpha")); !os.IsNotExist(err) {
+		t.Fatalf("utility installed before every help check passed: %v", err)
 	}
 }
 
@@ -2278,5 +2334,84 @@ func gitFixture(t *testing.T, dir string, args ...string) {
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+}
+
+func helpProbeQuote(text string) string {
+	return "'" + strings.ReplaceAll(text, "'", "'\\''") + "'"
+}
+
+func TestRenderedGoHelpProbeRejectsEachDefect(t *testing.T) {
+	root := repoRoot(t)
+	tooling := mustRead(t, filepath.Join(root, "build.sh"))
+	conforming := "widget v1.2.3\nShape widgets\nexample.com/widget\n\nUsage\n  widget [options]\n\nOptions\n  -v, --version   print executable version\n  -h, -?, --help  show this help\n"
+	helpStub := func(help string) string {
+		return "#!/bin/bash\ncase \"${1:-}\" in -h | '-?' | --help) printf '%s' " + helpProbeQuote(help) + "; exit 0 ;; esac\nexit 2\n"
+	}
+	cases := []struct {
+		name, module, help, readme, stub, want string
+	}{
+		{name: "conforming", help: conforming},
+		{name: "conforming with matching README", help: conforming, readme: "# widget\n\nIntro.\n\n### Usage\n\n```text\n" + conforming + "```\n"},
+		{name: "URL sub-path", help: strings.Replace(conforming, "example.com/widget\n", "example.com/widget/tree/main/cmd/widget\n", 1)},
+		{name: "module major-version suffix", module: "example.com/widget/v2", help: conforming},
+		{name: "Commands and Examples in order", help: strings.Replace(conforming, "Options\n", "Commands\n  run  run it\n\nOptions\n", 1) + "\nExamples\n  widget run\n"},
+		{name: "non-zero exit", stub: "#!/bin/bash\nexit 3\n", want: "utility widget: -h exited 3 or wrote to stderr"},
+		{name: "stderr output", stub: "#!/bin/bash\nprintf 'noise\\n' >&2\nprintf '%s' " + helpProbeQuote(conforming) + "\n", want: "-h exited 0 or wrote to stderr"},
+		{name: "differing output", stub: "#!/bin/bash\ncase \"${1:-}\" in '-?') printf '%s' " + helpProbeQuote(conforming+"extra\n") + "; exit 0 ;; *) printf '%s' " + helpProbeQuote(conforming) + "; exit 0 ;; esac\n", want: "-h, -?, and --help print different help"},
+		{name: "escape sequence", help: strings.Replace(conforming, "widget v1.2.3", "\x1b[1;38;5;231mwidget\x1b[0m v1.2.3", 1), want: "help carries an escape sequence without a terminal"},
+		{name: "wrong line 1", help: strings.Replace(conforming, "widget v1.2.3", "widget 1.2.3", 1), want: "help line 1 must be exactly 'widget v1.2.3'"},
+		{name: "description with period", help: strings.Replace(conforming, "Shape widgets\n", "Shape widgets.\n", 1), want: "help line 2 must be a one-line description with no trailing period"},
+		{name: "URL outside module", help: strings.Replace(conforming, "example.com/widget\n", "example.com/other\n", 1), want: "help line 3 must be the utility's URL without a scheme: example.com/widget or example.com/widget/<path>"},
+		{name: "URL with scheme", help: strings.Replace(conforming, "example.com/widget\n", "https://example.com/widget\n", 1), want: "help line 3 must be the utility's URL without a scheme"},
+		{name: "URL sub-path with trailing text", help: strings.Replace(conforming, "example.com/widget\n", "example.com/widget/docs and more\n", 1), want: "help line 3 must carry the URL alone with no scheme"},
+		{name: "missing blank line 4", help: strings.Replace(conforming, "\n\nUsage", "\nUsage", 1), want: "help line 4 must be blank and line 5 must be Usage"},
+		{name: "missing Usage", help: strings.Replace(conforming, "Usage\n", "Synopsis\n", 1), want: "help line 4 must be blank and line 5 must be Usage"},
+		{name: "Notes heading", help: conforming + "\nNotes\n  keep\n", want: "heading Notes: Usage appears once; Overview and Notes belong in the README"},
+		{name: "text outside a section", help: conforming + "\nSee also the manual\n", want: "help text outside a section: See also the manual"},
+		{name: "second utility-specific section", help: conforming + "\nCheatsheet\n  a\n\nTips\n  b\n", want: "second utility-specific section Tips; at most one is allowed"},
+		{name: "Examples not last", help: conforming + "\nExamples\n  widget\n\nCheatsheet\n  a\n", want: "section Cheatsheet is out of order"},
+		{name: "missing Options", help: "widget v1.2.3\nShape widgets\nexample.com/widget\n\nUsage\n  widget [options]\n", want: "help has no Options section"},
+		{name: "missing go.mod module line", module: "-", help: conforming, want: "help probe needs the module line in go.mod"},
+		{name: "README block differs", help: conforming, readme: "# widget\n\n### Usage\n\n```text\nwidget v1.2.3\n```\n", want: "cmd/widget/README.md '### Usage' text block differs from the help"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpRoot := filepath.Join(dir, "tmp")
+			if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeBuildFixture(t, filepath.Join(dir, "tooling.sh"), tooling, 0o644)
+			module := tc.module
+			if module == "" {
+				module = "example.com/widget"
+			}
+			if module != "-" {
+				writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module "+module+"\n\ngo 1.27.0\n"), 0o644)
+			}
+			if tc.readme != "" {
+				writeBuildFixture(t, filepath.Join(dir, "cmd/widget/README.md"), []byte(tc.readme), 0o644)
+			}
+			stub := tc.stub
+			if stub == "" {
+				stub = helpStub(tc.help)
+			}
+			writeBuildFixture(t, filepath.Join(dir, "compiled"), []byte(stub), 0o755)
+			cmd := exec.Command("/bin/bash", "-c", "source ./tooling.sh; _color_init; _validate_utility_help_output ./compiled widget 1.2.3")
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "TMPDIR="+tmpRoot)
+			out, err := cmd.CombinedOutput()
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("conforming help rejected: %v: %s", err, out)
+				}
+			} else if err == nil || !strings.Contains(string(out), tc.want) {
+				t.Fatalf("expected rejection %q: err=%v output=%s", tc.want, err, out)
+			}
+			if matches, globErr := filepath.Glob(filepath.Join(tmpRoot, "govna-help.*")); globErr != nil || len(matches) != 0 {
+				t.Fatalf("help probe workspace remains: %v err=%v", matches, globErr)
+			}
+		})
 	}
 }

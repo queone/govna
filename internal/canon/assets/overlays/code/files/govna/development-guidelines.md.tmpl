@@ -96,6 +96,7 @@ Keep repo-specific practices in `## Project Practices`.
 - Align meanings two spaces past the longest form in the section.
 - End `Options` with the `-v, --version` and `-h, -?, --help` rows, appended by the renderer.
 - Allow one indented paragraph at the end of a section body.
+- Keep a utility README's `### Usage` text block byte-equal to the utility's plain help output.
 - Emit one escape sequence per colored span.
 - Emit no escape sequence when output is not a color terminal.
 - Add every new flag to the shared renderer.

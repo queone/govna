@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.22.0 | AC39 fail Go builds when a utility's help drifts from the canon CLI standard |
 | 0.21.0 | AC38 standardize CLI help and version output in canon and govna's own help |
 | 0.20.0 | AC36+AC37 summarize release checks, fix TMPDIR slashes, address Director as you |
 | 0.19.0 | AC35 pass swept plan.md lines to grep as patterns, not options |

@@ -23,6 +23,6 @@ Current contents (`files/`):
 - `plan.md`
 - `README.md`
 
-Stack overlays (`stacks/<name>/build.sh.tmpl`, first-class: Go, Rust, Swift, Terraform) carry the rest of the pipeline inline and require no external govna tools. Rust CODE builds validate independent utility declarations and compiled `--version` output. Swift CODE builds require Swift 6 and a root `Package.swift`. All target Bash 3.2+ so macOS system Bash is supported.
+Stack overlays (`stacks/<name>/build.sh.tmpl`, first-class: Go, Rust, Swift, Terraform) carry the rest of the pipeline inline and require no external govna tools. Go CODE builds validate every utility's help output against the canon CLI help standard. Rust CODE builds validate independent utility declarations and compiled `--version` output. Swift CODE builds require Swift 6 and a root `Package.swift`. All target Bash 3.2+ so macOS system Bash is supported.
 
 See `plan.md` for future overlay improvements.
