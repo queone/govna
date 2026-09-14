@@ -1151,6 +1151,7 @@ _release_validate_prepared() { # $1=tag $2=message
     case "$kind" in
     programVersion) actual=$(_extract_program_version "$path") ;;
     TemplateVersion) actual=$(_extract_template_version "$path") ;;
+    readmeUsage) actual=$(_readme_usage_version "$path" "$(basename "$(dirname "$path")")") ;;
     *) actual='' ;;
     esac
     [ "$actual" = "$version" ] || {

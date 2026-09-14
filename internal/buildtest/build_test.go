@@ -2603,6 +2603,25 @@ func TestGoPrepRewritesReadmeUsageVersion(t *testing.T) {
 	}
 }
 
+func TestGoReleaseValidatesPreparedReadmeUsage(t *testing.T) {
+	dir := writeGoPrepBookkeepingFixture(t)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/README.md"), []byte(goPrepReadme("1.0.0")), 0o644)
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "readme")
+	if out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.3", "AC29 readme"); err != nil {
+		t.Fatalf("prep: %v: %s", err, out)
+	}
+	// The release path re-validates every prepared version target, including the
+	// README usage line prep rewrote, so it must read that line as the new version.
+	out, err := run(t, dir, "", "-c", "source ./build.sh; _color_init; _release_validate_prepared v1.2.3 'AC29 readme'")
+	if err != nil {
+		t.Fatalf("release validation rejected the prepared tree: %v: %s", err, out)
+	}
+	if strings.Contains(out, "prepared readmeUsage") {
+		t.Fatalf("release validation reported the README usage target: %s", out)
+	}
+}
+
 func TestGoPrepRejectsReadmeWithoutMatchingUsageLine(t *testing.T) {
 	for _, tc := range []struct{ name, readme, found string }{
 		{name: "no usage heading", readme: "# widget\n\nIntro.\n\n```text\nwidget v1.0.0\n```\n"},

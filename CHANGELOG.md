@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.24.1 | Go release path reads the prepped README usage line; canon v0.59.1 |
 | 0.24.0 | AC41+AC42 dedup canon, audit skips AC pointers, prep bumps README, prep doc fix |
 | 0.23.0 | AC40 let prep release direct-handled changes without an AC |
 | 0.22.0 | AC39 fail Go builds when a utility's help drifts from the canon CLI standard |
