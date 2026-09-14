@@ -52,6 +52,9 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 - Prohibit a smaller release batch while excluded implemented work remains.
 - Prohibit automatic release-batch splitting.
 - Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.
+- Apply this checklist equally to an established empty release batch.
+- Describe each direct-handled change in the release message for an empty release batch.
+- Reject a release message without AC references while any unpackaged implemented AC exists.
 
 1. **Verify completion.**
    - Verify all in-scope AC work is complete.

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.23.0 | AC40 let prep release direct-handled changes without an AC |
 | 0.22.0 | AC39 fail Go builds when a utility's help drifts from the canon CLI standard |
 | 0.21.0 | AC38 standardize CLI help and version output in canon and govna's own help |
 | 0.20.0 | AC36+AC37 summarize release checks, fix TMPDIR slashes, address Director as you |

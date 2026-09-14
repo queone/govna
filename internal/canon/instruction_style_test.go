@@ -1344,6 +1344,9 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 		"Prohibit a smaller release batch while excluded implemented work remains.",
 		"Prohibit automatic release-batch splitting.",
 		"Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.",
+		"Apply this checklist equally to an established empty release batch.",
+		"Describe each direct-handled change in the release message for an empty release batch.",
+		"Reject a release message without AC references while any unpackaged implemented AC exists.",
 	}
 	checklistOpening := "- " + strings.Join(checklistRules, "\n- ") + "\n"
 	codeOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"

@@ -1116,6 +1116,135 @@ func TestGoPrepIsBookkeepingOnlyAndEmitsShellSafeCommand(t *testing.T) {
 	}
 }
 
+func TestGoPrepReleasesDirectHandledChangesWithoutACReferences(t *testing.T) {
+	dir := writeGoPrepBookkeepingFixture(t)
+	const message = "fix help typo"
+	before, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.3", message, "--dry-run")
+	if err != nil {
+		t.Fatalf("dry-run prep without AC references: %v:\n%s", err, out)
+	}
+	if !strings.Contains(out, "AC deletions:\nplan.md AC-pointer IE removals:\n") {
+		t.Fatalf("dry run planned an AC deletion or plan.md sweep without an AC reference:\n%s", out)
+	}
+	if !strings.Contains(out, "release command:") {
+		t.Fatalf("dry run omitted the release command:\n%s", out)
+	}
+	after, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("dry run changed the fixture: before=%q after=%q", before, after)
+	}
+
+	out, err = run(t, dir, "", "./build.sh", "prep", "v1.2.3", message)
+	if err != nil {
+		t.Fatalf("prep without AC references: %v:\n%s", err, out)
+	}
+	if !strings.Contains(out, "release command:") {
+		t.Fatalf("prep omitted the release command:\n%s", out)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/main.go"))); !strings.Contains(got, `programVersion = "1.2.3"`) {
+		t.Fatalf("prepared version=%s", got)
+	}
+	if changelog := string(mustRead(t, filepath.Join(dir, "CHANGELOG.md"))); !strings.Contains(changelog, "| Unreleased | |\n| 1.2.3 | "+message+" |\n") {
+		t.Fatalf("prepared changelog=%s", changelog)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "govna/ac29-fixture.md")); err != nil {
+		t.Fatalf("prep touched an unreferenced AC file: %v", err)
+	}
+	if plan := string(mustRead(t, filepath.Join(dir, "plan.md"))); plan != goPrepPlanPointer+"\n- keep\n" {
+		t.Fatalf("prep swept plan.md without an AC reference: %q", plan)
+	}
+}
+
+func TestGoPrepRejectsNamedACWithoutExactlyOneFile(t *testing.T) {
+	dir := writeGoPrepBookkeepingFixture(t)
+	out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.3", "AC31 fix")
+	if err == nil {
+		t.Fatalf("prep accepted AC31 without a matching AC file:\n%s", out)
+	}
+	if !strings.Contains(out, "prep: AC31 must select exactly one govna/ac31-*.md file; found 0") {
+		t.Fatalf("prep did not name the missing AC file: %v:\n%s", err, out)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/main.go"))); !strings.Contains(got, `programVersion = "1.0.0"`) {
+		t.Fatalf("rejected prep bumped the version: %s", got)
+	}
+}
+
+func TestRenderedPrepAcceptsMessagesWithoutACReferences(t *testing.T) {
+	root := repoRoot(t)
+	const message = "fix help typo"
+	for _, tc := range []struct {
+		name  string
+		path  string
+		parse string
+		find  string
+	}{
+		{"Go", "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl", "_prep_parse_ac_refs", `_prep_find_ac_files "$PWD" "$refs"`},
+		{"Rust", "internal/canon/assets/overlays/code/stacks/rust/build.sh.tmpl", "_ac_refs", `_matching_ac_files "$refs"`},
+		{"Terraform", "internal/canon/assets/overlays/code/stacks/terraform/build.sh.tmpl", "_prep_parse_ac_refs", `_prep_find_ac_files "$PWD" "$refs"`},
+		{"DOC", "internal/canon/assets/overlays/doc/files/build.sh.tmpl", "_prep_parse_ac_refs", `_prep_find_ac_files "$PWD" "$refs"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, tc.path)), 0o755)
+			writeBuildFixture(t, filepath.Join(dir, "govna", "ac70-first.md"), []byte("fixture\n"), 0o644)
+			command := fmt.Sprintf(`source ./build.sh
+refs=$(%s '%s')
+files=$(%s)
+printf 'refs:[%%s]\nfiles:[%%s]\n' "$refs" "$files"
+`, tc.parse, message, tc.find)
+			out, err := run(t, dir, "", "-c", command)
+			if err != nil {
+				t.Fatalf("reference-less message: %v: %s", err, out)
+			}
+			if want := "refs:[]\nfiles:[]\n"; out != want {
+				t.Fatalf("reference-less selection:\n%s\nwant:\n%s", out, want)
+			}
+		})
+	}
+
+	t.Run("Go validator", func(t *testing.T) {
+		dir := t.TempDir()
+		writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+		out, err := run(t, dir, "", "-c", `source ./build.sh
+_prep_validate_ac_selection "$PWD" "" "" && printf 'accepted\n'
+`)
+		if err != nil || out != "accepted\n" {
+			t.Fatalf("Go validator rejected empty references: %v: %s", err, out)
+		}
+	})
+
+	t.Run("Swift", func(t *testing.T) {
+		dir := t.TempDir()
+		writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/swift/build.sh.tmpl")), 0o755)
+		writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---|---|\n| Unreleased | |\n"), 0o644)
+		writeBuildFixture(t, filepath.Join(dir, "govna", "ac70-first.md"), []byte("fixture\n"), 0o644)
+		command := `eval "$(sed '/^main "$@"/,$d' ./build.sh)"
+refs=$(_prep_refs 'fix help typo')
+printf 'refs:[%s]\n' "$refs"
+_prep_apply v1.2.3 'fix help typo'
+printf 'remaining:\n'
+for file in govna/ac*.md; do [ -f "$file" ] && printf '%s\n' "$file"; done
+`
+		out, err := run(t, dir, "", "-c", command)
+		if err != nil {
+			t.Fatalf("reference-less Swift prep: %v: %s", err, out)
+		}
+		if want := "refs:[]\nremaining:\ngovna/ac70-first.md\n"; out != want {
+			t.Fatalf("reference-less Swift selection:\n%s\nwant:\n%s", out, want)
+		}
+		if changelog := string(mustRead(t, filepath.Join(dir, "CHANGELOG.md"))); !strings.Contains(changelog, "| 1.2.3 | fix help typo |\n") {
+			t.Fatalf("Swift prep omitted the changelog row: %s", changelog)
+		}
+	})
+}
+
 func TestGoPrepRejectsPlanPointerThatSurvivesSweep(t *testing.T) {
 	dir := writeGoPrepBookkeepingFixture(t)
 	// Replace the sweep with a stub that rewrites plan.md to only the pointer

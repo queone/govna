@@ -115,7 +115,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.57.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.58.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -703,6 +703,13 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			"- Require the established release batch to equal the complete pending release batch.",
 			"- Reject Package while excluded implemented work remains in the unreleased repository state.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
+			"- Treat an explicit valid Package instruction for an established empty release batch as the same trigger.",
+			"- Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent names for `Package` only after Ratify acceptance or for an established empty release batch.",
+			"- Define an empty release batch as an empty pending release batch with at least one unreleased direct-handled change.",
+			"- Treat an empty release batch as established only after an explicit Director Package request.",
+			"- Describe each direct-handled change in the release message for an empty release batch.",
+			"- Reject a release message without AC references while any unpackaged implemented AC exists.",
+			"- Apply standalone Package, package, pack, or prep to an established empty release batch when no AC can enter Package.",
 			"- Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.",
 			"- Treat only a Director-named complete pending release batch as an established multi-AC release batch.",
 			"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
@@ -743,6 +750,9 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			"- Require every pending release-batch member to complete Ratify before prep.",
 			"- Reject prep while excluded implemented work remains in the unreleased repository state.",
 			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
+			"- Apply this checklist equally to an established empty release batch.",
+			"- Describe each direct-handled change in the release message for an empty release batch.",
+			"- Reject a release message without AC references while any unpackaged implemented AC exists.",
 			"- Require the established release batch to equal the complete pending release batch before prep.",
 			"- Reject a release message longer than 80 bytes before prep.",
 			"- Prohibit a smaller release batch while excluded implemented work remains.",
@@ -763,8 +773,76 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(content), "Package requires every implemented batch member to be Ratified, compares the complete pending batch with the exact message, and rejects partial or oversized batches before prep.") {
-			t.Errorf("%s omits complete release-batch safety", path)
+		text := string(content)
+		for _, required := range []string{
+			"Package requires every implemented batch member to be Ratified, compares the complete pending batch with the exact message, and rejects partial or oversized batches before prep. An empty release batch packages direct-handled changes without AC references only when no implemented AC awaits release.",
+			"- Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent release-preparation actions for a Ratified or empty release batch.",
+			"- Define an empty release batch as an empty pending release batch with at least one unreleased direct-handled change.",
+			"- Apply standalone `Package`, `package`, `pack`, or `prep` to an established empty release batch when no AC can enter Package.",
+			"for the established Ratified or empty release batch only after separate Director authorization.",
+		} {
+			if strings.Count(text, required) != 1 {
+				t.Errorf("%s requires one empty-release-batch cycle rule %q", path, required)
+			}
+		}
+		if strings.Contains(text, "as equivalent post-Ratify release-preparation actions.") {
+			t.Errorf("%s retains the Ratify-only Package naming rule", path)
+		}
+	}
+
+	for _, path := range []string{
+		"govna/canon-cycle.md",
+		"internal/canon/assets/overlays/code/files/govna/canon-cycle.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/canon-cycle.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Count(string(content), "- Exercise an empty release batch with direct-handled changes before Package prep.") != 1 {
+			t.Errorf("%s omits the empty-release-batch safety scenario", path)
+		}
+	}
+}
+
+func TestEmptyReleaseBatchFlavorRules(t *testing.T) {
+	root := filepath.Join("..", "..")
+	const buildEvidence = "- Use the successful final full build as current Package evidence for an empty release batch."
+	const codeInterpretation = "- Interpret standalone `Package`, `package`, `pack`, or `prep` as Package only after an explicit request for a Ratified or empty release batch."
+	const docInterpretation = "- Interpret `Package` as the release-preparation action only after an explicit Director request for a Ratified or empty release batch."
+	const retiredInterpretation = "as post-Ratify Package only after acceptance and explicit request."
+	const retiredDocInterpretation = "as the post-Ratify release-preparation action only after Ratify acceptance and an explicit Director request."
+	for path, want := range map[string]map[string]int{
+		"AGENTS.md": {buildEvidence: 1, codeInterpretation: 1, docInterpretation: 0, retiredInterpretation: 0, retiredDocInterpretation: 0},
+		"internal/canon/assets/base/AGENTS.md.tmpl":               {buildEvidence: 1, codeInterpretation: 1, docInterpretation: 0, retiredInterpretation: 0, retiredDocInterpretation: 0},
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl": {buildEvidence: 0, codeInterpretation: 0, docInterpretation: 1, retiredInterpretation: 0, retiredDocInterpretation: 0},
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for text, count := range want {
+			if got := strings.Count(string(content), text); got != count {
+				t.Errorf("%s has %d of %q, want %d", path, got, text, count)
+			}
+		}
+	}
+
+	const checklistEvidence = "   - Use the successful final full build as current Package evidence for an empty release batch."
+	const acceptWithout = "Accept a message without AC references."
+	for path, count := range map[string]int{
+		"govna/build-release.md": 1,
+		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl": 1,
+		"internal/canon/assets/overlays/doc/files/govna/release.md.tmpl":        0,
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range []string{checklistEvidence, acceptWithout} {
+			if got := strings.Count(string(content), text); got != count {
+				t.Errorf("%s has %d of %q, want %d", path, got, text, count)
+			}
 		}
 	}
 }
