@@ -227,6 +227,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_module_path",
 		"_next_patch_tag",
 		"_prep_apply_changelog_insert",
+		"_prep_apply_readme_usage",
 		"_prep_apply_version_bump",
 		"_prep_detect_changelog_targets",
 		"_prep_detect_version_targets",
@@ -243,10 +244,13 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_prep_validate_ac_selection",
 		"_prep_validate_git_state",
 		"_prep_validate_multi_utility_versions",
+		"_prep_validate_readme_usage",
 		"_prep_validate_version_plan",
 		"_prep_verify_expected_files",
 		"_prep_verify_result",
 		"_print_coverage_summary",
+		"_readme_usage_line",
+		"_readme_usage_version",
 		"_recovery_error",
 		"_rel_run_inner",
 		"_rel_step",
@@ -2543,4 +2547,112 @@ func TestRenderedGoHelpProbeRejectsEachDefect(t *testing.T) {
 			}
 		})
 	}
+}
+
+const goPrepUsageHelp = "widget vVERSION\nShape widgets\nexample.com/widget\n\nUsage\n  widget [options]\n\nOptions\n  -v, --version   print executable version\n  -h, -?, --help  show this help\n"
+
+// goPrepReadme returns a utility README whose first "### Usage" text fence
+// carries the help output at the given version, followed by unrelated prose
+// that also mentions the old version.
+func goPrepReadme(version string) string {
+	return "# widget\n\nIntro.\n\n### Usage\n\n```text\n" + strings.ReplaceAll(goPrepUsageHelp, "VERSION", version) + "```\n\nMore prose that mentions widget v1.0.0 and stays untouched.\n"
+}
+
+func TestGoPrepRewritesReadmeUsageVersion(t *testing.T) {
+	dir := writeGoPrepBookkeepingFixture(t)
+	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/README.md"), []byte(goPrepReadme("1.0.0")), 0o644)
+	stub := "#!/bin/bash\ncase \"${1:-}\" in -h | '-?' | --help) printf '%s' " + helpProbeQuote(strings.ReplaceAll(goPrepUsageHelp, "VERSION", "1.2.3")) + "; exit 0 ;; esac\nexit 2\n"
+	writeBuildFixture(t, filepath.Join(dir, "compiled"), []byte(stub), 0o755)
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "readme")
+	probe := func() (string, error) {
+		cmd := exec.Command("/bin/bash", "-c", "source ./build.sh; _color_init; _validate_utility_help_output ./compiled widget 1.2.3")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb")
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if out, err := probe(); err == nil || !strings.Contains(out, "'### Usage' text block differs from the help") {
+		t.Fatalf("help probe accepted the stale README before prep: %v: %s", err, out)
+	}
+	dry, err := run(t, dir, "", "./build.sh", "prep", "--dry-run", "v1.2.3", "AC29 readme")
+	if err != nil {
+		t.Fatalf("dry run: %v: %s", err, dry)
+	}
+	if !strings.Contains(dry, "cmd/widget/README.md → 1.2.3 (readmeUsage)") {
+		t.Fatalf("dry run omits the README usage rewrite: %s", dry)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/README.md"))); got != goPrepReadme("1.0.0") {
+		t.Fatalf("dry run changed the README: %q", got)
+	}
+	out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.3", "AC29 readme")
+	if err != nil {
+		t.Fatalf("prep: %v: %s", err, out)
+	}
+	if !strings.Contains(out, "prep: verified README usage line in cmd/widget/README.md") {
+		t.Fatalf("prep omits the README verification line: %s", out)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/README.md"))); got != goPrepReadme("1.2.3") {
+		t.Fatalf("prepared README=%q", got)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/main.go"))); !strings.Contains(got, `programVersion = "1.2.3"`) {
+		t.Fatalf("prepared version=%s", got)
+	}
+	if out, err := probe(); err != nil {
+		t.Fatalf("help probe failed after prep: %v: %s", err, out)
+	}
+}
+
+func TestGoPrepRejectsReadmeWithoutMatchingUsageLine(t *testing.T) {
+	for _, tc := range []struct{ name, readme, found string }{
+		{name: "no usage heading", readme: "# widget\n\nIntro.\n\n```text\nwidget v1.0.0\n```\n"},
+		{name: "no text fence", readme: "# widget\n\n### Usage\n\nRun widget v1.0.0.\n"},
+		{name: "foreign version", readme: "# widget\n\n### Usage\n\n```text\nwidget v9.9.9\n```\n", found: "widget v9.9.9"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeGoPrepBookkeepingFixture(t)
+			writeBuildFixture(t, filepath.Join(dir, "cmd/widget/README.md"), []byte(tc.readme), 0o644)
+			gitFixture(t, dir, "add", ".")
+			gitFixture(t, dir, "commit", "-qm", "readme")
+			want := `prep: cmd/widget/README.md '### Usage' text block must open with "widget v1.0.0" (found "` + tc.found + `"); paste the plain help output there and retry`
+			for _, args := range [][]string{
+				{"./build.sh", "prep", "--dry-run", "v1.2.3", "AC29 readme"},
+				{"./build.sh", "prep", "v1.2.3", "AC29 readme"},
+			} {
+				out, err := run(t, dir, "", args...)
+				if err == nil || !strings.Contains(out, want) {
+					t.Fatalf("%v accepted an unmatchable README: %v: %s", args[1:], err, out)
+				}
+			}
+			if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/README.md"))); got != tc.readme {
+				t.Fatalf("rejected prep changed README=%q", got)
+			}
+			if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/main.go"))); !strings.Contains(got, `programVersion = "1.0.0"`) {
+				t.Fatalf("rejected prep bumped the version: %s", got)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "govna/ac29-fixture.md")); err != nil {
+				t.Fatalf("rejected prep removed the AC file: %v", err)
+			}
+		})
+	}
+	t.Run("already bumped", func(t *testing.T) {
+		readme := "# widget\n\n### Usage\n\n```text\nwidget v1.2.3\n```\n"
+		dir := writeGoPrepBookkeepingFixture(t)
+		writeBuildFixture(t, filepath.Join(dir, "cmd/widget/README.md"), []byte(readme), 0o644)
+		gitFixture(t, dir, "add", ".")
+		gitFixture(t, dir, "commit", "-qm", "readme")
+		dry, err := run(t, dir, "", "./build.sh", "prep", "--dry-run", "v1.2.3", "AC29 readme")
+		if err != nil {
+			t.Fatalf("dry run: %v: %s", err, dry)
+		}
+		if strings.Contains(dry, "README.md") {
+			t.Fatalf("dry run lists a README already at the new version: %s", dry)
+		}
+		if out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.3", "AC29 readme"); err != nil {
+			t.Fatalf("prep: %v: %s", err, out)
+		}
+		if got := string(mustRead(t, filepath.Join(dir, "cmd/widget/README.md"))); got != readme {
+			t.Fatalf("prep changed README=%q", got)
+		}
+	})
 }

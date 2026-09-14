@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -115,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.58.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.59.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -325,7 +326,6 @@ func TestAuditValidationContract(t *testing.T) {
 			"- Install an exact current-canon replacement before retired-source routing.",
 			"- Omit restore as a routing outcome.",
 			"- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.",
-			"- Preserve unrelated CHANGELOG Summary text and historical rows.",
 			"- Emit a conditional named-destination check for each offered migration outcome.",
 			"- Emit a replacement-before-retired-source check for each replacement-missing route.",
 			"- Emit an exact-phrase absence check for each legacy-phrase route.",
@@ -593,7 +593,7 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		}
 		text := string(content)
 		for _, rule := range append([]string{
-			"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
+			"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under `### Audit Adoption`.",
 			"- Pause after Audit until the Director requests Refine unless integrated audit adoption or eligible automatic Refine entry applies.",
 			"- Treat a Director-resolved routing decision or explicit workflow override recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
 			"- Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.",
@@ -644,9 +644,7 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 			"- Render the selected canon into that scratch directory once with the resolved executable.",
 			"- Compare every actionable path through the emitted `### Audit Review` instructions.",
 			"- Remove the exact scratch directory before reporting Audit completion or a blocker.",
-			"- Resume Refine after the Director resolves every blocking finding and decision.",
-			"- Run Pre-Implementation Verification after Refine.",
-			"- Stop before Implement.",
+			"- Follow `AGENTS.md` `### Audit Adoption` for every phase entry, pause, and exit of this review.",
 			"`PENDING` — immutable audit emission; workflow state is tracked in the active session.",
 		} {
 			if strings.Count(text, required) != 1 {
@@ -776,9 +774,7 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		text := string(content)
 		for _, required := range []string{
 			"Package requires every implemented batch member to be Ratified, compares the complete pending batch with the exact message, and rejects partial or oversized batches before prep. An empty release batch packages direct-handled changes without AC references only when no implemented AC awaits release.",
-			"- Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent release-preparation actions for a Ratified or empty release batch.",
-			"- Define an empty release batch as an empty pending release batch with at least one unreleased direct-handled change.",
-			"- Apply standalone `Package`, `package`, `pack`, or `prep` to an established empty release batch when no AC can enter Package.",
+			"- Apply `AGENTS.md` `### Phase-Advancement Rules` to every action instruction and release batch.",
 			"for the established Ratified or empty release batch only after separate Director authorization.",
 		} {
 			if strings.Count(text, required) != 1 {
@@ -1071,7 +1067,6 @@ func TestGovernanceScenarios(t *testing.T) {
 		"- Run `./build.sh` only when required build evidence is missing or stale.",
 		"- Run each acceptance test in the active AC when its current disposition is unavailable.",
 		"- Report each current acceptance-test disposition.",
-		"- Pause after each lifecycle action unless integrated audit adoption, completed-Draft automatic Audit entry, or eligible automatic Refine entry authorizes the immediate next action.",
 		"- Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.",
 		"- Enter Refine automatically when Audit completes with only advancement-eligible findings.",
 		"## Why Clean Ratify Reuses Implement Evidence",
@@ -1175,6 +1170,24 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		}
 	}
 
+	assertCycleRules := func(t *testing.T, path, content string) {
+		t.Helper()
+		if !strings.Contains(content, "- Apply `AGENTS.md` `### Phase-Advancement Rules` to every action instruction and release batch.") {
+			t.Errorf("%s does not reference Phase-Advancement Rules", path)
+		}
+		normalized := strings.ReplaceAll(content, "`", "")
+		for _, rule := range rules {
+			if strings.Contains(normalized, rule) {
+				t.Errorf("%s repeats AGENTS.md phase-routing rule: %s", path, rule)
+			}
+		}
+		for _, retired := range retiredRules {
+			if strings.Contains(content, retired) {
+				t.Errorf("%s retains broad file-count rule: %s", path, retired)
+			}
+		}
+	}
+
 	root := filepath.Join("..", "..")
 	for _, path := range []string{
 		"AGENTS.md",
@@ -1196,7 +1209,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertRules(t, path, string(content))
+		assertCycleRules(t, path, string(content))
 	}
 
 	for _, variant := range []struct {
@@ -1213,7 +1226,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertAGENTSRules(t, variant.name+" AGENTS.md", fileText(t, files, "AGENTS.md"))
-			assertRules(t, variant.name+" "+variant.cyclePath, fileText(t, files, variant.cyclePath))
+			assertCycleRules(t, variant.name+" "+variant.cyclePath, fileText(t, files, variant.cyclePath))
 		})
 	}
 }
@@ -1454,4 +1467,149 @@ func fileText(t *testing.T, files []File, path string) string {
 	}
 	t.Fatalf("missing %s", path)
 	return ""
+}
+
+// sharedInvariantRules names the rule bullets that stay in both AGENTS.md and
+// an owning canon document because audit content-coherence checks require them
+// in the rendered overlay document.
+var sharedInvariantRules = map[string]bool{
+	"Describe each direct-handled change in the release message for an empty release batch.":     true,
+	"Prohibit automatic release-batch splitting.":                                                true,
+	"Reject a release message without AC references while any unpackaged implemented AC exists.": true,
+	"Remove the exact scratch directory before reporting Audit completion or a blocker.":         true,
+}
+
+type dedupProfile struct {
+	name      string
+	config    Config
+	cyclePath string
+}
+
+// dedupProfiles lists every rendered profile with its cycle document path.
+func dedupProfiles() []dedupProfile {
+	profiles := []dedupProfile{{name: "DOC", config: Config{Flavor: Doc, RepoName: "handbook"}, cyclePath: "govna/editing-cycle.md"}}
+	for _, stack := range Stacks() {
+		config := Config{Flavor: Code, RepoName: "widget", Stack: stack}
+		if stack == "Go" {
+			config.ModulePath = "example.com/widget"
+		}
+		profiles = append(profiles, dedupProfile{name: "CODE/" + stack, config: config, cyclePath: "govna/development-cycle.md"})
+	}
+	return profiles
+}
+
+// canonZoneRules collects the rule bullets above the repo-owned boundary
+// heading, stripping the leading "- " and every backtick.
+func canonZoneRules(content, boundary string) map[string]bool {
+	rules := map[string]bool{}
+	for line := range strings.SplitSeq(content, "\n") {
+		if line == boundary {
+			break
+		}
+		if rule, ok := strings.CutPrefix(line, "- "); ok {
+			rules[strings.ReplaceAll(rule, "`", "")] = true
+		}
+	}
+	return rules
+}
+
+func TestCanonDocumentsDoNotRepeatAGENTSRules(t *testing.T) {
+	for _, profile := range dedupProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			agents := canonZoneRules(fileText(t, files, "AGENTS.md"), "## Project Rules")
+			for _, file := range files {
+				if file.Path == "AGENTS.md" || !strings.HasSuffix(file.Path, ".md") {
+					continue
+				}
+				for rule := range canonZoneRules(string(file.Content), "## Project Practices") {
+					if agents[rule] && !sharedInvariantRules[rule] {
+						t.Errorf("%s repeats an AGENTS.md rule: %s", file.Path, rule)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPrepAppendixDescribesEveryStack(t *testing.T) {
+	headingRef := regexp.MustCompile("`#{2,3} [^`]*`")
+	for _, stack := range Stacks() {
+		t.Run(stack, func(t *testing.T) {
+			config := Config{Flavor: Code, RepoName: "widget", Stack: stack}
+			if stack == "Go" {
+				config.ModulePath = "example.com/widget"
+			}
+			files, err := Render(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, appendix, ok := strings.Cut(fileText(t, files, "govna/build-release.md"), "### Appendix: what prep does\n\n")
+			if !ok {
+				t.Fatal("govna/build-release.md omits the prep appendix")
+			}
+			opening, _, _ := strings.Cut(appendix, "\n\n")
+			if strings.Contains(opening, "Go `./build.sh prep` performs bookkeeping only") {
+				t.Errorf("appendix describes every stack as Go bookkeeping: %s", opening)
+			}
+			for _, want := range []string{
+				"`./build.sh prep` performs release bookkeeping in every CODE stack.",
+				"Go and Terraform prep perform bookkeeping only.",
+				"Rust prep adds a fallback pre-change full build when validation evidence is missing or stale and one post-change full build after its writes.",
+				"Swift prep runs the canonical build before its writes and again with installation after them unless `-B` skips both.",
+			} {
+				if !strings.Contains(opening, want) {
+					t.Errorf("appendix opening omits %q: %s", want, opening)
+				}
+			}
+			if ref := headingRef.FindString(opening); ref != "" {
+				t.Errorf("appendix opening references heading %s", ref)
+			}
+		})
+	}
+}
+
+func TestCanonAGENTSReferencesResolve(t *testing.T) {
+	headingRef := regexp.MustCompile("`(#{2,3} [^`]+)`")
+	for _, profile := range dedupProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			headings := map[string]bool{}
+			for line := range strings.SplitSeq(fileText(t, files, "AGENTS.md"), "\n") {
+				if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
+					headings[line] = true
+				}
+			}
+			required := map[string][]string{
+				profile.cyclePath: {"### Four-Phase Workflow", "### Phase-Advancement Rules", "### Audit Adoption"},
+				"govna/audit.md":  {"### Audit Adoption"},
+				"govna/roles.md":  {"## Interaction Mode", "## Review Style"},
+			}
+			for path, wants := range required {
+				found := map[string]bool{}
+				for line := range strings.SplitSeq(fileText(t, files, path), "\n") {
+					if !strings.Contains(line, "AGENTS.md") {
+						continue
+					}
+					for _, match := range headingRef.FindAllStringSubmatch(line, -1) {
+						if !headings[match[1]] {
+							t.Errorf("%s references missing AGENTS.md heading %q", path, match[1])
+						}
+						found[match[1]] = true
+					}
+				}
+				for _, want := range wants {
+					if !found[want] {
+						t.Errorf("%s does not reference AGENTS.md %s", path, want)
+					}
+				}
+			}
+		})
+	}
 }

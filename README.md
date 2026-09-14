@@ -238,7 +238,7 @@ Run the full canonical validation and installation path with:
 ./build.sh
 ```
 
-Release preparation validates before and after its controlled mutations, then prints the release command without executing it:
+Release preparation performs bookkeeping only, then prints the release command without executing it:
 
 ```bash
 ./build.sh prep vX.Y.Z "release message"

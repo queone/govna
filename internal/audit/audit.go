@@ -179,6 +179,10 @@ var cycleContentCoherenceRule = contentCoherenceRule{
 var semverRE = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 var shaRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var nameReferenceRE = regexp.MustCompile(`(?:^|[[:space:]'"])(govna/[A-Za-z0-9._/-]+|AGENTS\.md|CHANGELOG\.md|README\.md|arch\.md|plan\.md)(?:$|[[:space:]'"),.:;])`)
+
+// consumerACRE matches consumer-owned AC documents. plan.md AC-pointers name
+// them by design, so a name reference is not evidence that Govna owns them.
+var consumerACRE = regexp.MustCompile(`^govna/ac[0-9]+-[^/]+\.md$`)
 var adoptionCommitRE = regexp.MustCompile(`(?i)(govna|^govern[a-z]*)`)
 
 func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) int {
@@ -840,7 +844,11 @@ func targetOnly(root string, current map[string][]byte, base *baseline, flavor c
 			continue
 		}
 		for _, m := range nameReferenceRE.FindAllStringSubmatch(string(data), -1) {
-			add(strings.TrimRight(m[1], ".,:;)]}"), "name-referenced from divergent governed file")
+			referenced := strings.TrimRight(m[1], ".,:;)]}")
+			if consumerACRE.MatchString(referenced) {
+				continue
+			}
+			add(referenced, "name-referenced from divergent governed file")
 		}
 	}
 	return out
