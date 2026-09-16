@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.59.1\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.60.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -333,6 +333,17 @@ func TestAuditValidationContract(t *testing.T) {
 			"- Emit an outside-Summary preservation check for each legacy-phrase route.",
 			"- Keep every emitted routing check atomic.",
 			"- Keep emitted AT numbering stable across identical reports.",
+			"- Fail the audit before emission when a governed path is a symbolic link, a directory, a special file, or unreadable.",
+			"- Name the failed path and its recovery action in that failure.",
+			"- Leave every existing emitted AC unchanged after that failure.",
+			"- Read the Summary from the canonical `| Unreleased | <summary> |` table row, where each `\\|` pair is one escaped pipe.",
+			"- Read the Summary from a legacy `## Unreleased` heading section as well.",
+			"- Drop a duplicate phrase-and-path pair.",
+			"- Ignore a phrase whose path is not a normalized repository-relative path.",
+			"- Drop an escaping reference or legacy phrase path without inspecting it.",
+			"- Fail the audit with a replace-the-link recovery action when a candidate path is a symbolic link.",
+			"- Reject an entry that is absolute, contains a backslash or control character, or has an empty, `.`, or `..` component.",
+			"- Direct the consumer to correct the invalid entry before retrying.",
 			"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
 		} {
 			if strings.Count(string(content), required) != 1 {

@@ -76,28 +76,36 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 		fmt.Fprintf(stderr, "create target %s: %v\n", absTarget, err)
 		return 1
 	}
+	access, err := repository.Open(absTarget)
+	if err != nil {
+		fmt.Fprintf(stderr, "open target %s: %v\n", absTarget, err)
+		return 1
+	}
+	defer access.Close()
 	for _, file := range files {
-		destination := filepath.Join(absTarget, filepath.FromSlash(file.Path))
-		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-			fmt.Fprintf(stderr, "write %s: %v\n", destination, err)
-			return 1
-		}
-		mode := os.FileMode(0o644)
-		if filepath.Ext(destination) == ".sh" {
-			mode = 0o755
-		}
-		if err := os.WriteFile(destination, file.Content, mode); err != nil {
-			fmt.Fprintf(stderr, "write %s: %v\n", destination, err)
-			return 1
-		}
-		if err := os.Chmod(destination, mode); err != nil {
-			fmt.Fprintf(stderr, "write %s: %v\n", destination, err)
+		if err := access.Preflight(file.Path, false); err != nil {
+			fmt.Fprintf(stderr, "check destination %s: %v\n", filepath.Join(absTarget, filepath.FromSlash(file.Path)), err)
 			return 1
 		}
 	}
 	claude := filepath.Join(absTarget, "CLAUDE.md")
-	_ = os.Remove(claude)
-	if err := os.Symlink("AGENTS.md", claude); err != nil {
+	if err := access.Preflight("CLAUDE.md", true); err != nil {
+		fmt.Fprintf(stderr, "check destination %s: %v\n", claude, err)
+		return 1
+	}
+	for _, file := range files {
+		destination := filepath.Join(absTarget, filepath.FromSlash(file.Path))
+		mode := os.FileMode(0o644)
+		if path.Ext(file.Path) == ".sh" {
+			mode = 0o755
+		}
+		if err := access.WriteFile(file.Path, file.Content, mode); err != nil {
+			fmt.Fprintf(stderr, "write %s: %v\n", destination, err)
+			return 1
+		}
+	}
+	_ = access.Remove("CLAUDE.md")
+	if err := access.Symlink("AGENTS.md", "CLAUDE.md"); err != nil {
 		fmt.Fprintf(stderr, "create symlink %s: %v\n", claude, err)
 		return 1
 	}

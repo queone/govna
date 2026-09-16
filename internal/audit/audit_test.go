@@ -5,15 +5,20 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/queone/govna/internal/canon"
 	"github.com/queone/govna/internal/emission"
 	rendercmd "github.com/queone/govna/internal/render"
+	"github.com/queone/govna/internal/repository"
 )
 
 const testProgramVersion = "9.8.7"
@@ -112,7 +117,7 @@ func TestAuditCleanAndJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Header.CanonSHA != "v0.59.1" || report.Emitted != nil || strings.Contains(stdout.String(), "no AC emitted") {
+	if report.Header.CanonSHA != "v0.60.0" || report.Emitted != nil || strings.Contains(stdout.String(), "no AC emitted") {
 		t.Fatalf("bad JSON: %s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "canon_reference") || strings.Contains(stdout.String(), "prior_commits") || !strings.Contains(stdout.String(), `"canon_ref"`) || !strings.Contains(stdout.String(), `"compare_command"`) {
@@ -127,7 +132,7 @@ func TestConfiguredRepoCheckEmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = bytes.Replace(data, []byte("canon_version = v0.59.1\n"), []byte("canon_version = v0.41.0\n"), 1)
+	data = bytes.Replace(data, []byte("canon_version = v0.60.0\n"), []byte("canon_version = v0.41.0\n"), 1)
 	if err := os.WriteFile(baseline, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +143,7 @@ func TestConfiguredRepoCheckEmission(t *testing.T) {
 	if code := Run([]string{"--repo-name", "widget"}, &stdout, &stderr, root, testProgramVersion); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
-	body, err := os.ReadFile(filepath.Join(root, "govna", "ac1-audit-v0.59.1.md"))
+	body, err := os.ReadFile(filepath.Join(root, "govna", "ac1-audit-v0.60.0.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,10 +205,10 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 	if code := Run([]string{"--repo-name", "widget"}, &stdout, &stderr, root, testProgramVersion); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
-	if !strings.HasPrefix(stdout.String(), "Wrote govna/ac1-audit-v0.59.1.md for review") {
+	if !strings.HasPrefix(stdout.String(), "Wrote govna/ac1-audit-v0.60.0.md for review") {
 		t.Fatalf("stdout=%q", stdout.String())
 	}
-	stub := filepath.Join(root, "govna", "ac1-audit-v0.59.1.md")
+	stub := filepath.Join(root, "govna", "ac1-audit-v0.60.0.md")
 	body, err := os.ReadFile(stub)
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +216,7 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 	if !strings.Contains(string(body), "## Summary") || !strings.Contains(string(body), "`README.md` — `ambiguity`") {
 		t.Fatalf("bad stub: %s", body)
 	}
-	markerPrefix := "<!-- audit: emitted-by govna executable v9.8.7 with embedded canon v0.59.1 sha256:"
+	markerPrefix := "<!-- audit: emitted-by govna executable v9.8.7 with embedded canon v0.60.0 sha256:"
 	if !strings.HasPrefix(string(body), markerPrefix) {
 		t.Fatalf("bad marker: %s", body)
 	}
@@ -256,7 +261,7 @@ func TestAuditActionableEmissionAndGuard(t *testing.T) {
 	if !strings.HasPrefix(string(upgraded), markerPrefix) || bytes.Equal(upgraded, legacy) || strings.Contains(string(upgraded), "Install and verify") {
 		t.Fatalf("legacy marker not upgraded: %s", upgraded)
 	}
-	matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.59.1.md"))
+	matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.60.0.md"))
 	if err != nil || len(matches) != 1 || matches[0] != stub {
 		t.Fatalf("same-canon upgrade changed stub identity: matches=%v err=%v", matches, err)
 	}
@@ -323,7 +328,7 @@ func TestAuditFormatForcingAndCoherence(t *testing.T) {
 	if !strings.Contains(encoded.String(), `"classification":"preserve"`) || !strings.Contains(encoded.String(), `"effective_classification":"force-sync"`) {
 		t.Fatalf("JSON output omits real Classification or EffectiveClassification: %s", encoded.String())
 	}
-	body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+	body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 	if !strings.Contains(body, "### Files ready to update\n\n- `AGENTS.md` — `force-sync`: this file's governed structure always syncs to canon, regardless of local edits or the preserve list.") {
 		t.Fatalf("force-synced preserve file did not render the force-sync explanation: %s", body)
 	}
@@ -912,7 +917,7 @@ func TestMissingFormatFileKeepsClassificationAndForcesSync(t *testing.T) {
 			if file.Classification != "missing-in-target" || !file.forceSync || file.EffectiveClassification != "force-sync" {
 				t.Fatalf("file=%+v", file)
 			}
-			body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+			body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 			if !strings.Contains(body, "### Files ready to update\n\n- `govna/ac-template.md` — `force-sync`: this file's governed structure always syncs to canon, regardless of local edits or the preserve list.") {
 				t.Fatalf("routing=%s", body)
 			}
@@ -968,7 +973,7 @@ func TestAuditMultipleStubsErrorHasPrefix(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, "govna", "ac-template.md")); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"ac1-audit-v0.59.1.md", "ac2-audit-v0.59.1.md"} {
+	for _, name := range []string{"ac1-audit-v0.60.0.md", "ac2-audit-v0.60.0.md"} {
 		if err := os.WriteFile(filepath.Join(root, "govna", name), []byte("stub\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -996,9 +1001,14 @@ func TestAuditDiffTruncationAndCrossFlavor(t *testing.T) {
 	for _, f := range files {
 		current[f.Path] = f.Content
 	}
-	got := targetOnly(root, current, nil, canon.Code, "widget")
-	if got["govna/release.md"] != "present in other flavor canon" {
-		t.Fatalf("target-only=%v", got)
+	access, err := repository.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer access.Close()
+	got, err := targetOnly(access, current, nil, canon.Code, "widget")
+	if err != nil || got["govna/release.md"] != "present in other flavor canon" {
+		t.Fatalf("target-only=%v err=%v", got, err)
 	}
 }
 
@@ -1028,7 +1038,7 @@ func TestTargetOnlyPreserveIsDurable(t *testing.T) {
 		if !bytes.Contains(encoded, []byte(`"relpath":"govna/release.md"`)) || !bytes.Contains(encoded, []byte(`"classification":"preserve"`)) {
 			t.Fatalf("inspection %d JSON omits settled target-only file: %s", inspection, encoded)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 		if strings.Contains(body, "**`govna/release.md`**:") {
 			t.Fatalf("inspection %d repeated the settled routing question: %s", inspection, body)
 		}
@@ -1054,7 +1064,7 @@ func TestReplacementMissingRoutesAfterDirectUpdate(t *testing.T) {
 	if retired.Classification != "target-has-no-canon" || replacementMissingPath(retired) != "govna/audit.md" {
 		t.Fatalf("retired=%+v", retired)
 	}
-	body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+	body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 	install := "Install `govna/audit.md` before retired-source routing for `govna/drift-scan.md`."
 	route := "Which action should Govna record after installing `govna/audit.md`: keep local (preserve), move content to a destination named in the response (migrate), or remove (delete)?"
 	orderingAT := "Verify `govna/audit.md` matches its applicable rendered canon region before retired-source routing for `govna/drift-scan.md`."
@@ -1075,15 +1085,15 @@ func TestRoutingCapabilityMatrixAndConditionalATs(t *testing.T) {
 	report := Report{
 		Header: Header{Flavor: "code", RepoName: "widget"},
 		Files: []FileResult{
-			{Path: "canon.md", Classification: "ambiguity", CanonReference: "govna @ v0.59.1: canon.md"},
+			{Path: "canon.md", Classification: "ambiguity", CanonReference: "govna @ v0.60.0: canon.md"},
 			{Path: "target.md", Classification: "target-has-no-canon", CanonReference: "present in prior canon baseline"},
 			{Path: "govna/drift-scan.md", Classification: "target-has-no-canon", CanonReference: "retired canon path; replacement missing: govna/audit.md"},
 			{Path: "legacy.md", Classification: "target-has-no-canon", CanonReference: "present in prior canon baseline", LegacyPreserveMarkers: []string{"preserve legacy.md"}},
 			{Path: "marker.md", Classification: "ambiguity", LegacyPreserveMarkers: []string{"preserve marker.md"}, PreserveEntries: []string{"marker.md"}, legacyOnly: true, targetPresent: true, targetHash: "abc123"},
 		},
 	}
-	body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
-	if again := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome()); again != body {
+	body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
+	if again := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome()); again != body {
 		t.Fatal("identical routing reports produced unstable emitted ATs")
 	}
 	if !strings.Contains(body, "- `marker.md` — `ambiguity`: the Director must choose whether to convert the exact legacy phrase or remove only that phrase.") {
@@ -1180,7 +1190,7 @@ func TestMarkerOnlyRoutingStateVariants(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body := buildAC(Report{Header: Header{Flavor: "doc", RepoName: "handbook"}, Files: []FileResult{tc.file}}, "govna/ac1-audit-v0.59.1.md", notApplicableOutcome("`Not applicable`", "DOC fixture"))
+			body := buildAC(Report{Header: Header{Flavor: "doc", RepoName: "handbook"}, Files: []FileResult{tc.file}}, "govna/ac1-audit-v0.60.0.md", notApplicableOutcome("`Not applicable`", "DOC fixture"))
 			for _, want := range []string{tc.wantTargetAT, tc.wantRegistryAT, "occurs exactly once in `govna/preserve.txt` when its marker-only action is convert", "legacy-phrase cleanup for `" + tc.file.Path + "` starts only after every applicable target-state and registry-state AT passes", "Unreleased CHANGELOG Summary changes only through exact removal", "CHANGELOG line outside the Unreleased Summary remains byte-identical", "is absent from the Unreleased CHANGELOG Summary after the marker-only choice"} {
 				if !strings.Contains(body, want) {
 					t.Errorf("marker-only route omits %q: %s", want, body)
@@ -1210,7 +1220,7 @@ func TestMarkerOnlyClassificationUsesIndependentFileAction(t *testing.T) {
 		if !markerOnly(file) || !file.targetPresent || file.targetHash == "" || file.Classification != "ambiguity" {
 			t.Fatalf("matching canon marker=%+v", file)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 		line := lineContaining(t, body, "**`README.md`**:")
 		if !strings.Contains(line, "convert the exact legacy phrase") || strings.Contains(line, "update (sync)") || strings.Contains(line, "migrate") {
 			t.Fatalf("matching canon marker route=%s", line)
@@ -1231,7 +1241,7 @@ func TestMarkerOnlyClassificationUsesIndependentFileAction(t *testing.T) {
 		if markerOnly(file) || file.Classification != "ambiguity" {
 			t.Fatalf("actionable canon marker=%+v", file)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 		line := lineContaining(t, body, "**`README.md`**:")
 		for _, want := range []string{"update (sync)", "keep local (preserve)", "destination named in the response (migrate)", "remove (delete)"} {
 			if !strings.Contains(line, want) {
@@ -1257,7 +1267,7 @@ func TestMarkerOnlyClassificationUsesIndependentFileAction(t *testing.T) {
 		if markerOnly(file) || file.Classification != "ambiguity" || file.targetPresent || !file.targetInspected {
 			t.Fatalf("missing actionable marker=%+v", file)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 		if !strings.Contains(body, "- Compare `README.md` with `diff -u /dev/null <scratch>/README.md`.") || strings.Contains(body, "diff -ru <scratch>/README.md README.md") {
 			t.Fatalf("missing target has invalid Audit Review command: %s", body)
 		}
@@ -1285,7 +1295,7 @@ func TestMarkerOnlyClassificationUsesIndependentFileAction(t *testing.T) {
 		if !markerOnly(file) || len(file.PreserveEntries) != 1 || file.PreserveEntries[0] != target {
 			t.Fatalf("settled target-only marker=%+v", file)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 		line := lineContaining(t, body, "**`"+target+"`**:")
 		if !strings.Contains(line, "convert the exact legacy phrase") || strings.Contains(line, "migrate") {
 			t.Fatalf("settled target-only marker route=%s", line)
@@ -1341,7 +1351,7 @@ func TestDocDotfileAuditRegression(t *testing.T) {
 	if ignore.Classification != "match" || ignore.CanonReference == "" {
 		t.Fatalf("DOC .gitignore classification=%+v", ignore)
 	}
-	body := buildAC(report, "govna/ac1-audit-v0.59.1.md", notApplicableOutcome("`Not applicable`", "DOC fixture"))
+	body := buildAC(report, "govna/ac1-audit-v0.60.0.md", notApplicableOutcome("`Not applicable`", "DOC fixture"))
 	if strings.Contains(body, "**`.gitignore`**:") || strings.Contains(body, "unresolved rendered reference") {
 		t.Fatalf("DOC .gitignore produced impossible routing: %s", body)
 	}
@@ -1349,14 +1359,14 @@ func TestDocDotfileAuditRegression(t *testing.T) {
 
 func TestAuditGoldens(t *testing.T) {
 	report := Report{
-		Header: Header{Invocation: "govna audit --repo-name widget", CanonSHA: "v0.59.1", Target: "<TARGET>", Flavor: "code", FlavorSource: "explicit", RepoName: "widget", CanonVersion: "v0.28.0", CodeStack: "Go"},
+		Header: Header{Invocation: "govna audit --repo-name widget", CanonSHA: "v0.60.0", Target: "<TARGET>", Flavor: "code", FlavorSource: "explicit", RepoName: "widget", CanonVersion: "v0.28.0", CodeStack: "Go"},
 		Files: []FileResult{
-			{Path: "README.md", Classification: "clear-sync", PriorCommits: []string{"abc123"}, CanonReference: "govna @ v0.59.1: README.md", CompareCommand: "compare the embedded Govna file with the repository file: README.md"},
+			{Path: "README.md", Classification: "clear-sync", PriorCommits: []string{"abc123"}, CanonReference: "govna @ v0.60.0: README.md", CompareCommand: "compare the embedded Govna file with the repository file: README.md"},
 			{Path: "govna/canon-baseline.txt", Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt"},
 			{Path: "local.md", Classification: "target-has-no-canon", CanonReference: "name-referenced from divergent governed file", CompareCommand: "review local.md because it is not in the selected embedded Govna files"},
 			{Path: "plan.md", Classification: "expected-divergence"},
 		},
-		Emitted: &Emitted{ACStub: "govna/ac7-audit-v0.59.1.md"},
+		Emitted: &Emitted{ACStub: "govna/ac7-audit-v0.60.0.md"},
 	}
 	markdown, err := os.ReadFile("testdata/actionable-golden.md")
 	if err != nil {
@@ -1389,7 +1399,7 @@ func TestExistingAndMissingBaselineClassification(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		data = bytes.Replace(data, []byte("canon_version = v0.59.1\n"), []byte("canon_version = v0.41.0\n"), 1)
+		data = bytes.Replace(data, []byte("canon_version = v0.60.0\n"), []byte("canon_version = v0.41.0\n"), 1)
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -1405,7 +1415,7 @@ func TestExistingAndMissingBaselineClassification(t *testing.T) {
 		if disposition.kind != validationInferred || !strings.Contains(disposition.evidence, "`./build.sh`") {
 			t.Fatalf("validation disposition=%+v", disposition)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", disposition)
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", disposition)
 		if !strings.Contains(body, "### Files ready to update\n\n- `govna/canon-baseline.txt` — `clear-sync`: the file still matches the previously installed Govna version and is safe to update.") || !strings.Contains(body, "## Migration findings\n\n- None.") {
 			t.Fatalf("body=%s", body)
 		}
@@ -1423,7 +1433,7 @@ func TestExistingAndMissingBaselineClassification(t *testing.T) {
 		if baseline.Classification != "migration-required" {
 			t.Fatalf("baseline=%+v", baseline)
 		}
-		body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+		body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 		want := "- Write `govna/canon-baseline.txt` from the final temporary render only after all other work is complete and the repository check succeeds."
 		if !strings.Contains(body, want) {
 			t.Fatalf("body=%s", body)
@@ -1669,7 +1679,7 @@ func TestUnresolvedValidationGolden(t *testing.T) {
 			{Path: "plan.md", Classification: "preserve"},
 		},
 	}
-	body := buildAC(report, "govna/ac7-audit-v0.59.1.md", outcome)
+	body := buildAC(report, "govna/ac7-audit-v0.60.0.md", outcome)
 	want, err := os.ReadFile("testdata/unresolved-validation-golden.md")
 	if err != nil {
 		t.Fatal(err)
@@ -1700,14 +1710,14 @@ func TestUnresolvedValidationGolden(t *testing.T) {
 
 func TestInferredValidationOmitsManualRouting(t *testing.T) {
 	report := Report{Header: Header{Flavor: "code", RepoName: "widget"}, Files: []FileResult{{Path: baselinePath, Classification: "clear-sync"}}}
-	code := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+	code := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 	for _, absent := range []string{"**Repository check**:", "Choose the repository check in chat."} {
 		if strings.Contains(code, absent) {
 			t.Fatalf("inferred CODE emission contains %q: %s", absent, code)
 		}
 	}
 	report.Header.Flavor = "doc"
-	doc := buildAC(report, "govna/ac1-audit-v0.59.1.md", notApplicableOutcome("`Not applicable` inferred from exact DOC governance evidence", "inferred from exact DOC governance evidence"))
+	doc := buildAC(report, "govna/ac1-audit-v0.60.0.md", notApplicableOutcome("`Not applicable` inferred from exact DOC governance evidence", "inferred from exact DOC governance evidence"))
 	for _, absent := range []string{"**Repository check**:", "Choose the repository check in chat."} {
 		if strings.Contains(doc, absent) {
 			t.Fatalf("inferred DOC emission contains %q: %s", absent, doc)
@@ -1717,8 +1727,8 @@ func TestInferredValidationOmitsManualRouting(t *testing.T) {
 
 func TestEmittedSummaryAndFlavorInstructions(t *testing.T) {
 	report := Report{Header: Header{Flavor: "code", RepoName: "widget"}, Files: []FileResult{{Path: "README.md", Classification: "clear-sync"}, {Path: "local.md", Classification: "ambiguity"}, {Path: "plan.md", Classification: "preserve"}}}
-	body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
-	wantPrefix := "# AC1 Adopt Govna Governance Files v0.59.1\n\n## Summary\n\nThis AC updates `widget` to Govna's embedded governance files (canon v0.59.1). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.\n\nGovna found 1 file ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.\n\n## In Scope"
+	body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
+	wantPrefix := "# AC1 Adopt Govna Governance Files v0.60.0\n\n## Summary\n\nThis AC updates `widget` to Govna's embedded governance files (canon v0.60.0). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.\n\nGovna found 1 file ready to update, 0 required control files to add, 1 file needing a Director decision, and 1 file that will stay unchanged.\n\n## In Scope"
 	if !strings.HasPrefix(body, wantPrefix) {
 		t.Fatalf("summary=%s", body)
 	}
@@ -1730,7 +1740,7 @@ func TestEmittedSummaryAndFlavorInstructions(t *testing.T) {
 		t.Fatalf("CODE instruction missing: %s", body)
 	}
 	report.Header.Flavor = "doc"
-	doc := buildAC(report, "govna/ac1-audit-v0.59.1.md", notApplicableOutcome("`Not applicable`", ""))
+	doc := buildAC(report, "govna/ac1-audit-v0.60.0.md", notApplicableOutcome("`Not applicable`", ""))
 	if !strings.HasPrefix(doc, wantPrefix) {
 		t.Fatalf("DOC summary=%s", doc)
 	}
@@ -1751,7 +1761,7 @@ func TestEmittedSummaryAndFlavorInstructions(t *testing.T) {
 			{Path: "plan.md", Classification: "expected-divergence"},
 		},
 	}
-	plural := buildAC(pluralReport, "govna/ac2-audit-v0.59.1.md", inferredBuildOutcome())
+	plural := buildAC(pluralReport, "govna/ac2-audit-v0.60.0.md", inferredBuildOutcome())
 	wantCounts := "Govna found 2 files ready to update, 1 required control file to add, 0 files needing a Director decision, and 2 files that will stay unchanged.\n\n## In Scope"
 	if !strings.Contains(plural, wantCounts) {
 		t.Fatalf("plural summary=%s", plural)
@@ -1762,14 +1772,14 @@ func TestGeneratedInstructionBranches(t *testing.T) {
 	report := Report{
 		Header: Header{Flavor: "code", RepoName: "widget"},
 		Files: []FileResult{
-			{Path: "AGENTS.md", Classification: "ambiguity", Boundary: "## Project Rules", protectedHash: "abc123", forceSync: true, CanonReference: "govna @ v0.59.1: AGENTS.md", LegacyPreserveMarkers: []string{"do not sync AGENTS.md"}},
+			{Path: "AGENTS.md", Classification: "ambiguity", Boundary: "## Project Rules", protectedHash: "abc123", forceSync: true, CanonReference: "govna @ v0.60.0: AGENTS.md", LegacyPreserveMarkers: []string{"do not sync AGENTS.md"}},
 			{Path: baselinePath, Classification: "migration-required"},
 			{Path: "govna/metadata.txt", Classification: "migration-required"},
 			{Path: "govna/other.md", Classification: "migration-required"},
-			{Path: "local.md", Classification: "ambiguity", CanonReference: "govna @ v0.59.1: local.md", LegacyPreserveMarkers: []string{"preserve local.md"}},
+			{Path: "local.md", Classification: "ambiguity", CanonReference: "govna @ v0.60.0: local.md", LegacyPreserveMarkers: []string{"preserve local.md"}},
 		},
 	}
-	body := buildAC(report, "govna/ac1-audit-v0.59.1.md", inferredBuildOutcome())
+	body := buildAC(report, "govna/ac1-audit-v0.60.0.md", inferredBuildOutcome())
 	for _, want := range []string{
 		"- Confirm each file selected for update exists in the selected CODE render.",
 		"- Apply each Director choice only to its authorized file region.",
@@ -1806,7 +1816,7 @@ func TestGeneratedInstructionBranches(t *testing.T) {
 		}
 	}
 	report.Header.Flavor = "doc"
-	if doc := buildAC(report, "govna/ac1-audit-v0.59.1.md", notApplicableOutcome("`Not applicable`", "")); strings.Contains(doc, "selected CODE render") {
+	if doc := buildAC(report, "govna/ac1-audit-v0.60.0.md", notApplicableOutcome("`Not applicable`", "")); strings.Contains(doc, "selected CODE render") {
 		t.Errorf("DOC body contains CODE reachability instruction: %s", doc)
 	}
 }
@@ -2143,4 +2153,381 @@ func TestAuditIgnoresNameReferencedConsumerACDocuments(t *testing.T) {
 			t.Fatalf("%s: got %+v, want name-referenced target-has-no-canon", path, file)
 		}
 	}
+}
+
+func auditSentinel(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "sentinel.md")
+	if err := os.WriteFile(path, []byte("sentinel content\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertAuditSentinel(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "sentinel content\n" {
+		t.Fatalf("sentinel changed: %q err=%v", data, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("sentinel mode changed: %v err=%v", info.Mode(), err)
+	}
+}
+
+func runAuditExpectingFailure(t *testing.T, root string, args []string, want string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	code := Run(args, &stdout, &stderr, root, testProgramVersion)
+	if code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), want) {
+		t.Fatalf("args=%v code=%d stdout=%q stderr=%q want %q", args, code, stdout.String(), stderr.String(), want)
+	}
+}
+
+func auditStubs(t *testing.T, root string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return matches
+}
+
+func failReads(t *testing.T, rel string) {
+	t.Helper()
+	original := repository.ReadHook
+	t.Cleanup(func() { repository.ReadHook = original })
+	repository.ReadHook = func(r *os.Root, name string) ([]byte, error) {
+		if name == rel {
+			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+		}
+		return original(r, name)
+	}
+}
+
+func TestBaselineRejectsMalformedPathsBeforeInspection(t *testing.T) {
+	hash := strings.Repeat("0", 64)
+	for _, tc := range []struct{ name, entry, want string }{
+		{"absolute", "/etc/passwd", `entry "/etc/passwd" is an absolute path`},
+		{"backslash", `govna\audit.md`, "contains a backslash"},
+		{"control character", "govna/a\x01b.md", "contains a control character"},
+		{"empty component", "govna//audit.md", "contains an empty path component"},
+		{"trailing slash", "govna/audit.md/", "contains an empty path component"},
+		{"dot component", "./README.md", `contains a "." component`},
+		{"traversal", "../secret.md", `contains a ".." component`},
+	} {
+		for _, args := range [][]string{nil, {"--json"}} {
+			t.Run(tc.name+fmt.Sprint(args), func(t *testing.T) {
+				root := fixture(t)
+				content := "govna-canon-baseline-v1\ncanon_version = v" + canon.Version + "\n" + tc.entry + "\tfull\t" + hash + "\n"
+				if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(baselinePath)), []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				runAuditExpectingFailure(t, root, args, "audit: invalid govna/canon-baseline.txt: entry")
+				runAuditExpectingFailure(t, root, args, tc.want)
+				runAuditExpectingFailure(t, root, args, "correct the entry to a normalized repository-relative path before retrying")
+				if stubs := auditStubs(t, root); len(stubs) != 0 {
+					t.Fatalf("AC emitted after invalid baseline: %v", stubs)
+				}
+			})
+		}
+	}
+}
+
+func TestEscapingEvidenceAndLinkedInputsDoNotDiscloseContent(t *testing.T) {
+	t.Run("escaping references and phrases are not evidence", func(t *testing.T) {
+		root := fixture(t)
+		sentinel := filepath.Join(filepath.Dir(root), "sentinel.md")
+		if err := os.WriteFile(sentinel, []byte("sentinel content\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		replaceFileText(t, filepath.Join(root, "AGENTS.md"), "# AGENTS.md", "# AGENTS.md\n\nSee govna/../../sentinel.md and govna/../sentinel.md.")
+		replaceFileText(t, filepath.Join(root, "CHANGELOG.md"), "| Unreleased | |", "| Unreleased | preserve ../sentinel.md |")
+		data, err := os.ReadFile(filepath.Join(root, "CHANGELOG.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "CHANGELOG.md"), append(data, []byte("\n## Unreleased\n\ndo not sync ../sentinel.md\n")...), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		report, body := runAuditFixture(t, root, []string{"--json"})
+		encoded, err := json.Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range report.Files {
+			if strings.Contains(file.Path, "sentinel") {
+				t.Fatalf("escaping path became evidence: %+v", file)
+			}
+		}
+		if strings.Contains(string(encoded), "sentinel content") || strings.Contains(body, "sentinel") {
+			t.Fatalf("external content disclosed\n%s\n%s", encoded, body)
+		}
+		assertAuditSentinel(t, sentinel)
+	})
+	t.Run("linked governed input", func(t *testing.T) {
+		root := fixture(t)
+		sentinel := auditSentinel(t)
+		if err := os.Remove(filepath.Join(root, "README.md")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(sentinel, filepath.Join(root, "README.md")); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{nil, {"--json"}} {
+			runAuditExpectingFailure(t, root, args, "audit: inspect README.md: README.md is a symbolic link; replace the link with a regular file and retry")
+		}
+		if stubs := auditStubs(t, root); len(stubs) != 0 {
+			t.Fatalf("AC emitted after linked input: %v", stubs)
+		}
+		assertAuditSentinel(t, sentinel)
+	})
+	t.Run("linked target-only candidate", func(t *testing.T) {
+		root := fixture(t)
+		sentinel := auditSentinel(t)
+		if err := os.Symlink(sentinel, filepath.Join(root, "govna", "release.md")); err != nil {
+			t.Fatal(err)
+		}
+		runAuditExpectingFailure(t, root, nil, "audit: inspect govna/release.md: govna/release.md is a symbolic link; replace the link with a regular file and retry")
+		assertAuditSentinel(t, sentinel)
+	})
+	t.Run("linked control registry", func(t *testing.T) {
+		root := fixture(t)
+		sentinel := auditSentinel(t)
+		if err := os.Symlink(sentinel, filepath.Join(root, filepath.FromSlash(preservePath))); err != nil {
+			t.Fatal(err)
+		}
+		runAuditExpectingFailure(t, root, nil, "audit: inspect govna/preserve.txt: govna/preserve.txt is a symbolic link; replace the link with a regular file and retry")
+		assertAuditSentinel(t, sentinel)
+	})
+}
+
+func TestInspectionFailuresStopAuditBeforeEmission(t *testing.T) {
+	t.Run("permission failure keeps the existing emitted AC", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.Remove(filepath.Join(root, "govna", "roles.md")); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr bytes.Buffer
+		if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 0 {
+			t.Fatalf("code=%d stderr=%s", code, stderr.String())
+		}
+		stubs := auditStubs(t, root)
+		if len(stubs) != 1 {
+			t.Fatalf("stubs=%v", stubs)
+		}
+		before, err := os.ReadFile(stubs[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		failReads(t, "README.md")
+		for _, args := range [][]string{nil, {"--json"}} {
+			runAuditExpectingFailure(t, root, args, "audit: inspect README.md: open README.md: permission denied; fix the file's permissions or type and re-run audit")
+		}
+		after, err := os.ReadFile(stubs[0])
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("emitted AC changed after failed audit: err=%v", err)
+		}
+		if again := auditStubs(t, root); len(again) != 1 {
+			t.Fatalf("stubs after failure=%v", again)
+		}
+	})
+	t.Run("preserved unreadable file still fails", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(preservePath)), []byte("govna-preserve-v1\nREADME.md\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		failReads(t, "README.md")
+		runAuditExpectingFailure(t, root, nil, "audit: inspect README.md: open README.md: permission denied")
+	})
+	t.Run("absent preserved file remains match", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(preservePath)), []byte("govna-preserve-v1\nREADME.md\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(root, "README.md")); err != nil {
+			t.Fatal(err)
+		}
+		report, clean, err := inspect(Config{DiffLines: 200, invocation: "govna audit"}, root)
+		if err != nil || !clean {
+			t.Fatalf("clean=%v err=%v", clean, err)
+		}
+		if file := reportFile(t, report, "README.md"); file.Classification != "match" || file.targetPresent {
+			t.Fatalf("absent preserved file=%+v", file)
+		}
+	})
+	t.Run("directory at governed path", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.Remove(filepath.Join(root, "govna", "roles.md")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(root, "govna", "roles.md"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runAuditExpectingFailure(t, root, []string{"--json"}, "audit: inspect govna/roles.md: govna/roles.md is a directory, not a regular file; move the directory aside and retry")
+		if stubs := auditStubs(t, root); len(stubs) != 0 {
+			t.Fatalf("AC emitted after directory failure: %v", stubs)
+		}
+	})
+	t.Run("special file at governed path fails before reading", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.Remove(filepath.Join(root, "README.md")); err != nil {
+			t.Fatal(err)
+		}
+		if err := syscall.Mkfifo(filepath.Join(root, "README.md"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		runAuditExpectingFailure(t, root, nil, "audit: inspect README.md: README.md is not a regular file; remove the special file and retry")
+	})
+	t.Run("unreadable legacy phrase target", func(t *testing.T) {
+		root := fixture(t)
+		if err := os.WriteFile(filepath.Join(root, "marker.md"), []byte("local marker\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		replaceFileText(t, filepath.Join(root, "CHANGELOG.md"), "| Unreleased | |", "| Unreleased | preserve marker.md |")
+		failReads(t, "marker.md")
+		runAuditExpectingFailure(t, root, nil, "audit: inspect marker.md: open marker.md: permission denied")
+	})
+	t.Run("valid older baseline still classifies", func(t *testing.T) {
+		root := fixture(t)
+		replaceFileText(t, filepath.Join(root, filepath.FromSlash(baselinePath)), "canon_version = v"+canon.Version+"\n", "canon_version = v0.41.0\n")
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(baselinePath)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+		entries := append(lines[2:], "govna/retired-canon.md\tfull\t"+strings.Repeat("a", 64))
+		sort.Strings(entries)
+		sorted := strings.Join(append(lines[:2], entries...), "\n") + "\n"
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(baselinePath)), []byte(sorted), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "govna", "retired-canon.md"), []byte("retired\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		report, clean, err := inspect(Config{DiffLines: 200, invocation: "govna audit"}, root)
+		if err != nil || clean {
+			t.Fatalf("clean=%v err=%v", clean, err)
+		}
+		if file := reportFile(t, report, "govna/retired-canon.md"); file.Classification != "target-has-no-canon" || file.CanonReference != "present in prior canon baseline" {
+			t.Fatalf("retired entry=%+v", file)
+		}
+	})
+}
+
+func TestLegacyPhrasesInUnreleasedTableRow(t *testing.T) {
+	markers := func(t *testing.T, changelog string) map[string][]string {
+		t.Helper()
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "CHANGELOG.md"), []byte(changelog), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		access, err := repository.Open(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer access.Close()
+		got, err := legacyMarkers(access)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	want := map[string][]string{
+		"README.md":  {"preserve README.md"},
+		"plan.md":    {"do not sync plan.md"},
+		"govna/x.md": {"intentional divergence: govna/x.md"},
+		"govna/y.md": {"govna/y.md: keep local"},
+	}
+	for _, tc := range []struct{ name, eol string }{{"lf", "\n"}, {"crlf", "\r\n"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			changelog := strings.Join([]string{
+				"# Changelog",
+				"",
+				"| Version | Summary |",
+				"|---------|---------|",
+				`| Unreleased | escaped \| pipe; preserve README.md; do not sync plan.md; intentional divergence: govna/x.md; govna/y.md: keep local |`,
+				"| 1.0.0 | preserve CHANGELOG.md |",
+				"",
+				"## Notes",
+				"",
+				"preserve arch.md",
+				"",
+			}, tc.eol)
+			if got := markers(t, changelog); !reflect.DeepEqual(got, want) {
+				t.Fatalf("markers=%v want %v", got, want)
+			}
+		})
+	}
+	t.Run("combined sources deduplicate", func(t *testing.T) {
+		got := markers(t, "# Changelog\n\n| Version | Summary |\n|---|---|\n| Unreleased | preserve README.md |\n\n## Unreleased\n\npreserve README.md\ndo not sync plan.md\n")
+		if !reflect.DeepEqual(got, map[string][]string{"README.md": {"preserve README.md"}, "plan.md": {"do not sync plan.md"}}) {
+			t.Fatalf("combined markers=%v", got)
+		}
+	})
+	t.Run("summary cell parsing", func(t *testing.T) {
+		for _, tc := range []struct{ line, cell string }{
+			{"| Unreleased | |", " "},
+			{"| Unreleased | plain summary |", " plain summary "},
+			{`| Unreleased | a \| b |`, " a | b "},
+			{`| Unreleased | edge \\| case |`, ` edge \| case `},
+			{"| Unreleased | unterminated", " unterminated"},
+		} {
+			cell, ok := unreleasedSummaryCell("# Changelog\n\n| Version | Summary |\n|---|---|\n" + tc.line + "\n| 1.0.0 | old |\n")
+			if !ok || cell != tc.cell {
+				t.Errorf("%q cell=%q ok=%v want %q", tc.line, cell, ok, tc.cell)
+			}
+		}
+		if _, ok := unreleasedSummaryCell("# Changelog\n\n| 1.0.0 | old |\n"); ok {
+			t.Error("missing Unreleased row produced a cell")
+		}
+	})
+	t.Run("end to end matches across modes", func(t *testing.T) {
+		var bodies []string
+		for _, args := range [][]string{nil, {"--json"}} {
+			root := fixture(t)
+			replaceFileText(t, filepath.Join(root, "CHANGELOG.md"), "| Unreleased | |", "| Unreleased | preserve README.md |")
+			changelogBefore, err := os.ReadFile(filepath.Join(root, "CHANGELOG.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			if code := Run(args, &stdout, &stderr, root, testProgramVersion); code != 0 || stderr.Len() != 0 {
+				t.Fatalf("args=%v code=%d stderr=%s", args, code, stderr.String())
+			}
+			stubs := auditStubs(t, root)
+			if len(stubs) != 1 {
+				t.Fatalf("stubs=%v", stubs)
+			}
+			body, err := os.ReadFile(stubs[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			bodies = append(bodies, string(body))
+			line := lineContaining(t, string(body), "**`README.md`**:")
+			if !strings.Contains(line, "convert the exact legacy phrase") {
+				t.Fatalf("table-row phrase not routed: %s", line)
+			}
+			changelogAfter, err := os.ReadFile(filepath.Join(root, "CHANGELOG.md"))
+			if err != nil || !bytes.Equal(changelogBefore, changelogAfter) {
+				t.Fatalf("changelog changed during audit: err=%v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(preservePath))); err == nil {
+				t.Fatal("preserve registry created during audit")
+			}
+			if len(args) > 0 {
+				var report Report
+				if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+					t.Fatal(err)
+				}
+				if file := reportFile(t, report, "README.md"); !reflect.DeepEqual(file.LegacyPreserveMarkers, []string{"preserve README.md"}) {
+					t.Fatalf("JSON markers=%v", file.LegacyPreserveMarkers)
+				}
+			}
+		}
+		if bodies[0] != bodies[1] {
+			t.Fatalf("ordinary and JSON emissions differ\n%s\n%s", bodies[0], bodies[1])
+		}
+	})
 }

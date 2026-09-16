@@ -1,9 +1,12 @@
 package repository
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -136,4 +139,240 @@ func TestAdoptionErrorNamesAcceptedEvidence(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Govna could not find the files that confirm Govna was added") || !strings.Contains(err.Error(), "govna/ac-template.md") || !strings.Contains(err.Error(), "CHANGELOG.md") {
 		t.Fatalf("err=%v", err)
 	}
+}
+
+func TestValidatePath(t *testing.T) {
+	for _, valid := range []string{"README.md", "govna/audit.md", "a/b/c.txt", ".gitignore"} {
+		if err := ValidatePath(valid); err != nil {
+			t.Errorf("%q rejected: %v", valid, err)
+		}
+	}
+	for _, tc := range []struct{ path, want string }{
+		{"", "is empty"},
+		{"/etc/passwd", "is an absolute path"},
+		{`govna\audit.md`, "contains a backslash"},
+		{"govna/a\x01b.md", "contains a control character"},
+		{"govna//audit.md", "contains an empty path component"},
+		{"govna/audit.md/", "contains an empty path component"},
+		{"./govna/audit.md", `contains a "." component`},
+		{"../secret.md", `contains a ".." component`},
+		{"govna/../../secret.md", `contains a ".." component`},
+	} {
+		if err := ValidatePath(tc.path); err == nil || err.Error() != tc.want {
+			t.Errorf("%q err=%v want %q", tc.path, err, tc.want)
+		}
+	}
+}
+
+func newSentinel(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "sentinel.md")
+	if err := os.WriteFile(path, []byte("sentinel\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertSentinel(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "sentinel\n" {
+		t.Fatalf("sentinel changed: %q err=%v", data, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("sentinel mode changed: %v err=%v", info.Mode(), err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("sentinel directory gained entries: %v err=%v", entries, err)
+	}
+}
+
+func TestOpenResolvesRootAlias(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Fatal(err)
+	}
+	access, err := Open(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer access.Close()
+	want, err := filepath.EvalSymlinks(real)
+	if err != nil || access.Dir() != want {
+		t.Fatalf("dir=%s want %s err=%v", access.Dir(), want, err)
+	}
+	if err := access.WriteFile("nested/dir/file.txt", []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(real, "nested", "dir", "file.txt")); err != nil || string(got) != "x\n" {
+		t.Fatalf("nested write got=%q err=%v", got, err)
+	}
+	if regular, err := access.Regular("nested/dir/file.txt"); err != nil || !regular {
+		t.Fatalf("regular=%v err=%v", regular, err)
+	}
+	if regular, err := access.Regular("nested/absent.txt"); err != nil || regular {
+		t.Fatalf("absent regular=%v err=%v", regular, err)
+	}
+}
+
+func TestPreflightRejectsLinksAndNonRegularEntries(t *testing.T) {
+	root := t.TempDir()
+	sentinel := newSentinel(t)
+	at := func(name string) string { return filepath.Join(root, filepath.FromSlash(name)) }
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.Mkdir(at("docs"), 0o755))
+	must(os.WriteFile(at("docs/readme.md"), []byte("inside\n"), 0o644))
+	must(os.Symlink(sentinel, at("escaping.md")))
+	must(os.Symlink("docs/readme.md", at("inside.md")))
+	must(os.Symlink("missing.md", at("dangling.md")))
+	must(os.Symlink("escaping.md", at("hop.md")))
+	must(os.Symlink(filepath.Dir(sentinel), at("linkdir")))
+	must(os.Mkdir(at("dir.md"), 0o755))
+	must(os.WriteFile(at("notdir"), []byte("file\n"), 0o644))
+	must(syscall.Mkfifo(at("fifo.md"), 0o600))
+	access, err := Open(root)
+	must(err)
+	defer access.Close()
+	for _, tc := range []struct{ rel, want string }{
+		{"escaping.md", "escaping.md is a symbolic link; replace the link with a regular file and retry"},
+		{"inside.md", "inside.md is a symbolic link; replace the link with a regular file and retry"},
+		{"dangling.md", "dangling.md is a symbolic link; replace the link with a regular file and retry"},
+		{"hop.md", "hop.md is a symbolic link; replace the link with a regular file and retry"},
+		{"linkdir/file.md", "linkdir is a symbolic link; replace the link with a real directory and retry"},
+		{"dir.md", "dir.md is a directory, not a regular file; move the directory aside and retry"},
+		{"notdir/file.md", "notdir is not a directory; move the file aside and retry"},
+		{"fifo.md", "fifo.md is not a regular file; remove the special file and retry"},
+		{"../outside.md", `../outside.md contains a ".." component; use a normalized repository-relative path`},
+	} {
+		err := access.Preflight(tc.rel, false)
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("%s err=%v want %q", tc.rel, err, tc.want)
+		}
+		if _, ok := errors.AsType[*PathError](err); !ok {
+			t.Errorf("%s error is not a PathError", tc.rel)
+		}
+		if _, readErr := access.ReadFile(tc.rel); readErr == nil || readErr.Error() != tc.want {
+			t.Errorf("%s read err=%v", tc.rel, readErr)
+		}
+		if writeErr := access.WriteFile(tc.rel, []byte("x\n"), 0o644); writeErr == nil || writeErr.Error() != tc.want {
+			t.Errorf("%s write err=%v", tc.rel, writeErr)
+		}
+	}
+	for _, ok := range []string{"docs/readme.md", "docs/new.md", "new/deep/file.md"} {
+		if err := access.Preflight(ok, false); err != nil {
+			t.Errorf("%s rejected: %v", ok, err)
+		}
+	}
+	if err := access.Preflight("inside.md", true); err != nil {
+		t.Errorf("allowed leaf link rejected: %v", err)
+	}
+	if err := access.Preflight("linkdir/file.md", true); err == nil {
+		t.Error("allowLink accepted a linked directory component")
+	}
+	if got, err := os.ReadFile(at("docs/readme.md")); err != nil || string(got) != "inside\n" {
+		t.Fatalf("in-repository link target changed: %q err=%v", got, err)
+	}
+	assertSentinel(t, sentinel)
+}
+
+func TestContainedAccessRejectsSubstitutionAfterPreflight(t *testing.T) {
+	root := t.TempDir()
+	sentinel := newSentinel(t)
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.WriteFile(filepath.Join(root, "README.md"), []byte("inside\n"), 0o644))
+	must(os.Mkdir(filepath.Join(root, "govna"), 0o755))
+	access, err := Open(root)
+	must(err)
+	defer access.Close()
+	must(access.Preflight("README.md", false))
+	must(access.Preflight("govna/audit.md", false))
+	must(os.Remove(filepath.Join(root, "README.md")))
+	must(os.Symlink(sentinel, filepath.Join(root, "README.md")))
+	must(os.Remove(filepath.Join(root, "govna")))
+	must(os.Symlink(filepath.Dir(sentinel), filepath.Join(root, "govna")))
+	if data, err := access.readContained("README.md"); err == nil {
+		t.Fatalf("contained read followed a substituted link: %q", data)
+	}
+	if err := access.writeContained("README.md", []byte("x\n"), 0o644); err == nil {
+		t.Fatal("contained write followed a substituted link")
+	}
+	if err := access.writeContained("govna/audit.md", []byte("x\n"), 0o644); err == nil {
+		t.Fatal("contained write followed a substituted directory link")
+	}
+	assertSentinel(t, sentinel)
+}
+
+func TestReadHookInjectsDeterministicFailures(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("inside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	original := ReadHook
+	t.Cleanup(func() { ReadHook = original })
+	ReadHook = func(r *os.Root, rel string) ([]byte, error) {
+		if rel == "README.md" {
+			return nil, &fs.PathError{Op: "open", Path: rel, Err: fs.ErrPermission}
+		}
+		return original(r, rel)
+	}
+	access, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer access.Close()
+	if _, err := access.ReadFile("README.md"); !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("read err=%v", err)
+	}
+	if _, present, err := access.ReadOptional("README.md"); present || !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("optional present=%v err=%v", present, err)
+	}
+	if _, present, err := access.ReadOptional("absent.md"); present || err != nil {
+		t.Fatalf("absent present=%v err=%v", present, err)
+	}
+}
+
+func TestAuditPreconditionsRejectLinkedAgents(t *testing.T) {
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "real.md"), []byte("ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("real.md", filepath.Join(d, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireAdopted(d); err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("linked AGENTS.md accepted: %v", err)
+	}
+}
+
+func TestFlavorRejectsLinkedMetadata(t *testing.T) {
+	root := t.TempDir()
+	sentinel := newSentinel(t)
+	if err := os.Mkdir(filepath.Join(root, "govna"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sentinel, filepath.Join(root, "govna", "metadata.txt")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Flavor(root, "")
+	if err == nil || !strings.Contains(err.Error(), "govna/metadata.txt is a symbolic link; replace the link with a regular file and retry") {
+		t.Fatalf("linked metadata err=%v", err)
+	}
+	assertSentinel(t, sentinel)
 }

@@ -117,7 +117,7 @@ Flags:
 - `-m, --module-path <path>` — set the Go module path; otherwise read it from `go.mod`.
 - `-g, --init-git` — initialize Git on `main` when the target is not already a repository.
 
-For an existing repository, apply keeps designated repository-owned files, merges registered governance boundaries, and reports every outcome in the adoption AC. After adoption, the repository owns its generated files and may adapt them to local needs.
+Apply keeps an existing `README.md`, `CHANGELOG.md`, `arch.md`, or `plan.md`, merges every registered governance boundary whether or not an agent instruction file already exists, recognizes a boundary with LF or CRLF line endings, and reports every outcome in the adoption AC. Before writing anything, apply validates every destination: it rejects a symbolic link at a managed path or intermediate directory (the `CLAUDE.md` alias link excepted), a directory or special file where a regular file belongs, and any path outside the target, naming the path and the recovery action. Every read and write runs through a handle contained in the resolved target. After adoption, the repository owns its generated files and may adapt them to local needs.
 
 ### `audit`
 
@@ -128,6 +128,8 @@ govna audit
 ```
 
 Audit reads the repository metadata and its baseline, the saved hashes of Govna-managed file regions previously installed there. It also reads the optional preserve registry, the list of files a Director chose to keep local. Each file receives a classification, which is the exact result label explaining its state. When Govna cannot safely act, the emitted AC asks for a routing decision: a Director choice to update, keep, migrate, or remove the file. The AC also records the repository check, meaning the command to run after updates or the reason no command applies. Audit does not make those choices or modify existing governed content.
+
+Audit reads every governed path without following links. It stops before emission, naming the path and its recovery action, when a path is a link, a directory, a special file, or unreadable, or when the saved baseline holds an entry that is not a normalized repository-relative path. Preserve phrases are read from the canonical Unreleased table row as well as from a legacy `## Unreleased` section.
 
 Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
 
@@ -155,7 +157,7 @@ Write the selected CODE or DOC built-in governance files to a target directory f
 govna render --flavor code --stack Go --module-path example.com/my-service <target>
 ```
 
-Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned.
+Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned. Render validates destinations the same way apply does, rejects links, directories, and special files at managed paths before writing anything, and replaces a regular `CLAUDE.md` file with the alias link.
 
 ### `version`
 
@@ -185,6 +187,8 @@ CODE repositories can select only Go, Rust, Swift, and Terraform because those s
 ## Design
 
 Govna is a standard-library-only Go module. It keeps every governance template inside the executable, so adding or rendering Govna files needs no runtime package, network service, submodule, or separate template checkout.
+
+Every command reaches repository files through one contained-access helper in `internal/repository`. It validates each path as normalized and repository-relative, rejects symbolic links at managed paths, and performs each operation through a handle rooted at the resolved target, so a link substituted after preflight cannot escape it.
 
 The canonical build checks generated apply, audit, and removal ACs for direct imperative instructions, one action per instruction, expected wording, and every expected output branch. These language checks run separately from byte-for-byte fixture comparisons.
 

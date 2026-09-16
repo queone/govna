@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -35,7 +36,13 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		fmt.Fprintf(stderr, "apply: Govna files cannot be added inside the Govna source checkout at %s; run this command from the target repository\n", cwd)
 		return 1
 	}
-	a, err := assess(cwd)
+	access, err := repository.Open(cwd)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: open target %s: %v\n", cwd, err)
+		return 1
+	}
+	defer access.Close()
+	a, err := assess(cwd, access)
 	if err != nil {
 		fmt.Fprintf(stderr, "apply: scan target repo: %v\n", err)
 		return 1
@@ -83,9 +90,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 			return 2
 		}
 	}
-	mode := "new"
-	if exists(filepath.Join(cwd, "AGENTS.md")) || exists(filepath.Join(cwd, "CLAUDE.md")) {
-		mode = "existing"
+	if present(access, "AGENTS.md") || present(access, "CLAUDE.md") {
 		fmt.Fprintln(stderr, "existing governance files detected; Govna will report whether each file is written, merged, or preserved")
 	}
 	name := repository.Name(cwd, module, cfg.RepoName)
@@ -94,11 +99,20 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		fmt.Fprintf(stderr, "apply: %v\n", err)
 		return 1
 	}
+	for _, file := range files {
+		if err := access.Preflight(file.Path, false); err != nil {
+			fmt.Fprintf(stderr, "apply: check destination %s: %v\n", file.Path, err)
+			return 1
+		}
+	}
+	if err := access.Preflight("CLAUDE.md", true); err != nil {
+		fmt.Fprintf(stderr, "apply: check destination CLAUDE.md: %v\n", err)
+		return 1
+	}
 	outcomes := []Outcome{}
 	for _, file := range files {
-		dest := filepath.Join(cwd, filepath.FromSlash(file.Path))
 		label := "written"
-		if mode == "existing" && exists(dest) {
+		if present(access, file.Path) {
 			switch file.Path {
 			case "README.md", "CHANGELOG.md", "arch.md", "plan.md":
 				label = "kept existing file"
@@ -106,15 +120,15 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 				outcomes = append(outcomes, Outcome{file.Path, label})
 				continue
 			}
-			if boundary := boundary(file.Path); boundary != "" {
-				old, e := os.ReadFile(dest)
+			if boundary, mixed := canon.Boundary(file.Path); mixed {
+				old, e := access.ReadFile(file.Path)
 				if e != nil {
-					fmt.Fprintf(stderr, "apply: read %s: %v\n", dest, e)
+					fmt.Fprintf(stderr, "apply: read %s: %v\n", file.Path, e)
 					return 1
 				}
-				merged, ok := merge(string(old), string(file.Content), boundary)
+				merged, ok := merge(old, file.Content, file.Path)
 				if ok {
-					file.Content = []byte(merged)
+					file.Content = merged
 					label = "updated Govna-managed section; kept repository-owned section"
 				} else if file.Path == "govna/build-release.md" {
 					label = "kept existing file; add the missing Govna/local boundary and merge the Govna-managed section manually"
@@ -127,28 +141,24 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 				}
 			}
 		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return fail(stderr, err)
-		}
 		perm := os.FileMode(0o644)
-		if filepath.Ext(dest) == ".sh" {
+		if path.Ext(file.Path) == ".sh" {
 			perm = 0o755
 		}
-		if err := os.WriteFile(dest, file.Content, perm); err != nil {
-			return fail(stderr, err)
+		if err := access.WriteFile(file.Path, file.Content, perm); err != nil {
+			fmt.Fprintf(stderr, "apply: write %s: %v\n", file.Path, err)
+			return 1
 		}
-		os.Chmod(dest, perm)
 		fmt.Fprintf(stdout, "wrote %s (Govna-managed file)\n", file.Path)
 		outcomes = append(outcomes, Outcome{file.Path, label})
 	}
 	symlink := "created"
-	claude := filepath.Join(cwd, "CLAUDE.md")
-	if info, err := os.Lstat(claude); err == nil && info.Mode().IsRegular() {
+	if info, err := access.Lstat("CLAUDE.md"); err == nil && info.Mode().IsRegular() {
 		symlink = "preserved"
 		fmt.Fprintln(stderr, "warning: CLAUDE.md exists as a regular file; expected symlink to AGENTS.md — delete the file and re-run to create the symlink")
 	} else {
-		_ = os.Remove(claude)
-		if err := os.Symlink("AGENTS.md", claude); err != nil {
+		_ = access.Remove("CLAUDE.md")
+		if err := access.Symlink("AGENTS.md", "CLAUDE.md"); err != nil {
 			return fail(stderr, err)
 		}
 		fmt.Fprintln(stdout, "symlink CLAUDE.md -> AGENTS.md")
@@ -159,8 +169,9 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	}
 	rel := fmt.Sprintf("govna/ac%d-govna-apply.md", n)
 	body := adoption(n, name, string(flavor), programVersion, outcomes, symlink)
-	if err := os.WriteFile(filepath.Join(cwd, rel), []byte(body), 0o644); err != nil {
-		return fail(stderr, err)
+	if err := access.WriteFile(rel, []byte(body), 0o644); err != nil {
+		fmt.Fprintf(stderr, "apply: write %s: %v\n", rel, err)
+		return 1
 	}
 	fmt.Fprintf(stdout, "wrote %s (review AC)\n", rel)
 	if cfg.InitGit {
@@ -180,7 +191,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	return 0
 }
 
-func assess(root string) (assessment, error) {
+func assess(root string, access *repository.Access) (assessment, error) {
 	a := assessment{shape: "empty", risk: "low"}
 	hasSource, hasManifest, hasLayout, hasDocMarker := false, false, false, false
 	files := []string{}
@@ -253,7 +264,7 @@ func assess(root string) (assessment, error) {
 	}
 	nonempty := 0
 	for _, rel := range expected {
-		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+		info, err := access.Lstat(rel)
 		if err != nil {
 			continue
 		}
@@ -308,23 +319,19 @@ func parse(args []string) (Config, error) {
 	}
 	return c, nil
 }
-func boundary(p string) string {
-	switch p {
-	case "AGENTS.md":
-		return "## Project Rules"
-	case "govna/build-release.md", "govna/development-guidelines.md", "govna/editing-guidelines.md":
-		return "## Project Practices"
+
+// merge joins the rendered canon zone above the registered boundary of path with the
+// existing file's boundary line and every byte after it, in either line-ending style.
+func merge(old, fresh []byte, path string) ([]byte, bool) {
+	head, ok := canon.ComparisonRegion(path, fresh)
+	if !ok {
+		return nil, false
 	}
-	return ""
-}
-func merge(old, fresh, b string) (string, bool) {
-	marker := "\n" + b + "\n"
-	a := strings.Index(fresh, marker)
-	z := strings.Index(old, marker)
-	if a < 0 || z < 0 {
-		return "", false
+	tail, ok := canon.ProtectedRegion(path, old)
+	if !ok {
+		return nil, false
 	}
-	return fresh[:a+1] + old[z+1:], true
+	return append(append([]byte{}, head...), tail...), true
 }
 func adoption(n int, name, flavor, programVersion string, out []Outcome, symlink string) string {
 	var b strings.Builder
@@ -346,5 +353,6 @@ func adoption(n int, name, flavor, programVersion string, out []Outcome, symlink
 	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
 	return b.String()
 }
-func exists(p string) bool          { _, e := os.Lstat(p); return e == nil }
-func fail(w io.Writer, e error) int { fmt.Fprintf(w, "apply: %v\n", e); return 1 }
+func exists(p string) bool                               { _, e := os.Lstat(p); return e == nil }
+func present(access *repository.Access, rel string) bool { _, e := access.Lstat(rel); return e == nil }
+func fail(w io.Writer, e error) int                      { fmt.Fprintf(w, "apply: %v\n", e); return 1 }

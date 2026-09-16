@@ -241,3 +241,131 @@ func TestRenderGoldenManifest(t *testing.T) {
 		}
 	}
 }
+
+func writeRenderFixture(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertRenderFixture(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != content {
+		t.Fatalf("%s content=%q err=%v", path, data, err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != mode {
+		t.Fatalf("%s mode=%v err=%v", path, info.Mode(), err)
+	}
+}
+
+func TestRenderRejectsUnsafeDestinationsBeforeWriting(t *testing.T) {
+	sentinel := filepath.Join(t.TempDir(), "sentinel.md")
+	writeRenderFixture(t, sentinel, "sentinel\n", 0o600)
+	outside := filepath.Dir(sentinel)
+	link := func(target, name string) func(string) {
+		return func(dir string) {
+			if err := os.Symlink(target, filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		setup func(string)
+		path  string
+		want  string
+	}{
+		{"escaping leaf link", link(sentinel, "plan.md"), "plan.md", "plan.md is a symbolic link; replace the link with a regular file and retry"},
+		{"linked intermediate directory", link(outside, "govna"), "govna/README.md", "govna is a symbolic link; replace the link with a real directory and retry"},
+		{"dangling link", link("missing.md", "plan.md"), "plan.md", "plan.md is a symbolic link; replace the link with a regular file and retry"},
+		{"multi-hop link", func(dir string) { link("hop.md", "plan.md")(dir); link(sentinel, "hop.md")(dir) }, "plan.md", "plan.md is a symbolic link; replace the link with a regular file and retry"},
+		{"in-repository link", func(dir string) {
+			writeRenderFixture(t, filepath.Join(dir, "docs", "plan.md"), "docs plan\n", 0o644)
+			link("docs/plan.md", "plan.md")(dir)
+		}, "plan.md", "plan.md is a symbolic link; replace the link with a regular file and retry"},
+		{"directory at file path", func(dir string) {
+			if err := os.Mkdir(filepath.Join(dir, "plan.md"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, "plan.md", "plan.md is a directory, not a regular file; move the directory aside and retry"},
+		{"directory at CLAUDE.md", func(dir string) {
+			if err := os.Mkdir(filepath.Join(dir, "CLAUDE.md"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, "CLAUDE.md", "CLAUDE.md is a directory, not a regular file; move the directory aside and retry"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cwd := t.TempDir()
+			target := filepath.Join(cwd, "out")
+			if err := os.Mkdir(target, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeRenderFixture(t, filepath.Join(target, "README.md"), "existing\n", 0o600)
+			tc.setup(target)
+			var stdout, stderr bytes.Buffer
+			code := Run([]string{"--flavor", "doc", "out"}, &stdout, &stderr, cwd)
+			want := "check destination " + filepath.Join(target, filepath.FromSlash(tc.path)) + ": " + tc.want + "\n"
+			if code != 1 || stdout.Len() != 0 || stderr.String() != want {
+				t.Fatalf("code=%d stdout=%q stderr=%q want %q", code, stdout.String(), stderr.String(), want)
+			}
+			assertRenderFixture(t, filepath.Join(target, "README.md"), "existing\n", 0o600)
+			if _, err := os.Lstat(filepath.Join(target, ".gitignore")); err == nil {
+				t.Fatal(".gitignore written before validation finished")
+			}
+			if tc.name != "directory at CLAUDE.md" {
+				if _, err := os.Lstat(filepath.Join(target, "CLAUDE.md")); err == nil {
+					t.Fatal("CLAUDE.md created before validation finished")
+				}
+			}
+			assertRenderFixture(t, sentinel, "sentinel\n", 0o600)
+			if entries, err := os.ReadDir(outside); err != nil || len(entries) != 1 {
+				t.Fatalf("sentinel directory gained entries: %v err=%v", entries, err)
+			}
+		})
+	}
+}
+
+func TestRenderReplacesRegularFilesAndAcceptsRootAlias(t *testing.T) {
+	cwd := t.TempDir()
+	real := filepath.Join(cwd, "real")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(cwd, "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Fatal(err)
+	}
+	writeRenderFixture(t, filepath.Join(real, "CLAUDE.md"), "old\n", 0o644)
+	writeRenderFixture(t, filepath.Join(real, "AGENTS.md"), "old\n", 0o600)
+	writeRenderFixture(t, filepath.Join(real, "keep.txt"), "keep\n", 0o600)
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"--flavor", "doc", "alias"}, &stdout, &stderr, cwd); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if stdout.String() != alias+"\n" {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+	if got, err := os.Readlink(filepath.Join(real, "CLAUDE.md")); err != nil || got != "AGENTS.md" {
+		t.Fatalf("CLAUDE.md link=%q err=%v", got, err)
+	}
+	agents, err := os.ReadFile(filepath.Join(real, "AGENTS.md"))
+	if err != nil || string(agents) == "old\n" {
+		t.Fatalf("AGENTS.md not replaced: err=%v", err)
+	}
+	if info, err := os.Lstat(filepath.Join(real, "AGENTS.md")); err != nil || info.Mode().Perm() != 0o644 {
+		t.Fatalf("AGENTS.md mode=%v err=%v", info.Mode(), err)
+	}
+	assertRenderFixture(t, filepath.Join(real, "keep.txt"), "keep\n", 0o600)
+	if _, err := os.Lstat(filepath.Join(real, "govna", "metadata.txt")); err != nil {
+		t.Fatalf("nested render missing: %v", err)
+	}
+}

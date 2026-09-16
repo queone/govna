@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -202,21 +204,22 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 			fmt.Fprintf(stderr, "audit: %v\n", err)
 			return 1
 		}
-		full := filepath.Join(cwd, filepath.FromSlash(path))
+		access, err := repository.Open(cwd)
+		if err != nil {
+			fmt.Fprintf(stderr, "audit: open target %s: %v\n", cwd, err)
+			return 1
+		}
+		defer access.Close()
 		if reused {
-			old, err := os.ReadFile(full)
+			old, err := access.ReadFile(path)
 			if err != nil || !emission.VerifyAuditBody(old) {
 				fmt.Fprintf(stderr, "audit: %s has been edited since last audit emission — to re-run, commit edits and delete the stub to regenerate, or rename the stub off the audit-v%s slug\n", path, canon.Version)
 				return 1
 			}
 		}
 		body := emission.AuditBody(programVersion, canon.Version, []byte(buildAC(report, path, validationDisposition(cwd, report))))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			fmt.Fprintf(stderr, "audit: %v\n", err)
-			return 1
-		}
-		if err := os.WriteFile(full, body, 0o644); err != nil {
-			fmt.Fprintf(stderr, "audit: %v\n", err)
+		if err := access.WriteFile(path, body, 0o644); err != nil {
+			fmt.Fprintf(stderr, "audit: write %s: %v\n", path, err)
 			return 1
 		}
 		report.Emitted = &Emitted{ACStub: path}
@@ -295,7 +298,12 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	if err := repository.RequireGitWorktree(root); err != nil {
 		return report, false, err
 	}
-	metadata, metadataPresent, err := readMetadata(root)
+	access, err := repository.Open(root)
+	if err != nil {
+		return report, false, fmt.Errorf("open target %s: %w", root, err)
+	}
+	defer access.Close()
+	metadata, metadataPresent, err := readMetadata(access)
 	if err != nil {
 		return report, false, err
 	}
@@ -344,18 +352,18 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	if err := checkCoherence(canonMap); err != nil {
 		return report, false, err
 	}
-	preserve, err := ParsePreserve(root)
+	preserve, err := parsePreserve(access.ReadOptional(preservePath))
 	if err != nil {
 		return report, false, err
 	}
-	repoCheck, err := ParseRepoCheck(root)
+	repoCheck, err := parseRepoCheck(access.ReadOptional(repoCheckPath))
 	if err != nil {
 		return report, false, err
 	}
 	report.repoCheck = repoCheck
-	baseBytes, basePresent, err := readOptional(filepath.Join(root, filepath.FromSlash(baselinePath)))
+	baseBytes, basePresent, err := access.ReadOptional(baselinePath)
 	if err != nil {
-		return report, false, err
+		return report, false, inspectError(baselinePath, err)
 	}
 	var prior *baseline
 	if basePresent {
@@ -366,7 +374,10 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		prior = &p
 	}
 	report.Header = Header{Invocation: cfg.invocation, CanonSHA: "v" + canon.Version, Target: root, Flavor: strings.ToLower(string(flavor)), FlavorSource: flavorSource, RepoName: name, CanonVersion: metadata["canon_version"], CodeStack: metadata["code_stack"]}
-	legacy := legacyMarkers(root)
+	legacy, err := legacyMarkers(access)
+	if err != nil {
+		return report, false, err
+	}
 	paths := make([]string, 0, len(canonMap))
 	for path := range canonMap {
 		if path != baselinePath {
@@ -375,13 +386,16 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	}
 	sort.Strings(paths)
 	for _, path := range paths {
-		fr := classify(root, path, canonMap[path], prior, preserve, cfg.DiffLines)
+		fr, err := classify(access, path, canonMap[path], prior, preserve, cfg.DiffLines)
+		if err != nil {
+			return report, false, err
+		}
 		if path == "govna/metadata.txt" {
 			if !metadataPresent {
 				fr.Classification = "migration-required"
 				fr.CanonReference = "metadata absent"
 			} else if metadata["canon_version"] != "v"+canon.Version {
-				target, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+				target, _ := access.ReadFile(path)
 				replaced := strings.Replace(string(target), "canon_version = "+metadata["canon_version"], "canon_version = v"+canon.Version, 1)
 				if replaced == string(canonMap[path]) {
 					fr.Classification = "clear-sync"
@@ -397,7 +411,9 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 			fr.legacyOnly = !actionable(fr.Classification) && !formatNeedsSync
 			fr.Classification = "ambiguity"
 			if fr.legacyOnly {
-				captureTargetState(root, path, &fr)
+				if err := captureTargetState(access, path, &fr); err != nil {
+					return report, false, err
+				}
 			}
 			delete(legacy, path)
 		}
@@ -418,7 +434,11 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	} else if !bytes.Equal(baseBytes, canonMap[baselinePath]) {
 		report.Files = append(report.Files, FileResult{Path: baselinePath, Classification: "clear-sync", CanonReference: "generated baseline manifest", CompareCommand: "compare generated baseline with target govna/canon-baseline.txt", canonPresent: true, targetPresent: true, targetInspected: true})
 	}
-	for path, evidence := range targetOnly(root, canonMap, prior, flavor, name) {
+	extra, err := targetOnly(access, canonMap, prior, flavor, name)
+	if err != nil {
+		return report, false, err
+	}
+	for path, evidence := range extra {
 		classification := "target-has-no-canon"
 		if preserve[path] {
 			classification = "preserve"
@@ -427,14 +447,19 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		if preserve[path] {
 			fr.PreserveEntries = []string{path}
 		}
-		data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		data, err := access.ReadFile(path)
+		if err != nil {
+			return report, false, inspectError(path, err)
+		}
 		fr.Diff = diffText(nil, data, path, cfg.DiffLines)
 		if markers := legacy[path]; len(markers) > 0 {
 			fr.LegacyPreserveMarkers = markers
 			if preserve[path] {
 				fr.Classification = "ambiguity"
 				fr.legacyOnly = true
-				captureTargetState(root, path, &fr)
+				if err := captureTargetState(access, path, &fr); err != nil {
+					return report, false, err
+				}
 			} else {
 				fr.Classification = "target-has-no-canon"
 			}
@@ -447,7 +472,10 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		if preserve[path] {
 			fr.PreserveEntries = []string{path}
 		}
-		data, present, _ := readOptional(filepath.Join(root, filepath.FromSlash(path)))
+		data, present, err := access.ReadOptional(path)
+		if err != nil {
+			return report, false, inspectError(path, err)
+		}
 		fr.targetPresent = present
 		if present {
 			hash := sha256.Sum256(data)
@@ -465,11 +493,13 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	return report, clean, nil
 }
 
-func readMetadata(root string) (map[string]string, bool, error) {
-	path := filepath.Join(root, "govna", "metadata.txt")
-	data, present, err := readOptional(path)
-	if err != nil || !present {
-		return map[string]string{}, present, err
+func readMetadata(access *repository.Access) (map[string]string, bool, error) {
+	data, present, err := access.ReadOptional("govna/metadata.txt")
+	if err != nil {
+		return nil, false, inspectError("govna/metadata.txt", err)
+	}
+	if !present {
+		return map[string]string{}, false, nil
 	}
 	if len(data) == 0 || data[len(data)-1] != '\n' {
 		return nil, true, fmt.Errorf("invalid govna/metadata.txt: require a final newline")
@@ -633,6 +663,9 @@ func parseBaseline(data []byte, flavor canon.Flavor) (baseline, error) {
 		if p == baselinePath || p == preservePath {
 			return bad("manifest contains excluded control path")
 		}
+		if err := repository.ValidatePath(p); err != nil {
+			return bad(fmt.Sprintf("entry %q %v; correct the entry to a normalized repository-relative path before retrying", p, err))
+		}
 		boundary, mixed := canon.Boundary(p)
 		valid := !mixed && scope == "full" || mixed && scope == "before:"+boundary || flavor == canon.Code && p == "govna/build-release.md" && scope == "full" && less(v, version{0, 11, 0})
 		if !valid {
@@ -645,9 +678,15 @@ func parseBaseline(data []byte, flavor canon.Flavor) (baseline, error) {
 
 // ParsePreserve validates and returns the optional durable preserve registry.
 func ParsePreserve(root string) (map[string]bool, error) {
-	data, present, err := readOptional(filepath.Join(root, filepath.FromSlash(preservePath)))
-	if err != nil || !present {
-		return map[string]bool{}, err
+	return parsePreserve(readOptional(filepath.Join(root, filepath.FromSlash(preservePath))))
+}
+
+func parsePreserve(data []byte, present bool, err error) (map[string]bool, error) {
+	if err != nil {
+		return nil, inspectError(preservePath, err)
+	}
+	if !present {
+		return map[string]bool{}, nil
 	}
 	bad := func(s string) (map[string]bool, error) { return nil, fmt.Errorf("invalid %s: %s", preservePath, s) }
 	if len(data) == 0 || data[len(data)-1] != '\n' {
@@ -676,9 +715,15 @@ func ParsePreserve(root string) (map[string]bool, error) {
 
 // ParseRepoCheck validates and returns the optional configured repository check.
 func ParseRepoCheck(root string) (string, error) {
-	data, present, err := readOptional(filepath.Join(root, filepath.FromSlash(repoCheckPath)))
-	if err != nil || !present {
-		return "", err
+	return parseRepoCheck(readOptional(filepath.Join(root, filepath.FromSlash(repoCheckPath))))
+}
+
+func parseRepoCheck(data []byte, present bool, err error) (string, error) {
+	if err != nil {
+		return "", inspectError(repoCheckPath, err)
+	}
+	if !present {
+		return "", nil
 	}
 	bad := func(s string) (string, error) {
 		return "", fmt.Errorf("invalid %s: %s; set the first line to govna-repo-check-v1 and the second line to one command, or delete the file to restore the unresolved repository-check question", repoCheckPath, s)
@@ -703,12 +748,15 @@ func ParseRepoCheck(root string) (string, error) {
 	return command, nil
 }
 
-func classify(root, path string, want []byte, base *baseline, preserve map[string]bool, limit int) FileResult {
+func classify(access *repository.Access, path string, want []byte, base *baseline, preserve map[string]bool, limit int) (FileResult, error) {
 	fr := FileResult{Path: path, CanonReference: "govna @ v" + canon.Version + ": " + path, canonPresent: true, targetInspected: true}
 	if preserve[path] {
 		fr.PreserveEntries = []string{path}
 	}
-	got, present, _ := readOptional(filepath.Join(root, filepath.FromSlash(path)))
+	got, present, err := access.ReadOptional(path)
+	if err != nil {
+		return fr, inspectError(path, err)
+	}
 	fr.targetPresent = present
 	if !present {
 		if preserve[path] {
@@ -717,11 +765,11 @@ func classify(root, path string, want []byte, base *baseline, preserve map[strin
 			fr.Classification = "missing-in-target"
 			fr.Diff = diffText(want, nil, path, limit)
 		}
-		return fr
+		return fr, nil
 	}
 	if bytes.Equal(got, want) {
 		fr.Classification = "match"
-		return fr
+		return fr, nil
 	}
 	if boundary, mixed := canon.Boundary(path); mixed {
 		wr, wok := canon.ComparisonRegion(path, want)
@@ -733,23 +781,23 @@ func classify(root, path string, want []byte, base *baseline, preserve map[strin
 			fr.protectedHash = fmt.Sprintf("%x", hash)
 			if bytes.Equal(wr, gr) {
 				fr.Classification = "match"
-				return fr
+				return fr, nil
 			}
 		}
 		if path == "govna/build-release.md" && !gok {
 			fr.Classification = "ambiguity"
 			fr.Diff = diffText(want, got, path, limit)
-			return fr
+			return fr, nil
 		}
 	}
 	if path == "plan.md" || path == "arch.md" {
 		fr.Classification = "expected-divergence"
-		return fr
+		return fr, nil
 	}
 	fr.Diff = diffText(want, got, path, limit)
 	if preserve[path] {
 		fr.Classification = "preserve"
-		return fr
+		return fr, nil
 	}
 	if base != nil {
 		if entry, ok := base.Entries[path]; ok {
@@ -758,20 +806,28 @@ func classify(root, path string, want []byte, base *baseline, preserve map[strin
 				hash := sha256.Sum256(region)
 				if fmt.Sprintf("%x", hash) == entry.Hash {
 					fr.Classification = "clear-sync"
-					return fr
+					return fr, nil
 				}
 			}
 		}
 		fr.Classification = "ambiguity"
-		return fr
+		return fr, nil
 	}
-	fr.PriorCommits = gitLog(root, path)
+	fr.PriorCommits = gitLog(access.Dir(), path)
 	if len(fr.PriorCommits) == 0 {
 		fr.Classification = "clear-sync"
 	} else {
 		fr.Classification = "ambiguity"
 	}
-	return fr
+	return fr, nil
+}
+
+// inspectError names the failed inspection and keeps the path's recovery action.
+func inspectError(path string, err error) error {
+	if _, ok := errors.AsType[*repository.PathError](err); ok {
+		return fmt.Errorf("inspect %s: %w", path, err)
+	}
+	return fmt.Errorf("inspect %s: %w; fix the file's permissions or type and re-run audit", path, err)
 }
 
 func gitLog(root, path string) []string {
@@ -796,19 +852,36 @@ func gitLog(root, path string) []string {
 	return lines
 }
 
-func targetOnly(root string, current map[string][]byte, base *baseline, flavor canon.Flavor, name string) map[string]string {
+func targetOnly(access *repository.Access, current map[string][]byte, base *baseline, flavor canon.Flavor, name string) (map[string]string, error) {
 	out := map[string]string{}
+	var failure error
 	add := func(path, evidence string) {
-		if path == preservePath || path == repoCheckPath {
+		if failure != nil || path == preservePath || path == repoCheckPath {
 			return
 		}
 		if _, ok := current[path]; ok {
 			return
 		}
-		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); err == nil && info.Mode().IsRegular() {
-			if _, exists := out[path]; !exists {
-				out[path] = evidence
-			}
+		if repository.ValidatePath(path) != nil {
+			return
+		}
+		info, err := access.Lstat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return
+		}
+		if err != nil {
+			failure = inspectError(path, err)
+			return
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			failure = inspectError(path, &repository.PathError{Path: path, Problem: "is a symbolic link", Recovery: "replace the link with a regular file and retry"})
+			return
+		}
+		if !info.Mode().IsRegular() {
+			return
+		}
+		if _, exists := out[path]; !exists {
+			out[path] = evidence
 		}
 	}
 	if base != nil {
@@ -816,7 +889,9 @@ func targetOnly(root string, current map[string][]byte, base *baseline, flavor c
 			add(path, "present in prior canon baseline")
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "govna", "audit.md")); err == nil {
+	if present, err := access.Regular("govna/audit.md"); err != nil {
+		return nil, inspectError("govna/audit.md", err)
+	} else if present {
 		add("govna/drift-scan.md", "retired canon path; replacement present: govna/audit.md")
 	} else {
 		add("govna/drift-scan.md", "retired canon path; replacement missing: govna/audit.md")
@@ -839,8 +914,11 @@ func targetOnly(root string, current map[string][]byte, base *baseline, flavor c
 		add(path, "present in other flavor canon")
 	}
 	for path := range current {
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
-		if err != nil || bytes.Equal(data, current[path]) {
+		data, present, err := access.ReadOptional(path)
+		if err != nil {
+			return nil, inspectError(path, err)
+		}
+		if !present || bytes.Equal(data, current[path]) {
 			continue
 		}
 		for _, m := range nameReferenceRE.FindAllStringSubmatch(string(data), -1) {
@@ -851,28 +929,85 @@ func targetOnly(root string, current map[string][]byte, base *baseline, flavor c
 			add(referenced, "name-referenced from divergent governed file")
 		}
 	}
-	return out
+	if failure != nil {
+		return nil, failure
+	}
+	return out, nil
 }
 
-func legacyMarkers(root string) map[string][]string {
+var legacyPhrasePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?m)preserve ([A-Za-z0-9._/-]+)`),
+	regexp.MustCompile(`(?m)do not sync ([A-Za-z0-9._/-]+)`),
+	regexp.MustCompile(`(?m)intentional divergence: ([A-Za-z0-9._/-]+)`),
+	regexp.MustCompile(`(?m)([A-Za-z0-9._/-]+): keep local`),
+}
+
+// legacyMarkers collects exact preserve phrases from the canonical Unreleased table row
+// and from a legacy `## Unreleased` section, in that order, without duplicate phrase-and-path pairs.
+func legacyMarkers(access *repository.Access) (map[string][]string, error) {
 	out := map[string][]string{}
-	data, _ := os.ReadFile(filepath.Join(root, "CHANGELOG.md"))
-	text := string(data)
-	_, after, ok := strings.Cut(text, "## Unreleased")
-	if !ok {
-		return out
+	data, present, err := access.ReadOptional("CHANGELOG.md")
+	if err != nil {
+		return nil, inspectError("CHANGELOG.md", err)
 	}
-	section := after
-	if end := strings.Index(section, "\n## "); end >= 0 {
-		section = section[:end]
+	if !present {
+		return out, nil
 	}
-	patterns := []*regexp.Regexp{regexp.MustCompile(`(?m)preserve ([A-Za-z0-9._/-]+)`), regexp.MustCompile(`(?m)do not sync ([A-Za-z0-9._/-]+)`), regexp.MustCompile(`(?m)intentional divergence: ([A-Za-z0-9._/-]+)`), regexp.MustCompile(`(?m)([A-Za-z0-9._/-]+): keep local`)}
-	for _, re := range patterns {
-		for _, m := range re.FindAllStringSubmatch(section, -1) {
-			out[m[1]] = append(out[m[1]], m[0])
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	var sections []string
+	if cell, ok := unreleasedSummaryCell(text); ok {
+		sections = append(sections, cell)
+	}
+	if _, after, ok := strings.Cut(text, "## Unreleased"); ok {
+		section := after
+		if end := strings.Index(section, "\n## "); end >= 0 {
+			section = section[:end]
+		}
+		sections = append(sections, section)
+	}
+	seen := map[string]bool{}
+	for _, section := range sections {
+		for _, re := range legacyPhrasePatterns {
+			for _, m := range re.FindAllStringSubmatch(section, -1) {
+				if repository.ValidatePath(m[1]) != nil {
+					continue
+				}
+				key := m[1] + "\x00" + m[0]
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				out[m[1]] = append(out[m[1]], m[0])
+			}
 		}
 	}
-	return out
+	return out, nil
+}
+
+// unreleasedSummaryCell returns the Summary cell of the canonical `| Unreleased | ... |` row,
+// treating each `\|` pair as one escaped pipe.
+func unreleasedSummaryCell(text string) (string, bool) {
+	const prefix = "| Unreleased |"
+	for line := range strings.SplitSeq(text, "\n") {
+		rest, ok := strings.CutPrefix(line, prefix)
+		if !ok {
+			continue
+		}
+		var cell strings.Builder
+		for i := 0; i < len(rest); i++ {
+			switch {
+			case rest[i] == '\\' && i+1 < len(rest) && rest[i+1] == '|':
+				cell.WriteByte('|')
+				i++
+			case rest[i] == '|':
+				return cell.String(), true
+			default:
+				cell.WriteByte(rest[i])
+			}
+		}
+		return cell.String(), true
+	}
+	return "", false
 }
 
 func diffText(want, got []byte, path string, limit int) string {
@@ -907,13 +1042,17 @@ func readOptional(path string) ([]byte, bool, error) {
 	return data, err == nil, err
 }
 
-func captureTargetState(root, path string, file *FileResult) {
-	data, present, _ := readOptional(filepath.Join(root, filepath.FromSlash(path)))
+func captureTargetState(access *repository.Access, path string, file *FileResult) error {
+	data, present, err := access.ReadOptional(path)
+	if err != nil {
+		return inspectError(path, err)
+	}
 	file.targetPresent = present
 	if present {
 		hash := sha256.Sum256(data)
 		file.targetHash = fmt.Sprintf("%x", hash)
 	}
+	return nil
 }
 
 func comparisonDescription(f FileResult, path string) string {
@@ -1345,7 +1484,7 @@ func validationDisposition(root string, report Report) validationOutcome {
 	if report.repoCheck != "" {
 		return validationOutcome{kind: validationConfigured, evidence: "`" + report.repoCheck + "` configured standing resolution in `govna/repo-check.txt`", reason: report.repoCheck}
 	}
-	agents, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	agents := readRepositoryFile(root, "AGENTS.md")
 	first := regexp.MustCompile(`(?m)^- Run `+"`"+`([^`+"`"+`\n]+)`+"`"+` as the first validation command(?:\s|\.|$)[^\n]*$`).FindAllSubmatch(agents, -1)
 	wide := regexp.MustCompile(`(?m)^- Use `+"`"+`([^`+"`"+`\n]+)`+"`"+` for repository-wide [^\n]*validation[^\n]*$`).FindAllSubmatch(agents, -1)
 	if report.Header.Flavor == "code" && len(first) == 1 && len(wide) == 1 && string(first[0][1]) == "./build.sh" && string(wide[0][1]) == "./build.sh" {
@@ -1356,7 +1495,7 @@ func validationDisposition(root string, report Report) validationOutcome {
 		}
 	}
 	if report.Header.Flavor == "doc" && len(first) == 0 && len(wide) == 0 {
-		release, _ := os.ReadFile(filepath.Join(root, "govna", "release.md"))
+		release := readRepositoryFile(root, "govna/release.md")
 		const declaration = "DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command."
 		if bytes.Contains(release, []byte(declaration)) {
 			return validationOutcome{kind: validationNotApplicable, evidence: "`Not applicable` inferred from exact DOC governance evidence", reason: "inferred from exact DOC governance evidence"}
@@ -1392,4 +1531,14 @@ func stackManifestReachable(root, stack string) bool {
 func regularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
+}
+
+func readRepositoryFile(root, rel string) []byte {
+	access, err := repository.Open(root)
+	if err != nil {
+		return nil
+	}
+	defer access.Close()
+	data, _ := access.ReadFile(rel)
+	return data
 }
