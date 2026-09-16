@@ -157,6 +157,7 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 }
 
 var currentInstructionReplacements = map[string]string{
+	"Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.": "Require `--version` to print exactly `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.",
 	"Place the count paragraph first under `## Summary`.":                                                                               "Place the repository paragraph first under `## Summary`.",
 	"Start the count paragraph with `This adoption covers`.":                                                                            "Start the count paragraph with `Govna found`.",
 	"Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).": "Run `./build.sh` when the change touches code or build-relevant files and current build evidence is unavailable (skip for AC critique, doc-only review, design discussion).",

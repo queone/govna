@@ -589,16 +589,15 @@ _validate_compiled_utility() { # $1=utility $2=declared version
   }
   "$binary" --version >"$stdout" 2>"$stderr" || rc=$?
   if [ "$rc" -ne 0 ]; then
-    _failure "build: validate utility output: $utility: --version failed with exit status $rc; print $utility $version or $utility v$version"
+    _failure "build: validate utility output: $utility: --version failed with exit status $rc; print $utility v$version"
     return 1
   fi
   if [ -s "$stderr" ]; then
     _failure "build: validate utility output: $utility: --version wrote to stderr; write only the accepted version line to stdout"
     return 1
   fi
-  if ! { printf '%s\n' "$utility $version" | cmp -s - "$stdout" ||
-         printf '%s\n' "$utility v$version" | cmp -s - "$stdout"; }; then
-    _failure "build: validate utility output: $utility: expected exactly $utility $version or $utility v$version plus one newline on stdout"
+  if ! printf '%s\n' "$utility v$version" | cmp -s - "$stdout"; then
+    _failure "build: validate utility output: $utility: expected exactly $utility v$version plus one newline on stdout; print the v form and rebuild"
     return 1
   fi
   rm -f "$stdout" "$stderr"

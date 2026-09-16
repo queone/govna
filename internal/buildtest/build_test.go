@@ -464,7 +464,7 @@ build)
 #!/bin/bash
 if [ "\${1:-}" = --version ]; then
   if [ -n "\${FAKE_TRACE:-}" ]; then printf 'version $utility\n' >>"\${FAKE_TRACE}"; fi
-  printf '$utility $reported_version\n'
+  printf '$utility v$reported_version\n'
   exit 0
 fi
 case "\${1:-}" in
@@ -604,7 +604,7 @@ esac
 	installedBeforeFailures := map[string]string{}
 	for utility, version := range map[string]string{"alpha": "1.0.0", "widget": "1.2.3", "zeta": "2.0.0"} {
 		installed := filepath.Join(gopath, "bin", utility)
-		if versionOut, versionErr := exec.Command(installed, "--version").CombinedOutput(); versionErr != nil || string(versionOut) != utility+" "+version+"\n" {
+		if versionOut, versionErr := exec.Command(installed, "--version").CombinedOutput(); versionErr != nil || string(versionOut) != utility+" v"+version+"\n" {
 			t.Fatalf("installed %s version: %v: %q", utility, versionErr, versionOut)
 		}
 		installedBeforeFailures[utility] = string(mustRead(t, installed))
@@ -817,7 +817,7 @@ if [ "${1:-}" = --version ]; then
     : >"$READY_FILE"
     while :; do /bin/sleep 1; done
   fi
-  printf 'widget 1.2.3\n'
+  printf 'widget v1.2.3\n'
   exit 0
 fi
 case "${1:-}" in
@@ -1837,7 +1837,7 @@ case "\${1:-}" in
   exit 0
   ;;
 esac
-printf '$target $version\n'
+printf '$target v$version\n'
 EOF
   chmod +x "$output"
   ;;
@@ -1905,7 +1905,7 @@ exit "$rc"
 	for utility, version := range map[string]string{"alpha": "1.0.0", "widget": "1.2.3"} {
 		binary := filepath.Join(gopath, "bin", utility)
 		out, err := exec.Command(binary, "--version").CombinedOutput()
-		if err != nil || string(out) != utility+" "+version+"\n" {
+		if err != nil || string(out) != utility+" v"+version+"\n" {
 			t.Fatalf("installed %s: %v: %s", utility, err, out)
 		}
 	}
@@ -2030,7 +2030,7 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiled := filepath.Join(dir, "compiled")
-	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 1.2.3\\n'\n"), 0o755); err != nil {
+	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget v1.2.3\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	destination := filepath.Join(dir, "bin", "widget")
@@ -2041,7 +2041,7 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	if out, err := run(t, dir, "", "-c", script); err != nil {
 		t.Fatalf("install failed: %v: %s", err, out)
 	}
-	if out, err := exec.Command(destination, "--version").CombinedOutput(); err != nil || string(out) != "widget 1.2.3\n" {
+	if out, err := exec.Command(destination, "--version").CombinedOutput(); err != nil || string(out) != "widget v1.2.3\n" {
 		t.Fatalf("installed output: %v: %s", err, out)
 	}
 	installedBeforeFailure := string(mustRead(t, destination))
@@ -2054,9 +2054,21 @@ func TestUtilityDeclarationValidationAndAtomicInstall(t *testing.T) {
 	if installedAfterFailure := string(mustRead(t, destination)); installedAfterFailure != installedBeforeFailure {
 		t.Fatal("failed root validation replaced the installed utility")
 	}
-	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 1.2.3\\n'\n"), 0o755); err != nil {
+	if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget v1.2.3\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("bare version form rejected", func(t *testing.T) {
+		if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget 1.2.3\\n'\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		out, err := run(t, dir, "", "-c", "source ./tooling.sh; _color_init; _validate_utility_version_output ./compiled widget 1.2.3")
+		if err == nil || !strings.Contains(out, `expected exactly "widget v1.2.3" on stdout; print the v form and rebuild`) {
+			t.Fatalf("bare version form accepted: %v: %s", err, out)
+		}
+		if err := os.WriteFile(compiled, []byte("#!/bin/bash\nprintf 'widget v1.2.3\\n'\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	})
 	for _, failure := range []struct {
 		name    string
 		command string
@@ -2674,4 +2686,28 @@ func TestGoPrepRejectsReadmeWithoutMatchingUsageLine(t *testing.T) {
 			t.Fatalf("prep changed README=%q", got)
 		}
 	})
+}
+
+func TestRustCompiledUtilityRequiresVersionVForm(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/rust/build.sh.tmpl")), 0o755)
+	release := filepath.Join(dir, "target", "release")
+	if err := os.MkdirAll(release, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(release, "widget")
+	probe := "source ./build.sh; _color_init; _cargo_target=./target; _validate_compiled_utility widget 1.2.3"
+	if err := os.WriteFile(binary, []byte("#!/bin/bash\nprintf 'widget 1.2.3\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(t, dir, "", "-c", probe); err == nil || !strings.Contains(out, "expected exactly widget v1.2.3 plus one newline on stdout; print the v form and rebuild") {
+		t.Fatalf("bare version form accepted by the Rust check: %v: %s", err, out)
+	}
+	if err := os.WriteFile(binary, []byte("#!/bin/bash\nprintf 'widget v1.2.3\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(t, dir, "", "-c", probe); err != nil || !strings.Contains(out, "--version = 1.2.3") {
+		t.Fatalf("v form rejected by the Rust check: %v: %s", err, out)
+	}
 }
