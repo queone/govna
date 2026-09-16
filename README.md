@@ -1,18 +1,116 @@
 # govna
 
-Dependency-free governance tooling for CODE and DOC repositories.
+Shared working rules for you and your coding agent, installed in your repository.
 
-Govna carries a versioned set of governance files inside one Go executable. That embedded file set is the canon. Govna can add those files to a repository, check an adopted repository for updates, prepare a Director-reviewed removal plan, or write a temporary copy for inspection.
+Govna helps you agree on a change, review its scope, and check the result with an AI coding agent. It adds readable instruction and workflow files to software (CODE) or documentation (DOC) repositories. You describe the work and approve decisions; the agent follows the repository's rules.
+
+**"Coding agent" in this README means a terminal CLI: [Claude Code](https://code.claude.com/docs/en/quickstart) (`claude`) or [Codex CLI](https://learn.chatgpt.com/docs/codex/cli) (`codex`) running in your repository.** Those CLIs are Govna's primary and only tested interaction target. Govna writes the files they read at startup; you keep talking to the agent in its terminal.
+
+**Not yet tested or supported:** the VS Code and JetBrains extensions of either agent, the Claude and ChatGPT desktop apps on Windows and macOS, their iOS and Android apps, and the web or cloud versions of either agent. They may read the same files, but nothing about Govna's workflow has been exercised there; `plan.md` tracks that exploration. Govna itself is exercised on macOS and Linux; on Windows, creating the `CLAUDE.md` link needs Developer Mode or administrator rights.
+
+[Try it in a disposable clone](#quick-start) · [Try it in place with an instant revert](#try-it-in-place-with-an-instant-git-revert) · [Leave the trial or remove Govna](#leave-the-trial-or-remove-govna) · [Command reference](#usage)
+
+## Quick Start
+
+### 1. Install Govna and one agent CLI
+
+You need Git, Go 1.27 or later, and one signed-in CLI: follow the [Claude Code quickstart](https://code.claude.com/docs/en/quickstart) or the [Codex CLI guide](https://learn.chatgpt.com/docs/codex/cli). The shell examples use Bash or Zsh.
+
+```bash
+go install github.com/queone/govna/cmd/govna@latest
+export PATH="$(go env GOPATH)/bin:$PATH"
+govna version
+```
+
+If you set a custom `GOBIN`, add that directory to `PATH` instead. The `PATH` change lasts for the current shell session.
+
+### 2. Adopt Govna in a disposable clone
+
+Pick a Go, Rust, Swift, or Terraform code repository, or a documentation repository; other stacks are not yet selectable. Clone it to a new directory so your real checkout, including uncommitted work, is never touched:
+
+```bash
+git clone /path/to/your-repo govna-trial
+cd govna-trial
+govna apply
+git status --short
+```
+
+`apply` writes immediately and prints the path of an adoption AC, a short review record of what it wrote, merged, or kept. It keeps an existing `README.md`, `CHANGELOG.md`, `arch.md`, and `plan.md`; merges `AGENTS.md` below its `## Project Rules` boundary when one exists and replaces it otherwise; and overwrites `.gitignore`, `build.sh`, and everything under `govna/`. It saves no previous contents, which is why this walkthrough uses a clone. Govna detects the repository type and stack; when it cannot, pass `--flavor code|doc` and `--stack` as shown under [`apply`](#apply).
+
+### 3. Start the agent and confirm it sees the rules
+
+Run one of these from `govna-trial`:
+
+| Agent | Command | How it loads the rules |
+| --- | --- | --- |
+| Claude Code | `claude` | [Reads `CLAUDE.md`](https://code.claude.com/docs/en/memory), which Govna links to `AGENTS.md`. Type `/context` and check that `CLAUDE.md` is listed under Memory files. |
+| Codex CLI | `codex` | [Reads `AGENTS.md` before doing any work](https://learn.chatgpt.com/docs/agent-configuration/agents-md). |
+
+The contract makes the agent begin its first substantive reply with the line `Govna contract loaded.` If that line never appears, the rules did not load. When `apply` warned that an existing regular `CLAUDE.md` was kept, that file is why Claude Code did not see them.
+
+### 4. Review the adoption, then try one change
+
+Type this into the agent chat, replacing the placeholder with the path `apply` printed:
+
+```text
+Audit <adoption-document-path>
+```
+
+The agent reviews what was written, merged, or kept, explains any warning in plain language, and asks for any decision it needs. That is the whole adoption review for a trial.
+
+Then describe a small outcome you want and ask the agent to `Draft` an acceptance-criteria document for it. The agent audits its own draft, pauses for your decisions, and changes nothing until you say the document is implementation-ready. When it reports completion, say `Ratify` to accept. These words are Govna's [workflow vocabulary](#workflow-at-a-glance); the agent explains each step as it goes.
+
+### Try it in place with an instant Git revert
+
+If you would rather adopt in your usual checkout, make the tree clean first so Git can restore it exactly:
+
+```bash
+git status --short   # must print nothing; commit or `git stash -u` first
+govna apply
+```
+
+To put everything back the way it was:
+
+```bash
+git restore .        # restores every tracked file apply changed
+git clean -fd        # removes the new files: AGENTS.md, CLAUDE.md, govna/, and the adoption AC
+git status --short   # prints nothing again
+```
+
+`git clean -fd` deletes every untracked file and directory, not only Govna's, which is why the tree must start clean. Ignored files are left alone, and Govna never writes to them.
+
+## Leave the Trial or Remove Govna
+
+Three exits, fastest first:
+
+1. **Discard the clone.** Exit the agent, return to your original checkout, and delete `govna-trial`. Nothing in the original changed.
+2. **Revert in place.** Run the `git restore .` and `git clean -fd` pair above in a checkout that was clean before `govna apply`.
+3. **Remove Govna from a repository you kept working in.** Once you have commits on top of the adoption, Git cannot separate Govna's files from your work, so use `govna rm`.
+
+```bash
+govna rm
+```
+
+**`govna rm` writes a removal plan; it deletes nothing and cannot restore files that `apply` overwrote.** Complete the removal through the agent:
+
+1. Open the removal AC at the path `govna rm` printed.
+2. Tell the agent `Audit <removal-document-path>` and ask it to explain every choice while keeping your project content.
+3. Resolve the listed choices about deleting Govna files, keeping edited ones, or removing Govna sections from mixed files. Ask the agent to `Refine` the removal AC, then, when it reports readiness, tell it the AC is implementation-ready and to implement the approved removals.
+4. Check `git status --short` and `git diff`, then start a fresh agent session so it reads whatever instructions remain.
+
+Removal keeps `plan.md`, `arch.md`, every file registered in `govna/preserve.txt`, and repository-owned files with no Govna counterpart; it deletes the preserve registry last. Files with both Govna and local content wait for your choice. Anything `apply` overwrote comes back only from your Git history or a backup.
 
 ## Why
 
 Govna exists to make programming and publishing ceremonies—the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release—more effective and efficient. By making those checkpoints explicit and reusable, Directors and Operators spend less time reconstructing or renegotiating process from transient session context and more time delivering the change.
 
-Beyond saving coordination time, the contract keeps decision-bearing choices with the human Director while giving the agent Operator clear authority for settled mechanical work. Bounded scope and testable acceptance criteria reduce ambiguity, scope drift, and missed paths; recorded decisions improve continuity across sessions; and deterministic canon plus auditing make the workflow reproducible and governance drift detectable.
+Beyond saving coordination time, the contract keeps decision-bearing choices with the human Director while giving the agent Operator clear authority for settled mechanical work. Bounded scope and testable acceptance criteria reduce ambiguity, scope drift, and missed paths; recorded decisions improve continuity across sessions; and versioned governance files plus auditing make the workflow reproducible and governance drift detectable.
 
 Because the generated governance is file-based, adopted repositories remain self-contained, inspectable, and adaptable to local needs.
 
 ## What Govna Provides
+
+Govna carries a versioned set of governance files inside one dependency-free Go executable. That embedded file set is the canon.
 
 - Deterministic embedded canon for CODE and DOC repositories.
 - A two-role Director and Operator collaboration model.
@@ -47,24 +145,6 @@ Draft → Audit → Refine → Implement → Ratify → Package
 Draft creates the AC. Audit, Refine, Implement, and Ratify are its four phases. Package is the separate post-Ratify release-preparation action.
 
 Audit, Refine, Implement, and Ratify target one eligible AC. The pending release batch contains every unpackaged AC whose implementation is present, including work still awaiting Ratify. Before another AC enters Implement, the Operator privately checks that the projected plus-joined references and a brief result summary can fit one 80-byte message; that calculation does not start Package. Package requires every pending member to be Ratified and targets the complete batch. Use `Package AC70+AC71` to establish a fitting multi-AC batch, or use standalone `Package`, `package`, `pack`, or `prep` after a complete batch is already known. Prep rejects an oversized batch, a partial batch, and a smaller batch that would leave implemented work outside the release. An empty release batch, one with no implemented AC awaiting release, packages direct-handled changes with a release message that names no AC.
-
-## Installation
-
-Govna requires Go 1.27 or later when building from source.
-
-Install the latest release with:
-
-```bash
-go install github.com/queone/govna/cmd/govna@latest
-```
-
-For local development, use the repository’s canonical build, test, and installation path:
-
-```bash
-./build.sh
-```
-
-The build installs `govna` into `$(go env GOPATH)/bin` after validation succeeds.
 
 ## Usage
 
@@ -146,6 +226,8 @@ govna rm
 ```
 
 The command labels files for deletion, preservation, or Director review and writes a guarded removal AC. It does not carry out any removal choice or delete repository content.
+
+Follow [Leave the Trial or Remove Govna](#leave-the-trial-or-remove-govna) to review and implement that plan through your agent CLI. Removal does not recover pre-adoption file contents.
 
 Removal stubs use the same canon-keyed path and dual-axis guarded-marker model as audit stubs.
 
@@ -232,7 +314,7 @@ Releases, commits, and pushes remain Director-controlled; `build.sh` provides va
 
 Scope is deliberately narrow: govna aims to be a small, stable collaboration contract — not a full-stack generator or an opinionated starter kit. The fewer primitives it ships, the less there is to drift against.
 
-The primary validation surface so far has been CLI-type coding agents. The contract is file-based and agent-agnostic in principle — desktop clients and IDE-integrated agents can read the same files — but expect rougher edges there until those patterns are exercised.
+The current interaction scope is the Claude Code and Codex terminal CLIs. IDE extensions and the vendors' desktop, mobile, and web agent apps remain untested and unsupported; `plan.md` tracks that exploration. A shared file format alone does not establish support.
 
 ## Development and Release
 
@@ -241,6 +323,8 @@ Run the full canonical validation and installation path with:
 ```bash
 ./build.sh
 ```
+
+The build installs `govna` into `$(go env GOPATH)/bin` after validation succeeds.
 
 Release preparation performs bookkeeping only, then prints the release command without executing it:
 

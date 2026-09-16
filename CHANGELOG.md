@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.25.1 | README CLI-agent quick start, in-place git revert, rm exit, unsupported apps |
 | 0.25.0 | AC43 keep docs, contain file access, CRLF merges, table phrases; canon v0.60.0 |
 | 0.24.1 | Go release path reads the prepped README usage line; canon v0.59.1 |
 | 0.24.0 | AC41+AC42 dedup canon, audit skips AC pointers, prep bumps README, prep doc fix |

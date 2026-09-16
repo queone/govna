@@ -1458,3 +1458,29 @@ func TestGovernanceCorpusOrder(t *testing.T) {
 		t.Fatalf("unexpected governance corpus: %v", paths)
 	}
 }
+
+func TestInteractionSurfaceDocumentation(t *testing.T) {
+	root := filepath.Join("..", "..")
+	checks := map[string][]string{
+		"README.md": {
+			"Those CLIs are Govna's primary and only tested interaction target.",
+			"**Not yet tested or supported:** the VS Code and JetBrains extensions of either agent, the Claude and ChatGPT desktop apps on Windows and macOS, their iOS and Android apps, and the web or cloud versions of either agent.",
+			"### Try it in place with an instant Git revert",
+			"**`govna rm` writes a removal plan; it deletes nothing and cannot restore files that `apply` overwrote.**",
+		},
+		"arch.md": {
+			"Interaction surface: terminal coding-agent CLIs (Claude Code, Codex CLI)",
+		},
+	}
+	for path, phrases := range checks {
+		content, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, phrase := range phrases {
+			if !strings.Contains(string(content), phrase) {
+				t.Errorf("%s omits interaction-surface statement %q", path, phrase)
+			}
+		}
+	}
+}

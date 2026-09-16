@@ -10,3 +10,4 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 
 - IE1: Add complete canonical build adapters for Java, Node, and Python before making those CODE stacks selectable again.
 - IE2: Tighten the --version build floor to the v form in the Go and Rust stacks once consumers have migrated their help output.
+- IE3: Explore adopting, loading, reviewing, and removing Govna through IDE extensions and the vendors' desktop, mobile, and web agent apps; support stays limited to the Claude Code and Codex CLIs until then.

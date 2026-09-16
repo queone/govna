@@ -13,6 +13,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 ## Current Platform
 
 - Go
+- Interaction surface: terminal coding-agent CLIs (Claude Code, Codex CLI); IDE, desktop, mobile, and web agent interfaces are untested.
 
 ## Major Components
 
