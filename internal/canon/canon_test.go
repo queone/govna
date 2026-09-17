@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.61.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.62.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -287,6 +287,61 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	}
 }
 
+var auditValidationRules = []string{
+	"- Classify an existing target-only path named in the preserve registry as `preserve`.",
+	"- Keep that preserved target-only path visible in audit and JSON results.",
+	"- Omit another routing question for that preserved target-only path.",
+	"- Offer only these outcomes for a canon-backed ambiguity: sync, preserve, explicitly named migration, delete.",
+	"- Offer only these outcomes for an ordinary `target-has-no-canon` item: preserve, explicitly named migration, delete.",
+	"- Install an exact current-canon replacement before retired-source routing.",
+	"- Omit restore as a routing outcome.",
+	"- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.",
+	"- Fail the audit before emission when a governed path is a symbolic link, a directory, a special file, or unreadable.",
+	"- Name the failed path and its recovery action in that failure.",
+	"- Leave every existing emitted AC unchanged after that failure.",
+	"- Read the Summary from the canonical `| Unreleased | <summary> |` table row, where each `\\|` pair is one escaped pipe.",
+	"- Read the Summary from a legacy `## Unreleased` heading section as well.",
+	"- Drop a duplicate phrase-and-path pair.",
+	"- Ignore a phrase whose path is not a normalized repository-relative path.",
+	"- Drop an escaping reference or legacy phrase path without inspecting it.",
+	"- Fail the audit with a replace-the-link recovery action when a candidate path is a symbolic link.",
+	"- Reject an entry that is absolute, contains a backslash or control character, or has an empty, `.`, or `..` component.",
+	"- Direct the consumer to correct the invalid entry before retrying.",
+	"- Render canon into a scratch directory using `govna render <scratch>`.",
+	"- Apply mixed-content items by hunk-merge.",
+	"- Run the chosen repository command after all selected sync, migration, and deletion work.",
+	"- Verify each resolved preserve target remains and its exact path occurs in `govna/preserve.txt`.",
+}
+
+// auditEmissionRules live in arch.md: they bind the emitted AC shape that
+// internal/audit produces, not the consumer-facing audit guide.
+var auditEmissionRules = []string{
+	"- Require the selected CODE stack's recognized root manifest before inferring `./build.sh`.",
+	"- Ignore unrelated manifests, other prose, governance documents, executables, CI files, and flavor defaults.",
+	"- Name each emitted adoption AC `# AC<N> Adopt Govna Governance Files v<CANON_VERSION>`.",
+	"- Place the repository paragraph first under `## Summary`.",
+	"- Start the repository paragraph with `This AC updates`.",
+	"- Follow it with `The result label (classification)`.",
+	"- Place the count paragraph after the repository paragraph.",
+	"- Start the count paragraph with `Govna found`.",
+	"- Confirm each file selected for update exists in the selected CODE render.",
+	"- Emit the repository-check outcome pre-resolved to the configured command.",
+	"- Emit an unresolved repository check as the final numbered routing decision.",
+	"- Emit one manual resolution AT for an unresolved repository check.",
+	"- Emit one automated verification AT for an unresolved repository check.",
+	"- Emit a conditional named-destination check for each offered migration outcome.",
+	"- Emit a replacement-before-retired-source check for each replacement-missing route.",
+	"- Emit an exact-phrase absence check for each legacy-phrase route.",
+	"- Emit an unrelated-Summary preservation check for each legacy-phrase route.",
+	"- Emit an outside-Summary preservation check for each legacy-phrase route.",
+	"- Keep every emitted routing check atomic.",
+	"- Keep emitted AT numbering stable across identical reports.",
+	"- End every emitted adoption AC with exact status `` `PENDING` — immutable audit emission; workflow state is tracked in the active session.``",
+	"- Capture the SHA-256 digest of each existing mixed-content target from the first byte of its exact registered boundary-heading line through end of file.",
+	"- Keep the protected-region digest out of classification, baseline scope, and JSON output.",
+	"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
+}
+
 func TestAuditValidationContract(t *testing.T) {
 	root := filepath.Join("..", "..")
 	paths := []string{
@@ -305,49 +360,14 @@ func TestAuditValidationContract(t *testing.T) {
 		} else if string(content) != string(authority) {
 			t.Errorf("%s does not mirror govna/audit.md", path)
 		}
-		for _, required := range []string{
-			"- Require the selected CODE stack's recognized root manifest before inferring `./build.sh`.",
-			"- Ignore unrelated manifests, other prose, governance documents, executables, CI files, and flavor defaults.",
-			"- Name each emitted adoption AC `# AC<N> Adopt Govna Governance Files v<CANON_VERSION>`.",
-			"- Place the repository paragraph first under `## Summary`.",
-			"- Start the repository paragraph with `This AC updates`.",
-			"- Follow it with `The result label (classification)`.",
-			"- Place the count paragraph after the repository paragraph.",
-			"- Start the count paragraph with `Govna found`.",
-			"- Confirm each file selected for update exists in the selected CODE render.",
-			"- Emit an unresolved repository check as the final numbered routing decision.",
-			"- Emit one manual resolution AT for an unresolved repository check.",
-			"- Emit one automated verification AT for an unresolved repository check.",
-			"- Classify an existing target-only path named in the preserve registry as `preserve`.",
-			"- Keep that preserved target-only path visible in audit and JSON results.",
-			"- Omit another routing question for that preserved target-only path.",
-			"- Offer only these outcomes for a canon-backed ambiguity: sync, preserve, explicitly named migration, delete.",
-			"- Offer only these outcomes for an ordinary `target-has-no-canon` item: preserve, explicitly named migration, delete.",
-			"- Install an exact current-canon replacement before retired-source routing.",
-			"- Omit restore as a routing outcome.",
-			"- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.",
-			"- Emit a conditional named-destination check for each offered migration outcome.",
-			"- Emit a replacement-before-retired-source check for each replacement-missing route.",
-			"- Emit an exact-phrase absence check for each legacy-phrase route.",
-			"- Emit an unrelated-Summary preservation check for each legacy-phrase route.",
-			"- Emit an outside-Summary preservation check for each legacy-phrase route.",
-			"- Keep every emitted routing check atomic.",
-			"- Keep emitted AT numbering stable across identical reports.",
-			"- Fail the audit before emission when a governed path is a symbolic link, a directory, a special file, or unreadable.",
-			"- Name the failed path and its recovery action in that failure.",
-			"- Leave every existing emitted AC unchanged after that failure.",
-			"- Read the Summary from the canonical `| Unreleased | <summary> |` table row, where each `\\|` pair is one escaped pipe.",
-			"- Read the Summary from a legacy `## Unreleased` heading section as well.",
-			"- Drop a duplicate phrase-and-path pair.",
-			"- Ignore a phrase whose path is not a normalized repository-relative path.",
-			"- Drop an escaping reference or legacy phrase path without inspecting it.",
-			"- Fail the audit with a replace-the-link recovery action when a candidate path is a symbolic link.",
-			"- Reject an entry that is absolute, contains a backslash or control character, or has an empty, `.`, or `..` component.",
-			"- Direct the consumer to correct the invalid entry before retrying.",
-			"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
-		} {
+		for _, required := range auditValidationRules {
 			if strings.Count(string(content), required) != 1 {
 				t.Errorf("%s requires one occurrence of %q", path, required)
+			}
+		}
+		for _, moved := range []string{"### Emitted AC instruction and phase shape", "### Conditional routing verification", "- Emit "} {
+			if strings.Contains(string(content), moved) {
+				t.Errorf("%s retains audit emission contract text %q", path, moved)
 			}
 		}
 		for _, removed := range []string{
@@ -360,6 +380,15 @@ func TestAuditValidationContract(t *testing.T) {
 			if strings.Contains(string(content), removed) {
 				t.Errorf("%s retains superseded claim %q", path, removed)
 			}
+		}
+	}
+	arch, err := os.ReadFile(filepath.Join(root, "arch.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range auditEmissionRules {
+		if strings.Count(string(arch), required) != 1 {
+			t.Errorf("arch.md requires one occurrence of %q", required)
 		}
 	}
 }
@@ -553,8 +582,6 @@ func TestImmutableAuditACVerificationContract(t *testing.T) {
 		"- Treat a Director-resolved routing decision or explicit workflow override recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
 		"- Apply each resolved routing action while leaving the emitted AC stub unchanged.",
 		"- Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.",
-		"- Install each missing canon-backed replacement before retired-source routing.",
-		"- Remove each exact legacy phrase only after verifying its resolved target and registry state.",
 	}
 	for _, path := range paths {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -562,6 +589,24 @@ func TestImmutableAuditACVerificationContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, rule := range required {
+			if count := strings.Count(string(content), rule); count != 1 {
+				t.Errorf("%s rule count=%d, want 1 for %q", path, count, rule)
+			}
+		}
+	}
+	for _, path := range []string{
+		"govna/audit.md",
+		"internal/canon/assets/overlays/code/files/govna/audit.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/audit.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range []string{
+			"- Install an exact current-canon replacement before retired-source routing.",
+			"- Remove the exact legacy phrase after that verification.",
+		} {
 			if count := strings.Count(string(content), rule); count != 1 {
 				t.Errorf("%s rule count=%d, want 1 for %q", path, count, rule)
 			}
@@ -654,9 +699,7 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 			"- Require the emitted AC marker versions to match the recorded detailed version.",
 			"- Render the selected canon into that scratch directory once with the resolved executable.",
 			"- Compare every actionable path through the emitted `### Audit Review` instructions.",
-			"- Remove the exact scratch directory before reporting Audit completion or a blocker.",
 			"- Follow `AGENTS.md` `### Audit Adoption` for every phase entry, pause, and exit of this review.",
-			"`PENDING` — immutable audit emission; workflow state is tracked in the active session.",
 		} {
 			if strings.Count(text, required) != 1 {
 				t.Errorf("%s requires one integrated-audit phrase %q", path, required)
@@ -676,9 +719,9 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		"internal/canon/assets/overlays/code/files/arch.md.tmpl":                    "Integrated audit adoption is the only command-mediated phase exception.",
 		"internal/canon/assets/overlays/code/files/govna/README.md.tmpl":            "continues through immediate Operator Audit and no-edit Refine",
 		"internal/canon/assets/overlays/doc/files/govna/README.md.tmpl":             "continues through immediate Operator Audit and no-edit Refine",
-		"govna/development-cycle.md":                                                "The `govna` executable ends after deterministic audit comparison and emission.",
-		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl": "The `govna` executable ends after deterministic audit comparison and emission.",
-		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl":      "The `govna` executable ends after deterministic audit comparison and emission.",
+		"govna/development-cycle.md":                                                "Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl": "Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl":      "Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
 	}
 	for path, required := range docRequirements {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -713,7 +756,6 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			"- Reject Package while excluded implemented work remains in the unreleased repository state.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
 			"- Treat an explicit valid Package instruction for an established empty release batch as the same trigger.",
-			"- Treat standalone `Package`, `package`, `pack`, and `prep` as equivalent names for `Package` only after Ratify acceptance or for an established empty release batch.",
 			"- Define an empty release batch as an empty pending release batch with at least one unreleased direct-handled change.",
 			"- Treat an empty release batch as established only after an explicit Director Package request.",
 			"- Describe each direct-handled change in the release message for an empty release batch.",
@@ -754,18 +796,8 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		}
 		text := string(content)
 		for _, required := range []string{
-			"- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.",
-			"- Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.",
-			"- Require every pending release-batch member to complete Ratify before prep.",
-			"- Reject prep while excluded implemented work remains in the unreleased repository state.",
-			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
-			"- Apply this checklist equally to an established empty release batch.",
-			"- Describe each direct-handled change in the release message for an empty release batch.",
-			"- Reject a release message without AC references while any unpackaged implemented AC exists.",
-			"- Require the established release batch to equal the complete pending release batch before prep.",
-			"- Reject a release message longer than 80 bytes before prep.",
-			"- Prohibit a smaller release batch while excluded implemented work remains.",
-			"- Prohibit automatic release-batch splitting.",
+			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch.",
+			"- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 		} {
 			if strings.Count(text, required) != 1 {
 				t.Errorf("%s requires one release-batch checklist rule %q", path, required)
@@ -784,7 +816,6 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		}
 		text := string(content)
 		for _, required := range []string{
-			"Package requires every implemented batch member to be Ratified, compares the complete pending batch with the exact message, and rejects partial or oversized batches before prep. An empty release batch packages direct-handled changes without AC references only when no implemented AC awaits release.",
 			"- Apply `AGENTS.md` `### Phase-Advancement Rules` to every action instruction and release batch.",
 			"for the established Ratified or empty release batch only after separate Director authorization.",
 		} {
@@ -1069,7 +1100,7 @@ func TestGovernanceScenarios(t *testing.T) {
 		"- Rerun applicable validation when Ratify evidence is missing or stale.",
 		"- Rerun applicable validation after an inline Ratify correction.",
 		"- Perform the final review during the same Ratify turn.",
-		"- Recheck new or unresolved contract-integrity findings during Ratify.",
+		"- Recheck only new or unresolved contract-integrity findings during Audit completion, Implement completion, closure audit, and Ratify.",
 		"- Skip requests for a second acceptance signal after a clean Ratify review.",
 		"- Use the complete primary-repository state as the default dependency boundary.",
 		"- Narrow the dependency boundary only when repository evidence proves that a reused check cannot read the excluded state.",
@@ -1483,12 +1514,7 @@ func fileText(t *testing.T, files []File, path string) string {
 // sharedInvariantRules names the rule bullets that stay in both AGENTS.md and
 // an owning canon document because audit content-coherence checks require them
 // in the rendered overlay document.
-var sharedInvariantRules = map[string]bool{
-	"Describe each direct-handled change in the release message for an empty release batch.":     true,
-	"Prohibit automatic release-batch splitting.":                                                true,
-	"Reject a release message without AC references while any unpackaged implemented AC exists.": true,
-	"Remove the exact scratch directory before reporting Audit completion or a blocker.":         true,
-}
+var sharedInvariantRules = map[string]bool{}
 
 type dedupProfile struct {
 	name      string

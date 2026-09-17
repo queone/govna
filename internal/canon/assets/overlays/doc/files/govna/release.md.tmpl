@@ -42,19 +42,8 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 
 ## Pre-Release Checklist
 
-- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.
-- Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.
-- Require every pending release-batch member to complete Ratify before prep.
-- Reject prep while excluded implemented work remains in the unreleased repository state.
-- Require the unique release-message AC-reference set to equal the established release batch before prep.
-- Require the established release batch to equal the complete pending release batch before prep.
-- Reject a release message longer than 80 bytes before prep.
-- Prohibit a smaller release batch while excluded implemented work remains.
-- Prohibit automatic release-batch splitting.
-- Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.
-- Apply this checklist equally to an established empty release batch.
-- Describe each direct-handled change in the release message for an empty release batch.
-- Reject a release message without AC references while any unpackaged implemented AC exists.
+- Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch.
+- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.
 
 1. **Verify completion.**
    - Verify all in-scope AC work is complete.

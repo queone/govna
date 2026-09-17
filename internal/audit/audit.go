@@ -139,7 +139,6 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Require the emitted AC marker versions to match the recorded detailed version.",
 		"Render the selected canon into that scratch directory once with the resolved executable.",
 		"Compare every actionable path through the emitted `### Audit Review` instructions.",
-		"Remove the exact scratch directory before reporting Audit completion or a blocker.",
 	},
 }, {
 	Reference: "govna/canon-cycle.md",
@@ -157,12 +156,7 @@ var releaseContentCoherenceRule = contentCoherenceRule{
 		"End the structured Package completion report with `Run below to release:`.",
 		"Place the exact release command immediately after that line.",
 		"Add nothing after the release command.",
-		"Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.",
-		"Require every pending release-batch member to complete Ratify before prep.",
-		"Require the established release batch to equal the complete pending release batch before prep.",
-		"Reject a release message longer than 80 bytes before prep.",
-		"Prohibit a smaller release batch while excluded implemented work remains.",
-		"Prohibit automatic release-batch splitting.",
+		"Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 	},
 	Forbidden: []string{
 		"Present only the release command after prep.",

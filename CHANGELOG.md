@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.27.0 | AC45 shorten AGENTS.md and shipped governance docs; canon v0.62.0 |
 | 0.26.0 | AC44 require the v form for --version in Go and Rust builds; canon v0.61.0 |
 | 0.25.1 | README CLI-agent quick start, in-place git revert, rm exit, unsupported apps |
 | 0.25.0 | AC43 keep docs, contain file access, CRLF merges, table phrases; canon v0.60.0 |

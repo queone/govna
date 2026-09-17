@@ -58,8 +58,8 @@ func TestRunDocPreservesUnrelated(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(target, "keep.txt")); string(got) != "keep\n" {
 		t.Fatalf("unrelated=%q", got)
 	}
-	if agents, _ := os.ReadFile(filepath.Join(target, "AGENTS.md")); strings.Contains(string(agents), "provider/API fetch") {
-		t.Fatal("DOC AGENTS contains CODE vocabulary")
+	if cycle, _ := os.ReadFile(filepath.Join(target, "govna", "editing-cycle.md")); strings.Contains(string(cycle), "reconciliation path") {
+		t.Fatal("DOC editing cycle contains CODE vocabulary")
 	}
 }
 

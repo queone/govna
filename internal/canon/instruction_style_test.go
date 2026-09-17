@@ -22,13 +22,11 @@ var acDocument = regexp.MustCompile(`^ac[0-9]+-`)
 
 var instructionExceptions = []instructionException{
 	{"AGENTS.md", "Ask the Director to narrow the task or split the AC before proposing delegation when the task exceeds practical inline capacity.", "one ask action offers two exclusive request objects"},
-	{"AGENTS.md", "Map every in-scope command entry point, provider/API fetch, normalized-table write, durable snapshot, stale fallback, freshness gate, and complete-snapshot reconciliation path in the closure audit.", "one map action applies to a path-category list"},
 	{"AGENTS.md", "Reach for `Read` only to fetch unseen content or check for recent changes.", "one reach action has two exclusive purposes"},
 	{"govna/development-cycle.md", "Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.", "one keep action applies to two object classes"},
 	{"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl", "Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.", "one keep action applies to two object classes"},
 	{"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl", "Keep roadmap decisions and follow-on `IE<N>:` items in `plan.md`.", "one keep action applies to two object classes"},
 	{"internal/canon/assets/base/AGENTS.md.tmpl", "Ask the Director to narrow the task or split the AC before proposing delegation when the task exceeds practical inline capacity.", "one ask action offers two exclusive request objects"},
-	{"internal/canon/assets/base/AGENTS.md.tmpl", "Map every in-scope command entry point, provider/API fetch, normalized-table write, durable snapshot, stale fallback, freshness gate, and complete-snapshot reconciliation path in the closure audit.", "one map action applies to a path-category list"},
 	{"internal/canon/assets/base/AGENTS.md.tmpl", "Reach for `Read` only to fetch unseen content or check for recent changes.", "one reach action has two exclusive purposes"},
 	{"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl", "Ask the Director to narrow the task or split the AC before proposing delegation when the task exceeds practical inline capacity.", "one ask action offers two exclusive request objects"},
 	{"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl", "Reach for `Read` only to fetch unseen content or check for recent changes.", "one reach action has two exclusive purposes"},
@@ -48,6 +46,7 @@ const (
 )
 
 var rewrittenInstructionPaths = []string{
+	"arch.md",
 	"AGENTS.md",
 	"govna/audit.md",
 	"govna/build-release.md",
@@ -81,9 +80,6 @@ var (
 		"govna/build-release.md",
 		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl",
 	}
-	buildReleaseProjectRewrittenPaths = []string{
-		"govna/build-release.md",
-	}
 	codeStacksRewrittenPaths = []string{
 		"govna/code-stacks.md",
 		"internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl",
@@ -100,6 +96,9 @@ var (
 	editingRewrittenPaths = []string{
 		"internal/canon/assets/overlays/doc/files/govna/editing-guidelines.md.tmpl",
 	}
+	archRewrittenPaths = []string{
+		"arch.md",
+	}
 )
 
 var rewrittenInstructionReviews = []rewrittenInstructionReview{
@@ -114,8 +113,8 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 	{"Stop when a request is ambiguous or the change is hard to reverse.", "Stop when a request is ambiguous or the change is hard to reverse.", agentsRewrittenPaths, reviewClean},
 	{"Ask for direction before proceeding.", "Ask for direction before proceeding.", agentsRewrittenPaths, reviewClean},
 
-	{"Place the count paragraph first under `## Summary`.", "Place the count paragraph first under `## Summary`.", auditRewrittenPaths, reviewClean},
-	{"Start the count paragraph with `This adoption covers`.", "Start the count paragraph with `This adoption covers`.", auditRewrittenPaths, reviewClean},
+	{"Place the count paragraph first under `## Summary`.", "Place the count paragraph first under `## Summary`.", archRewrittenPaths, reviewClean},
+	{"Start the count paragraph with `This adoption covers`.", "Start the count paragraph with `This adoption covers`.", archRewrittenPaths, reviewClean},
 	{"Recompute the protected-region digest after adoption.", "Recompute the protected-region digest after adoption.", auditRewrittenPaths, reviewClean},
 	{"Require the protected-region digest to match the emitted digest.", "Require the protected-region digest to match the emitted digest.", auditRewrittenPaths, reviewClean},
 
@@ -126,11 +125,11 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 	{"Run ordinary canonical post-change validation for Go prep.", "Run ordinary canonical post-change validation for Go prep.", buildReleaseRewrittenPaths, reviewClean},
 	{"Reserve validation-token evidence for Rust prep.", "Reserve validation-token evidence for Rust prep.", buildReleaseRewrittenPaths, reviewClean},
 	{"Refresh validation-token evidence for Rust prep.", "Refresh validation-token evidence for Rust prep.", buildReleaseRewrittenPaths, reviewClean},
-	{"Rebuild a release from its clean tagged commit before publication.", "Rebuild a release from its clean tagged commit before publication.", buildReleaseProjectRewrittenPaths, reviewClean},
-	{"Install the rebuilt release before publication.", "Install the rebuilt release before publication.", buildReleaseProjectRewrittenPaths, reviewClean},
+	{"Rebuild a release from its clean tagged commit before publication.", "Rebuild a release from its clean tagged commit before publication.", codeStacksRewrittenPaths, reviewClean},
+	{"Install the rebuilt release before publication.", "Install the rebuilt release before publication.", codeStacksRewrittenPaths, reviewClean},
 
-	{"Run ordinary canonical pre-change validation during Go release prep.", "Run ordinary canonical pre-change validation during Go release prep.", codeStacksRewrittenPaths, reviewClean},
-	{"Run ordinary canonical post-change validation during Go release prep.", "Run ordinary canonical post-change validation during Go release prep.", codeStacksRewrittenPaths, reviewClean},
+	{"Run ordinary canonical pre-change validation during Go release prep.", "Run ordinary canonical pre-change validation during Go release prep.", buildReleaseRewrittenPaths, reviewClean},
+	{"Run ordinary canonical post-change validation during Go release prep.", "Run ordinary canonical post-change validation during Go release prep.", buildReleaseRewrittenPaths, reviewClean},
 	{"Bump the root package version during release prep.", "Bump the root package version during release prep.", codeStacksRewrittenPaths, reviewClean},
 	{"Refresh `Cargo.lock` during release prep.", "Refresh `Cargo.lock` during release prep.", codeStacksRewrittenPaths, reviewClean},
 	{"Accept declared binary names for scoped builds.", "Accept declared binary names for scoped builds.", codeStacksRewrittenPaths, reviewClean},
@@ -160,16 +159,16 @@ var currentInstructionReplacements = map[string]string{
 	"Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.": "Require `--version` to print exactly `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.",
 	"Place the count paragraph first under `## Summary`.":                                                                               "Place the repository paragraph first under `## Summary`.",
 	"Start the count paragraph with `This adoption covers`.":                                                                            "Start the count paragraph with `Govna found`.",
-	"Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).": "Run `./build.sh` when the change touches code or build-relevant files and current build evidence is unavailable (skip for AC critique, doc-only review, design discussion).",
+	"Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).": "Run `./build.sh` only when required build evidence is missing or stale.",
 	"Confirm that `./build.sh` passes when the change touches code or build-relevant files.":                                            "Confirm that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
 	"Run each acceptance test in the active AC when it can be exercised.":                                                               "Run each acceptance test in the active AC when its current disposition is unavailable.",
 	"Report the result of each exercised acceptance test.":                                                                              "Report each current acceptance-test disposition.",
 	"Run ordinary canonical pre-change validation for Go prep.":                                                                         "Use the successful final full build and clean Ratify review as current Package evidence.",
 	"Run ordinary canonical post-change validation for Go prep.":                                                                        "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
-	"Rebuild a release from its clean tagged commit before publication.":                                                                "Compile every discovered Go utility once from clean committed `HEAD` before tagging.",
-	"Install the rebuilt release before publication.":                                                                                   "Install every validated utility atomically before tagging.",
-	"Run ordinary canonical pre-change validation during Go release prep.":                                                              "Keep Go prep limited to version, changelog, released-AC, and matching `plan.md` pointer bookkeeping.",
-	"Run ordinary canonical post-change validation during Go release prep.":                                                             "Run no canonical build, Go build, or Go dependency command during Go prep.",
+	"Rebuild a release from its clean tagged commit before publication.":                                                                "Require clean committed `HEAD` before release compilation.",
+	"Install the rebuilt release before publication.":                                                                                   "Install every validated utility by atomic adjacent replacement.",
+	"Run ordinary canonical pre-change validation during Go release prep.":                                                              "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
+	"Run ordinary canonical post-change validation during Go release prep.":                                                             "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
 }
 
 func currentReviewedInstruction(review rewrittenInstructionReview) string {
@@ -501,7 +500,6 @@ func TestPlainLanguageContractAndMirrors(t *testing.T) {
 		"- Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.",
 		"- Confirm the AC title and Summary lead with the concrete outcome in plain language.",
 		"- Resolve an unresolved emitted repository check in chat.",
-		"- Run the chosen repository command after all selected sync, migration, and deletion work.",
 		"- Cite repository evidence when choosing `Not applicable` for the repository check.",
 		"- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.",
 	}
@@ -556,6 +554,19 @@ func TestPlainLanguageFirstUseExplanations(t *testing.T) {
 			}
 		}
 	}
+	for _, path := range []string{
+		"govna/audit.md",
+		"internal/canon/assets/overlays/code/files/govna/audit.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/govna/audit.md.tmpl",
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Count(string(content), "- Run the chosen repository command after all selected sync, migration, and deletion work.") != 1 {
+			t.Errorf("%s requires one occurrence of the repository-command ordering rule", path)
+		}
+	}
 }
 
 func TestScopedPlainLanguageReplacements(t *testing.T) {
@@ -563,10 +574,10 @@ func TestScopedPlainLanguageReplacements(t *testing.T) {
 		path, legacy, current string
 	}
 	checks := []replacement{
-		{"govna/audit.md", "Place the count paragraph first under `## Summary`.", "Place the repository paragraph first under `## Summary`."},
-		{"govna/audit.md", "Start the count paragraph with `This adoption covers`.", "Start the count paragraph with `Govna found`."},
-		{"govna/audit.md", "Start the Summary sentences with `This audit adoption synchronizes`", "Start the repository paragraph with `This AC updates`."},
-		{"govna/audit.md", "Audit surfaced", "Follow it with `The result label (classification)`."},
+		{"arch.md", "Place the count paragraph first under `## Summary`.", "Place the repository paragraph first under `## Summary`."},
+		{"arch.md", "Start the count paragraph with `This adoption covers`.", "Start the count paragraph with `Govna found`."},
+		{"arch.md", "Start the Summary sentences with `This audit adoption synchronizes`", "Start the repository paragraph with `This AC updates`."},
+		{"arch.md", "Audit surfaced", "Follow it with `The result label (classification)`."},
 		{"internal/audit/audit.go", " Audit v", "Adopt Govna Governance Files v%s"},
 		{"internal/audit/audit.go", "Review Govna File Updates", "Adopt Govna Governance Files v%s"},
 		{"internal/audit/audit.go", "This adoption covers", "Govna found %s, %s, %s, and %s."},
@@ -1008,10 +1019,6 @@ func TestCompoundActionDetection(t *testing.T) {
 func TestAtomicInstructionCorrections(t *testing.T) {
 	want := map[string][]string{
 		"govna/audit.md": {
-			"- Name each emitted adoption AC `# AC<N> Adopt Govna Governance Files v<CANON_VERSION>`.",
-			"- Place the repository paragraph first under `## Summary`.",
-			"- Place the count paragraph after the repository paragraph.",
-			"- Start the count paragraph with `Govna found`.",
 			"- Recompute the protected-region digest after adoption.",
 			"- Require the protected-region digest to match the emitted digest.",
 			"- Run the ordinary agent-mediated audit without `--json`.",
@@ -1019,17 +1026,14 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Create exactly one unique system-temporary scratch directory outside the consumer repository.",
 			"- Render the selected canon into that scratch directory once with the resolved executable.",
 			"- Compare every actionable path through the emitted `### Audit Review` instructions.",
-			"- Remove the exact scratch directory before reporting Audit completion or a blocker.",
 		},
 		"govna/build-release.md": {
 			"- Use the successful final full build and clean Ratify review as current Package evidence.",
 			"- Keep Go prep free of canonical build, Go build, and Go dependency commands.",
 			"- Reserve validation-token evidence for Rust prep.",
 			"- Refresh validation-token evidence for Rust prep.",
-			"- Compile every discovered Go utility once from clean committed `HEAD` before tagging.",
-			"- Install every validated utility atomically before tagging.",
-			"- Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch.",
-			"- Require the unique release-message AC-reference set to equal the established release batch before prep.",
+			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch.",
+			"- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 		},
 		"govna/code-stacks.md": {
 			"- Bump the root package version during release prep.",
@@ -1172,8 +1176,8 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 	if len(rewrittenInstructionReviews) != 45 {
 		t.Fatalf("rewritten instruction manifest has %d entries, want 45", len(rewrittenInstructionReviews))
 	}
-	if len(rewrittenInstructionPaths) != 16 {
-		t.Fatalf("rewritten instruction path inventory has %d entries, want 16", len(rewrittenInstructionPaths))
+	if len(rewrittenInstructionPaths) != 17 {
+		t.Fatalf("rewritten instruction path inventory has %d entries, want 17", len(rewrittenInstructionPaths))
 	}
 
 	expectedPaths := make(map[string]bool, len(rewrittenInstructionPaths))
@@ -1188,6 +1192,11 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 	}
 
 	corpus := governanceCorpus(t)
+	archContent, err := os.ReadFile(filepath.Join("..", "..", "arch.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	corpus["arch.md"] = string(archContent)
 	coveredPaths := map[string]bool{}
 	beforeSeen := map[string]bool{}
 	afterSeen := map[string]bool{}
@@ -1330,21 +1339,10 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 		}
 	}
 
-	const first = "Start this checklist only when the Director explicitly requests a valid Package instruction for the established Ratified release batch."
+	const first = "Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch."
 	checklistRules := []string{
 		first,
-		"Map every unpackaged AC with implementation in the unreleased repository state to the complete pending release batch.",
-		"Require every pending release-batch member to complete Ratify before prep.",
-		"Reject prep while excluded implemented work remains in the unreleased repository state.",
-		"Require the unique release-message AC-reference set to equal the established release batch before prep.",
-		"Require the established release batch to equal the complete pending release batch before prep.",
-		"Reject a release message longer than 80 bytes before prep.",
-		"Prohibit a smaller release batch while excluded implemented work remains.",
-		"Prohibit automatic release-batch splitting.",
-		"Do not treat `./build.sh prep ...` or ordinary build-preparation language as a workflow request.",
-		"Apply this checklist equally to an established empty release batch.",
-		"Describe each direct-handled change in the release message for an empty release batch.",
-		"Reject a release message without AC references while any unpackaged implemented AC exists.",
+		"Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 	}
 	checklistOpening := "- " + strings.Join(checklistRules, "\n- ") + "\n"
 	codeOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
