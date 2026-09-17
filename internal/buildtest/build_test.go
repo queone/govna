@@ -48,6 +48,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			config: canon.Config{Flavor: canon.Doc, RepoName: "handbook"},
 			bindings: []binding{
 				{claim: "`build.sh` is self-contained Bash 3.2+ tooling.", implementation: "_prep_parse_ac_refs()", regression: "TestRenderedPrepCompositeACReferences"},
+				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 			},
 		},
 		{
@@ -65,6 +66,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Rust", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
 			bindings: []binding{
+				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Require one literal `PROGRAM_VERSION: &str` strict stable SemVer declaration in each declared binary path.", implementation: "_validate_utility_declarations", regression: "test_utility_declaration_validation", shellRegression: true},
 				{claim: "Validate every declaration before compilation and each compiled binary before installation.", implementation: "_validate_compiled_utility \"$target\" \"$version\"", regression: "test_compiled_version_output", shellRegression: true},
 			},
@@ -73,6 +75,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Swift", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
 			bindings: []binding{
+				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Keep SwiftPM artifacts in one invocation-owned external scratch directory and clean it on success, failure, and handled signals.", implementation: "govna-swift-build.XXXXXX", regression: "TestSupportedProfileCommandParity"},
 				{claim: "Run strict toolchain formatting, debug compilation, tests, and release compilation with compiler warnings as errors.", implementation: "-Xswiftc -warnings-as-errors", regression: "TestSupportedProfileCommandParity"},
 			},
@@ -81,6 +84,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Terraform", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
 			bindings: []binding{
+				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform fmt -check -recursive", regression: "TestSupportedProfileCommandParity"},
 				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform validate", regression: "TestSupportedProfileCommandParity"},
 			},
@@ -2709,5 +2713,164 @@ func TestRustCompiledUtilityRequiresVersionVForm(t *testing.T) {
 	}
 	if out, err := run(t, dir, "", "-c", probe); err != nil || !strings.Contains(out, "--version = 1.2.3") {
 		t.Fatalf("v form rejected by the Rust check: %v: %s", err, out)
+	}
+}
+
+// nonGoReleaseProfiles lists every rendered release path that lacked the Go
+// prepared-state guard before AC46.
+var nonGoReleaseProfiles = []struct {
+	name   string
+	config canon.Config
+}{
+	{name: "DOC", config: canon.Config{Flavor: canon.Doc, RepoName: "handbook"}},
+	{name: "Rust", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"}},
+	{name: "Swift", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"}},
+	{name: "Terraform", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"}},
+}
+
+// prepareProfileReleaseFixture renders one profile's build.sh into a Git
+// repository whose CHANGELOG.md carries the prepared row for version and
+// message, with a Cargo.toml root package at cargoVersion for Rust.
+func prepareProfileReleaseFixture(t *testing.T, config canon.Config, dir, version, message, cargoVersion string) {
+	t.Helper()
+	files, err := canon.Render(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var script []byte
+	for _, file := range files {
+		if file.Path == "build.sh" {
+			script = file.Content
+		}
+	}
+	if len(script) == 0 {
+		t.Fatal("render omits build.sh")
+	}
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+	changelog := fmt.Sprintf("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| %s | %s |\n", version, message)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte(changelog), 0o644)
+	if config.Stack == "Rust" {
+		cargo := fmt.Sprintf("[package]\nname = \"widget\"\nversion = \"%s\"\nedition = \"2021\"\n", cargoVersion)
+		writeBuildFixture(t, filepath.Join(dir, "Cargo.toml"), []byte(cargo), 0o644)
+	}
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+}
+
+func gitState(t *testing.T, dir string) string {
+	t.Helper()
+	status := gitFixtureOutput(t, dir, "status", "--porcelain")
+	head := gitFixtureOutput(t, dir, "rev-parse", "HEAD")
+	tags := gitFixtureOutput(t, dir, "tag", "--list")
+	return string(status) + string(head) + string(tags)
+}
+
+func assertRefusedBeforePrompt(t *testing.T, dir, out string, err error, wants ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("release was not refused: %s", out)
+	}
+	if strings.Contains(out, "Proceed") {
+		t.Fatalf("release reached the approval prompt: %s", out)
+	}
+	for _, want := range wants {
+		if !strings.Contains(out, want) {
+			t.Fatalf("refusal omits %q: %s", want, out)
+		}
+	}
+}
+
+func TestNonGoReleaseRefusesUnpreparedTagAndMessage(t *testing.T) {
+	for _, profile := range nonGoReleaseProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			dir := t.TempDir()
+			prepareProfileReleaseFixture(t, profile.config, dir, "1.0.0", "AC29 release", "1.0.0")
+			before := gitState(t, dir)
+			resolved, err := filepath.EvalSymlinks(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := run(t, dir, "", "./build.sh", "v2.0.0", "AC106 other")
+			assertRefusedBeforePrompt(t, dir, out, err,
+				"CHANGELOG.md must contain the exact row | 2.0.0 | AC106 other | immediately after Unreleased",
+				" in "+resolved,
+				`run ./build.sh prep v2.0.0 "AC106 other" in the intended repository`)
+			if gitState(t, dir) != before {
+				t.Fatal("refusal changed Git state")
+			}
+		})
+	}
+}
+
+func TestNonGoReleaseRefusesExistingTag(t *testing.T) {
+	for _, profile := range nonGoReleaseProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			dir := t.TempDir()
+			prepareProfileReleaseFixture(t, profile.config, dir, "1.0.0", "AC29 release", "1.0.0")
+			gitFixture(t, dir, "tag", "v1.0.0")
+			before := gitState(t, dir)
+			out, err := run(t, dir, "", "./build.sh", "v1.0.0", "AC29 release")
+			assertRefusedBeforePrompt(t, dir, out, err, "tag v1.0.0 already exists")
+			if gitState(t, dir) != before {
+				t.Fatal("refusal changed Git state")
+			}
+		})
+	}
+}
+
+func TestNonGoReleaseValidatesTagAndMessageLikeGo(t *testing.T) {
+	long := strings.Repeat("x", 81)
+	cases := []struct {
+		name, tag, message, want string
+	}{
+		{name: "leading zero tag", tag: "v01.0.0", message: "AC29 release", want: "strict stable SemVer"},
+		{name: "81-byte message", tag: "v1.0.0", message: long, want: "80 bytes"},
+		{name: "pipe in message", tag: "v1.0.0", message: "AC29 | release", want: "cannot contain |"},
+		{name: "empty message", tag: "v1.0.0", message: "", want: "non-empty"},
+	}
+	for _, profile := range nonGoReleaseProfiles {
+		for _, tc := range cases {
+			t.Run(profile.name+"/"+tc.name, func(t *testing.T) {
+				dir := t.TempDir()
+				prepareProfileReleaseFixture(t, profile.config, dir, "1.0.0", "AC29 release", "1.0.0")
+				before := gitState(t, dir)
+				out, err := run(t, dir, "", "./build.sh", tc.tag, tc.message)
+				assertRefusedBeforePrompt(t, dir, out, err, tc.want)
+				if gitState(t, dir) != before {
+					t.Fatal("refusal changed Git state")
+				}
+			})
+		}
+	}
+}
+
+func TestRustReleaseRequiresPreparedRootVersion(t *testing.T) {
+	dir := t.TempDir()
+	prepareProfileReleaseFixture(t, canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"}, dir, "1.0.0", "AC29 release", "0.9.0")
+	before := gitState(t, dir)
+	out, err := run(t, dir, "", "./build.sh", "v1.0.0", "AC29 release")
+	assertRefusedBeforePrompt(t, dir, out, err, "prepared Cargo.toml [package].version is 0.9.0; require 1.0.0")
+	if gitState(t, dir) != before {
+		t.Fatal("refusal changed Git state")
+	}
+}
+
+func TestNonGoReleaseReachesPromptWhenPrepared(t *testing.T) {
+	for _, profile := range nonGoReleaseProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			dir := t.TempDir()
+			prepareProfileReleaseFixture(t, profile.config, dir, "1.0.0", "AC29 release", "1.0.0")
+			before := gitState(t, dir)
+			out, err := run(t, dir, "n\n", "./build.sh", "v1.0.0", "AC29 release")
+			if err == nil || !strings.Contains(out, "release aborted") || !strings.Contains(out, "Proceed") {
+				t.Fatalf("prepared release did not reach the prompt and cancel: %v: %s", err, out)
+			}
+			if gitState(t, dir) != before {
+				t.Fatal("cancellation changed Git state")
+			}
+		})
 	}
 }

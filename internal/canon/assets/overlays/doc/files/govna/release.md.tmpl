@@ -12,6 +12,7 @@ Require its confirmation prompt before `git add → commit → annotated tag →
 Keep DOC release prep repository-wide.
 Reject CODE target selection.
 Limit release messages to 80 bytes.
+Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.
 
 DOC repositories do not provide installable utilities, so the independent
 utility-version declaration and `--version` contract does not apply to this

@@ -280,11 +280,66 @@ rel_usage() {
 }
 
 # rel_run TAG MESSAGE
+# ── release prepared-state guard ────────────────────────────────────────────
+
+_is_strict_stable_semver() { # $1=version -> success when MAJOR.MINOR.PATCH
+  printf '%s' "$1" | LC_ALL=C grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+}
+
+_release_refuse() { # $1=condition $2=tag $3=message
+  printf 'release: %s in %s; run ./build.sh prep %s %s in the intended repository\n' \
+    "$1" "$PWD" "$2" "$(_go_quote "$3")" >&2
+  return 1
+}
+
+_validate_changelog_shape() { # $1=path
+  LC_ALL=C awk '
+    NR == 1 && $0 != "# Changelog" { bad=1 }
+    NR == 2 && $0 != "" { bad=1 }
+    NR == 3 && $0 != "| Version | Summary |" { bad=1 }
+    NR == 4 && $0 != "|---------|---------|" { bad=1 }
+    NR == 5 && $0 != "| Unreleased | |" { bad=1 }
+    NR >= 5 && $0 !~ /^\| [^|]+ \|(\\\||[^|])*\|$/ { bad=1 }
+    END { if (NR < 5 || bad) exit 1 }
+  ' "$1"
+}
+
+_validate_changelog_release_row() { # $1=path $2=version $3=message
+  LC_ALL=C awk -v row="| $2 | $3 |" '
+    $0 == row { count++; if (NR == 6) immediate=1 }
+    END { if (count != 1 || !immediate) exit 1 }
+  ' "$1"
+}
+
+# Refuse a release that prep did not prepare in this repository: strict tag,
+# message shape, no existing tag, and the exact CHANGELOG row after Unreleased.
+_release_validate_prepared() { # $1=tag $2=message
+  local tag="$1" message="$2" version="${1#v}"
+  { [ "$tag" = "v$version" ] && _is_strict_stable_semver "$version"; } ||
+    { _release_refuse "tag must use strict stable SemVer vMAJOR.MINOR.PATCH ($(_go_quote "$tag"))" "$tag" "$message"; return 1; }
+  [ -n "$message" ] || { _release_refuse 'message must be non-empty' "$tag" "$message"; return 1; }
+  [ "$(_byte_len "$message")" -le 80 ] ||
+    { _release_refuse "message must be 80 bytes or fewer (got $(_byte_len "$message"))" "$tag" "$message"; return 1; }
+  case "$message" in
+  *'|'*) _release_refuse 'message must fit one Markdown table cell and cannot contain |' "$tag" "$message"; return 1 ;;
+  *$'\n'* | *$'\r'*) _release_refuse 'message must be one line' "$tag" "$message"; return 1 ;;
+  esac
+  if git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1; then
+    _release_refuse "tag $tag already exists" "$tag" "$message"; return 1
+  fi
+  [ -f CHANGELOG.md ] || { _release_refuse 'CHANGELOG.md is missing' "$tag" "$message"; return 1; }
+  _validate_changelog_shape CHANGELOG.md ||
+    { _release_refuse 'CHANGELOG.md does not use the canonical changelog heading and two-column table shape' "$tag" "$message"; return 1; }
+  _validate_changelog_release_row CHANGELOG.md "$version" "$message" ||
+    { _release_refuse "CHANGELOG.md must contain the exact row | $version | $message | immediately after Unreleased" "$tag" "$message"; return 1; }
+}
+
 rel_run() {
   local tag="$1" message="$2"
   _rel_tag_for_recovery="$tag"
 
   _ensure_git_repo || return 1
+  _release_validate_prepared "$tag" "$message" || return 1
 
   printf '%s %s\n' "$(yel7 'release tag:')" "$(grn3 "$tag")"
   printf '%s %s\n' "$(yel7 'release message:')" "$(grn3 "$(_go_quote "$message")")"
@@ -905,8 +960,8 @@ rel_main() {
   local tag message
   tag=$(_trim "$1")
   message=$(_trim "$2")
-  if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-    printf 'release tag must match vMAJOR.MINOR.PATCH: %s\n' "$(_go_quote "$tag")" >&2
+  if [ "$tag" != "v${tag#v}" ] || ! _is_strict_stable_semver "${tag#v}"; then
+    printf 'release tag must use strict stable SemVer vMAJOR.MINOR.PATCH: %s\n' "$(_go_quote "$tag")" >&2
     return 2
   fi
   if [ -z "$message" ]; then
