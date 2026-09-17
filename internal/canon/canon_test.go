@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.63.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.63.1\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -184,6 +184,32 @@ func TestSelfHostedGoBaseline(t *testing.T) {
 	}
 	if got != string(want) {
 		t.Fatalf("self-hosted Go baseline differs from render\n%s", got)
+	}
+}
+
+func TestRenderedPlanNamesTheCeremonyEvaluation(t *testing.T) {
+	profiles := map[string]Config{"DOC": {Flavor: Doc, RepoName: "handbook"}}
+	for _, stack := range Stacks() {
+		module := ""
+		if stack == "Go" {
+			module = "example.com/widget"
+		}
+		profiles["CODE "+stack] = Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: module}
+	}
+	for name, config := range profiles {
+		t.Run(name, func(t *testing.T) {
+			files, err := Render(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := fileText(t, files, "plan.md")
+			if !strings.Contains(plan, "`AGENTS.md` `### AC-First Workflow`") {
+				t.Error("plan.md does not point idea entries at the AC-First Workflow section")
+			}
+			if strings.Contains(strings.ToLower(plan), "rubric") {
+				t.Error("plan.md names a rubric that AGENTS.md does not define")
+			}
+		})
 	}
 }
 

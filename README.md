@@ -266,6 +266,34 @@ Govna provides two overlay flavors:
 
 CODE repositories can select only Go, Rust, Swift, and Terraform because those stacks have complete canonical build adapters. Each supported stack defines inference, canonical validation, installation, scoped-build, and release behavior. See [`govna/code-stacks.md`](govna/code-stacks.md) for the complete contracts.
 
+## Choosing a DOC Kind and Page Types
+
+This section is advice. Govna does not enforce it, record it, or copy it into a repository. Editorial structure stays the repository owner's domain.
+
+Two questions are worth settling when you start a DOC repository. The first is what the whole repository is. The second is what each page is.
+
+**What the repository is.** Each kind of document is written, ordered, and released in its own way:
+
+| Kind             | Unit you write   | Order                          | What a release means            | Does a candidate-judging step help? |
+| ---------------- | ---------------- | ------------------------------ | ------------------------------- | ----------------------------------- |
+| Blog             | Post             | By date                        | New posts go live               | Sometimes                           |
+| Wiki             | Page             | None; pages link to each other | A batch of page edits           | Rarely                              |
+| Book             | Chapter          | Linear                         | A draft milestone or an edition | No; the outline decides             |
+| Notes collection | Entry            | None; grouped by topic         | New and revised entries         | Yes                                 |
+| Novel            | Chapter or scene | Linear                         | A draft milestone               | No; the outline decides             |
+| Script           | Scene            | Linear                         | A draft revision                | No; the outline decides             |
+
+A candidate-judging step is a short review that decides whether a raw idea earns a place before anyone drafts it.
+
+**What each page is.** The [Diátaxis](https://diataxis.fr/) scheme sorts documentation pages into four types:
+
+- **Tutorial** — a lesson that teaches a newcomer by doing.
+- **How-to guide** — the steps that solve one specific problem.
+- **Reference** — facts to look up while working.
+- **Explanation** — background that builds understanding.
+
+A notes collection may prefer a looser set, such as opinion, explainer, how-to, reference, and quotation.
+
 ## Design
 
 Govna is a standard-library-only Go module. It keeps every governance template inside the executable, so adding or rendering Govna files needs no runtime package, network service, submodule, or separate template checkout.

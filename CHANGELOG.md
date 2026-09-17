@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.28.1 | AC47 README guide to DOC kinds; fix plan.md rubric reference; canon v0.63.1 |
 | 0.28.0 | AC46 refuse unprepared release commands in non-Go scripts; canon v0.63.0 |
 | 0.27.0 | AC45 shorten AGENTS.md and shipped governance docs; canon v0.62.0 |
 | 0.26.0 | AC44 require the v form for --version in Go and Rust builds; canon v0.61.0 |
