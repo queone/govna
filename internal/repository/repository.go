@@ -1,15 +1,19 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/queone/govna/internal/canon"
 	"github.com/queone/govna/internal/usererr"
@@ -85,8 +89,8 @@ func (a *Access) Dir() string { return a.dir }
 
 // Preflight validates rel beneath the root before any read or write.
 // It rejects an escaping path, a symbolic link at any directory component, and a
-// directory, special file, or link at the leaf; allowLink accepts a link at the leaf.
-func (a *Access) Preflight(rel string, allowLink bool) error {
+// directory, special file, or link at the leaf.
+func (a *Access) Preflight(rel string) error {
 	if err := ValidatePath(rel); err != nil {
 		return &PathError{Path: rel, Problem: err.Error(), Recovery: "use a normalized repository-relative path"}
 	}
@@ -117,9 +121,6 @@ func (a *Access) Preflight(rel string, allowLink bool) error {
 	mode := info.Mode()
 	switch {
 	case mode&fs.ModeSymlink != 0:
-		if allowLink {
-			return nil
-		}
 		return &PathError{Path: rel, Problem: "is a symbolic link", Recovery: "replace the link with a regular file and retry"}
 	case mode.IsDir():
 		return &PathError{Path: rel, Problem: "is a directory, not a regular file", Recovery: "move the directory aside and retry"}
@@ -139,7 +140,7 @@ func (a *Access) Lstat(rel string) (fs.FileInfo, error) {
 
 // Regular reports whether a regular file exists at rel after preflight.
 func (a *Access) Regular(rel string) (bool, error) {
-	if err := a.Preflight(rel, false); err != nil {
+	if err := a.Preflight(rel); err != nil {
 		return false, err
 	}
 	_, err := a.root.Lstat(rel)
@@ -151,7 +152,7 @@ func (a *Access) Regular(rel string) (bool, error) {
 
 // ReadFile reads the regular file at rel after preflight.
 func (a *Access) ReadFile(rel string) ([]byte, error) {
-	if err := a.Preflight(rel, false); err != nil {
+	if err := a.Preflight(rel); err != nil {
 		return nil, err
 	}
 	return a.readContained(rel)
@@ -171,7 +172,7 @@ func (a *Access) ReadOptional(rel string) ([]byte, bool, error) {
 
 // WriteFile writes the regular file at rel with perm after preflight, creating parent directories.
 func (a *Access) WriteFile(rel string, data []byte, perm fs.FileMode) error {
-	if err := a.Preflight(rel, false); err != nil {
+	if err := a.Preflight(rel); err != nil {
 		return err
 	}
 	return a.writeContained(rel, data, perm)
@@ -185,12 +186,124 @@ func (a *Access) Remove(rel string) error {
 	return a.root.Remove(rel)
 }
 
-// Symlink creates a link at rel that points at target.
-func (a *Access) Symlink(target, rel string) error {
+// Readlink returns the link text at rel without following it.
+func (a *Access) Readlink(rel string) (string, error) {
 	if err := ValidatePath(rel); err != nil {
-		return &PathError{Path: rel, Problem: err.Error(), Recovery: "use a normalized repository-relative path"}
+		return "", &PathError{Path: rel, Problem: err.Error(), Recovery: "use a normalized repository-relative path"}
 	}
-	return a.root.Symlink(target, rel)
+	return a.root.Readlink(rel)
+}
+
+// AgentFileState classifies the CLAUDE.md entry at the repository root.
+type AgentFileState int
+
+const (
+	// AgentFileAbsent means the root holds no regular file or link named CLAUDE.md.
+	AgentFileAbsent AgentFileState = iota
+	// AgentFileRetiredLink means CLAUDE.md is the link Govna used to create: a symbolic link to AGENTS.md.
+	AgentFileRetiredLink
+	// AgentFileOwned means CLAUDE.md is a repository-owned regular file or link.
+	AgentFileOwned
+)
+
+// AgentFilePath is the root instruction file that Claude Code reads instead of AGENTS.md.
+const AgentFilePath = "CLAUDE.md"
+
+// DeletableHint tells the operator that a repository-owned CLAUDE.md is no longer needed.
+const DeletableHint = "hint: CLAUDE.md can now be deleted; move anything you still need into AGENTS.md first. Claude Code v2.1.277 or later reads AGENTS.md directly and skips it while CLAUDE.md exists — see https://code.claude.com/docs/en/memory#agents-md"
+
+// minAgentsFileVersion is the first Claude Code version that reads AGENTS.md directly.
+var minAgentsFileVersion = [3]int{2, 1, 277}
+
+// agentVersionLimit bounds the Claude Code version probe.
+const agentVersionLimit = 2 * time.Second
+
+// AgentVersionHook returns the output of `claude --version`; a test replaces it so no test runs the real program.
+var AgentVersionHook = probeAgentVersion
+
+func probeAgentVersion() ([]byte, error) {
+	program, err := exec.LookPath("claude")
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), agentVersionLimit)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, program, "--version")
+	// A child that inherits stdout must not hold the probe open past the limit.
+	cmd.WaitDelay = 100 * time.Millisecond
+	return cmd.Output()
+}
+
+// AgentFile reports whether the root CLAUDE.md is absent, the retired Govna link, or repository-owned.
+// A directory or special file counts as absent.
+func (a *Access) AgentFile() (AgentFileState, error) {
+	info, err := a.root.Lstat(AgentFilePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return AgentFileAbsent, nil
+	}
+	if err != nil {
+		return AgentFileAbsent, err
+	}
+	switch mode := info.Mode(); {
+	case mode&fs.ModeSymlink != 0:
+		target, err := a.root.Readlink(AgentFilePath)
+		if err != nil {
+			return AgentFileAbsent, err
+		}
+		if target == "AGENTS.md" {
+			return AgentFileRetiredLink, nil
+		}
+		return AgentFileOwned, nil
+	case mode.IsRegular():
+		return AgentFileOwned, nil
+	}
+	return AgentFileAbsent, nil
+}
+
+// UpgradeHint returns the upgrade hint for an installed Claude Code that cannot read AGENTS.md.
+// It returns "" when the program is absent, the probe fails, or its output does not parse.
+func UpgradeHint() string {
+	out, err := AgentVersionHook()
+	if err != nil {
+		return ""
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) == 0 {
+		return ""
+	}
+	version, ok := parseAgentVersion(fields[0])
+	if !ok || slices.Compare(version[:], minAgentsFileVersion[:]) >= 0 {
+		return ""
+	}
+	return fmt.Sprintf("hint: Claude Code %s cannot read AGENTS.md; upgrade to v2.1.277 or later with \"claude update\"", fields[0])
+}
+
+func parseAgentVersion(text string) ([3]int, bool) {
+	var version [3]int
+	core, _, _ := strings.Cut(strings.TrimPrefix(text, "v"), "-")
+	core, _, _ = strings.Cut(core, "+")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return version, false
+	}
+	for i, part := range parts {
+		n, err := strconv.Atoi(part)
+		if err != nil || n < 0 {
+			return version, false
+		}
+		version[i] = n
+	}
+	return version, true
+}
+
+// WriteAgentHints prints the upgrade hint and, for a repository-owned CLAUDE.md, the deletable hint.
+func (a *Access) WriteAgentHints(w io.Writer) {
+	if hint := UpgradeHint(); hint != "" {
+		fmt.Fprintln(w, hint)
+	}
+	if state, err := a.AgentFile(); err == nil && state == AgentFileOwned {
+		fmt.Fprintln(w, DeletableHint)
+	}
 }
 
 func (a *Access) readContained(rel string) ([]byte, error) {

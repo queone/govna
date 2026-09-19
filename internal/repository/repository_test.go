@@ -1,13 +1,16 @@
 package repository
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestResolution(t *testing.T) {
@@ -256,7 +259,7 @@ func TestPreflightRejectsLinksAndNonRegularEntries(t *testing.T) {
 		{"fifo.md", "fifo.md is not a regular file; remove the special file and retry"},
 		{"../outside.md", `../outside.md contains a ".." component; use a normalized repository-relative path`},
 	} {
-		err := access.Preflight(tc.rel, false)
+		err := access.Preflight(tc.rel)
 		if err == nil || err.Error() != tc.want {
 			t.Errorf("%s err=%v want %q", tc.rel, err, tc.want)
 		}
@@ -271,15 +274,20 @@ func TestPreflightRejectsLinksAndNonRegularEntries(t *testing.T) {
 		}
 	}
 	for _, ok := range []string{"docs/readme.md", "docs/new.md", "new/deep/file.md"} {
-		if err := access.Preflight(ok, false); err != nil {
+		if err := access.Preflight(ok); err != nil {
 			t.Errorf("%s rejected: %v", ok, err)
 		}
 	}
-	if err := access.Preflight("inside.md", true); err != nil {
-		t.Errorf("allowed leaf link rejected: %v", err)
+	for rel, want := range map[string]string{"escaping.md": sentinel, "inside.md": "docs/readme.md", "dangling.md": "missing.md"} {
+		if got, err := access.Readlink(rel); err != nil || got != want {
+			t.Errorf("Readlink(%s)=%q err=%v want %q", rel, got, err, want)
+		}
 	}
-	if err := access.Preflight("linkdir/file.md", true); err == nil {
-		t.Error("allowLink accepted a linked directory component")
+	if _, err := access.Readlink("../outside.md"); err == nil {
+		t.Error("Readlink accepted an escaping path")
+	}
+	if _, err := access.Readlink("linkdir/secret.txt"); err == nil {
+		t.Error("Readlink followed a linked directory out of the root")
 	}
 	if got, err := os.ReadFile(at("docs/readme.md")); err != nil || string(got) != "inside\n" {
 		t.Fatalf("in-repository link target changed: %q err=%v", got, err)
@@ -301,8 +309,8 @@ func TestContainedAccessRejectsSubstitutionAfterPreflight(t *testing.T) {
 	access, err := Open(root)
 	must(err)
 	defer access.Close()
-	must(access.Preflight("README.md", false))
-	must(access.Preflight("govna/audit.md", false))
+	must(access.Preflight("README.md"))
+	must(access.Preflight("govna/audit.md"))
 	must(os.Remove(filepath.Join(root, "README.md")))
 	must(os.Symlink(sentinel, filepath.Join(root, "README.md")))
 	must(os.Remove(filepath.Join(root, "govna")))
@@ -375,4 +383,146 @@ func TestFlavorRejectsLinkedMetadata(t *testing.T) {
 		t.Fatalf("linked metadata err=%v", err)
 	}
 	assertSentinel(t, sentinel)
+}
+
+// Stub the Claude Code version probe so no test runs the real program.
+func init() { stubAgentVersion("2.1.277 (Claude Code)", nil) }
+
+func stubAgentVersion(output string, err error) {
+	AgentVersionHook = func() ([]byte, error) { return []byte(output), err }
+}
+
+func TestUpgradeHintComparesVersions(t *testing.T) {
+	defer stubAgentVersion("2.1.277 (Claude Code)", nil)
+	hint := func(version string) string {
+		return "hint: Claude Code " + version + ` cannot read AGENTS.md; upgrade to v2.1.277 or later with "claude update"`
+	}
+	for _, tc := range []struct {
+		output string
+		err    error
+		want   string
+	}{
+		{"2.1.276 (Claude Code)", nil, hint("2.1.276")},
+		{"1.0.0 (Claude Code)", nil, hint("1.0.0")},
+		{"2.0.999 (Claude Code)", nil, hint("2.0.999")},
+		{"2.1.276-beta.1 (Claude Code)\n", nil, hint("2.1.276-beta.1")},
+		{"2.1.277 (Claude Code)", nil, ""},
+		{"2.1.278 (Claude Code)", nil, ""},
+		{"2.2.0 (Claude Code)", nil, ""},
+		{"3.0.0 (Claude Code)", nil, ""},
+		{"", os.ErrNotExist, ""},
+		{"2.1.276 (Claude Code)", os.ErrDeadlineExceeded, ""},
+		{"", nil, ""},
+		{"Claude Code, probably", nil, ""},
+		{"2.1 (Claude Code)", nil, ""},
+		{"2.1.x (Claude Code)", nil, ""},
+	} {
+		stubAgentVersion(tc.output, tc.err)
+		if got := UpgradeHint(); got != tc.want {
+			t.Errorf("UpgradeHint for %q err=%v = %q want %q", tc.output, tc.err, got, tc.want)
+		}
+	}
+}
+
+func TestAgentFileStatesAndHints(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, root string)
+		state AgentFileState
+		hint  bool
+	}{
+		{"absent", func(*testing.T, string) {}, AgentFileAbsent, false},
+		{"retired link", func(t *testing.T, root string) {
+			if err := os.Symlink("AGENTS.md", filepath.Join(root, "CLAUDE.md")); err != nil {
+				t.Fatal(err)
+			}
+		}, AgentFileRetiredLink, false},
+		{"foreign link", func(t *testing.T, root string) {
+			if err := os.Symlink("elsewhere.md", filepath.Join(root, "CLAUDE.md")); err != nil {
+				t.Fatal(err)
+			}
+		}, AgentFileOwned, true},
+		{"dotted link", func(t *testing.T, root string) {
+			if err := os.Symlink("./AGENTS.md", filepath.Join(root, "CLAUDE.md")); err != nil {
+				t.Fatal(err)
+			}
+		}, AgentFileOwned, true},
+		{"regular file", func(t *testing.T, root string) {
+			if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte("mine\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, AgentFileOwned, true},
+		{"directory", func(t *testing.T, root string) {
+			if err := os.Mkdir(filepath.Join(root, "CLAUDE.md"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, AgentFileAbsent, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			tc.setup(t, root)
+			access, err := Open(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer access.Close()
+			state, err := access.AgentFile()
+			if err != nil || state != tc.state {
+				t.Fatalf("state=%v err=%v want %v", state, err, tc.state)
+			}
+			var hints bytes.Buffer
+			access.WriteAgentHints(&hints)
+			want := ""
+			if tc.hint {
+				want = DeletableHint + "\n"
+			}
+			if hints.String() != want {
+				t.Fatalf("hints=%q want %q", hints.String(), want)
+			}
+		})
+	}
+}
+
+func TestAgentVersionProbeReadsAndBoundsTheProgram(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake program is a shell script")
+	}
+	fake := func(t *testing.T, script string) {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+"/usr/bin"+string(os.PathListSeparator)+"/bin")
+	}
+	t.Run("reads the version", func(t *testing.T) {
+		fake(t, `echo "2.1.276 (Claude Code)"`)
+		out, err := probeAgentVersion()
+		if err != nil || strings.TrimSpace(string(out)) != "2.1.276 (Claude Code)" {
+			t.Fatalf("out=%q err=%v", out, err)
+		}
+	})
+	t.Run("absent program", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		if _, err := probeAgentVersion(); err == nil {
+			t.Fatal("absent program reported no error")
+		}
+	})
+	t.Run("failing program", func(t *testing.T) {
+		fake(t, "exit 3")
+		if _, err := probeAgentVersion(); err == nil {
+			t.Fatal("failing program reported no error")
+		}
+	})
+	t.Run("hung program", func(t *testing.T) {
+		fake(t, "sleep 30\necho \"2.1.276 (Claude Code)\"")
+		start := time.Now()
+		_, err := probeAgentVersion()
+		if err == nil {
+			t.Fatal("hung program reported no error")
+		}
+		if elapsed := time.Since(start); elapsed > agentVersionLimit+2*time.Second {
+			t.Fatalf("probe took %s, limit %s", elapsed, agentVersionLimit)
+		}
+	})
 }

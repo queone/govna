@@ -8,9 +8,19 @@ import (
 	"testing"
 
 	"github.com/queone/govna/internal/canon"
+	"github.com/queone/govna/internal/repository"
 )
 
 const testProgramVersion = "9.8.7"
+
+const upgradeHint = `hint: Claude Code 2.1.276 cannot read AGENTS.md; upgrade to v2.1.277 or later with "claude update"`
+
+// Stub the Claude Code version probe so no test runs the real program.
+func init() { stubAgentVersion("2.1.277 (Claude Code)", nil) }
+
+func stubAgentVersion(output string, err error) {
+	repository.AgentVersionHook = func() ([]byte, error) { return []byte(output), err }
+}
 
 func runAt(t *testing.T, d string, args ...string) (string, string, int) {
 	t.Helper()
@@ -20,31 +30,43 @@ func runAt(t *testing.T, d string, args ...string) (string, string, int) {
 }
 
 func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
-	created := adoption(7, "widget", "CODE", testProgramVersion, nil, "created")
+	created := adoption(7, "widget", "CODE", testProgramVersion, nil, repository.AgentFileAbsent)
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.63.1) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.63.1). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.64.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.64.0). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
 		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
 		"**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).",
-		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.",
 		"`PENDING` — apply emission; awaiting explicit Director Audit.",
 	} {
 		if !strings.Contains(created, want) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.63.1", "Director reads", "review applied governance", "overlay", "consumer-owned"} {
+	for _, invalid := range []string{"Applied govna v0.64.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT3**"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
 	}
-	preserved := adoption(8, "widget", "CODE", testProgramVersion, nil, "preserved")
-	want := "**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md."
-	if !strings.Contains(preserved, want) {
-		t.Errorf("preserved adoption omits %q", want)
+	kept := adoption(8, "widget", "CODE", testProgramVersion, nil, repository.AgentFileOwned)
+	for _, want := range []string{
+		"- `CLAUDE.md` (existing file kept — Claude Code reads it instead of AGENTS.md; see the apply hint)\n",
+		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.",
+	} {
+		if !strings.Contains(kept, want) {
+			t.Errorf("kept adoption omits %q", want)
+		}
+	}
+	removed := adoption(9, "widget", "CODE", testProgramVersion, nil, repository.AgentFileRetiredLink)
+	for _, want := range []string{
+		"- `CLAUDE.md` (retired Govna link removed)\n",
+		"**AT3** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.",
+	} {
+		if !strings.Contains(removed, want) {
+			t.Errorf("removed-link adoption omits %q", want)
+		}
 	}
 }
 func TestFreshAndReapply(t *testing.T) {
@@ -54,10 +76,19 @@ func TestFreshAndReapply(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("%s", err)
 	}
-	for _, p := range []string{"AGENTS.md", "CLAUDE.md", "govna/ac1-govna-apply.md"} {
+	for _, p := range []string{"AGENTS.md", "govna/ac1-govna-apply.md"} {
 		if !exists(filepath.Join(d, p)) {
 			t.Fatalf("missing %s", p)
 		}
+	}
+	if _, statErr := os.Lstat(filepath.Join(d, "CLAUDE.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("fresh apply created CLAUDE.md: %v", statErr)
+	}
+	if strings.Contains(out, "symlink") || strings.Contains(out, "CLAUDE.md") || strings.Contains(err, "CLAUDE.md") {
+		t.Fatalf("fresh apply mentions the link: stdout=%q stderr=%q", out, err)
+	}
+	if record, _ := os.ReadFile(filepath.Join(d, "govna/ac1-govna-apply.md")); strings.Contains(string(record), "CLAUDE.md") {
+		t.Fatalf("fresh adoption AC mentions CLAUDE.md:\n%s", record)
 	}
 	if !strings.Contains(out, "wrote govna/ac1-govna-apply.md (review AC)") {
 		t.Fatal(out)
@@ -107,9 +138,6 @@ func TestExistingGolden(t *testing.T) {
 	}
 	if _, stderr, code := runAt(t, d, "-f", "code", "-s", "rust"); code != 0 {
 		t.Fatal(stderr)
-	}
-	if err := os.Remove(filepath.Join(d, "CLAUDE.md")); err != nil {
-		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(d, "CLAUDE.md"), []byte("local claude\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -235,8 +263,11 @@ func TestExistingPreservationAndGovernaIgnored(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(d, "governa/metadata.txt")); string(b) != "legacy\n" {
 		t.Fatal("governa changed")
 	}
-	if !strings.Contains(err, "regular file") {
+	if !strings.Contains(err, repository.DeletableHint+"\n") {
 		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(d, "CLAUDE.md")); string(b) != "mine\n" {
+		t.Fatal("CLAUDE.md changed")
 	}
 }
 func TestGitMain(t *testing.T) {
@@ -491,11 +522,6 @@ func TestApplyRejectsUnsafeDestinationsBeforeWriting(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, "apply: check destination plan.md: plan.md is a directory, not a regular file; move the directory aside and retry"},
-		{"directory at CLAUDE.md", func(d string) {
-			if err := os.Mkdir(filepath.Join(d, "CLAUDE.md"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-		}, "apply: check destination CLAUDE.md: CLAUDE.md is a directory, not a regular file; move the directory aside and retry"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := filepath.Join(t.TempDir(), "widget")
@@ -528,7 +554,7 @@ func TestApplyRejectsUnsafeDestinationsBeforeWriting(t *testing.T) {
 	}
 }
 
-func TestApplyAcceptsRootAliasAndReplacesClaudeLink(t *testing.T) {
+func TestApplyAcceptsRootAliasAndKeepsForeignLink(t *testing.T) {
 	base := t.TempDir()
 	real := filepath.Join(base, "real")
 	if err := os.Mkdir(real, 0o755); err != nil {
@@ -553,7 +579,151 @@ func TestApplyAcceptsRootAliasAndReplacesClaudeLink(t *testing.T) {
 			t.Errorf("%s missing from resolved root: %v", p, err)
 		}
 	}
-	if got, err := os.Readlink(filepath.Join(real, "CLAUDE.md")); err != nil || got != "AGENTS.md" {
+	if got, err := os.Readlink(filepath.Join(real, "CLAUDE.md")); err != nil || got != "elsewhere.md" {
 		t.Fatalf("CLAUDE.md link=%q err=%v", got, err)
 	}
+	assertKeptAgentFile(t, real, out, stderr)
+}
+
+func assertKeptAgentFile(t *testing.T, d, stdout, stderr string) {
+	t.Helper()
+	if !strings.Contains(stderr, repository.DeletableHint+"\n") || strings.Count(stderr, "hint:") != 1 {
+		t.Fatalf("stderr=%q", stderr)
+	}
+	if strings.Contains(stdout, "removed CLAUDE.md") {
+		t.Fatalf("stdout claims a removal: %s", stdout)
+	}
+	record, err := os.ReadFile(filepath.Join(d, "govna", "ac1-govna-apply.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- `CLAUDE.md` (existing file kept — Claude Code reads it instead of AGENTS.md; see the apply hint)\n",
+		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n",
+	} {
+		if !strings.Contains(string(record), want) {
+			t.Errorf("adoption AC omits %q", want)
+		}
+	}
+}
+
+func TestApplyKeepsRegularAgentFile(t *testing.T) {
+	d := filepath.Join(t.TempDir(), "handbook")
+	if err := os.Mkdir(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMode(t, filepath.Join(d, "CLAUDE.md"), "local claude\n", 0o600)
+	out, stderr, code := runAt(t, d, "-f", "doc")
+	if code != 0 {
+		t.Fatal(stderr)
+	}
+	assertFile(t, filepath.Join(d, "CLAUDE.md"), "local claude\n", 0o600)
+	assertKeptAgentFile(t, d, out, stderr)
+}
+
+func TestApplyRemovesRetiredLink(t *testing.T) {
+	d := filepath.Join(t.TempDir(), "handbook")
+	if err := os.Mkdir(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("AGENTS.md", filepath.Join(d, "CLAUDE.md")); err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, code := runAt(t, d, "-f", "doc")
+	if code != 0 {
+		t.Fatal(stderr)
+	}
+	if _, err := os.Lstat(filepath.Join(d, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Fatalf("retired link remains: %v", err)
+	}
+	if !strings.Contains(out, "removed CLAUDE.md (retired Govna link)\n") {
+		t.Fatalf("stdout=%s", out)
+	}
+	if strings.Contains(stderr, "hint:") {
+		t.Fatalf("stderr=%q", stderr)
+	}
+	record, err := os.ReadFile(filepath.Join(d, "govna", "ac1-govna-apply.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- `CLAUDE.md` (retired Govna link removed)\n",
+		"**AT3** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.\n",
+	} {
+		if !strings.Contains(string(record), want) {
+			t.Errorf("adoption AC omits %q", want)
+		}
+	}
+}
+
+func TestApplyIgnoresAgentFileDirectory(t *testing.T) {
+	d := filepath.Join(t.TempDir(), "handbook")
+	if err := os.MkdirAll(filepath.Join(d, "CLAUDE.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := runAt(t, d, "-f", "doc")
+	if code != 0 || strings.Contains(stderr, "hint:") {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	if info, err := os.Lstat(filepath.Join(d, "CLAUDE.md")); err != nil || !info.IsDir() {
+		t.Fatalf("directory changed: %v err=%v", info, err)
+	}
+	record, err := os.ReadFile(filepath.Join(d, "govna", "ac1-govna-apply.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(record), "CLAUDE.md") {
+		t.Errorf("adoption AC mentions the directory:\n%s", record)
+	}
+}
+
+func TestApplyUpgradeHint(t *testing.T) {
+	defer stubAgentVersion("2.1.277 (Claude Code)", nil)
+	run := func(t *testing.T) (string, string, int) {
+		t.Helper()
+		d := filepath.Join(t.TempDir(), "handbook")
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return runAt(t, d, "-f", "doc")
+	}
+	stubAgentVersion("2.1.277 (Claude Code)", nil)
+	baseOut, _, _ := run(t)
+	for _, tc := range []struct {
+		name, output string
+		err          error
+		want         string
+	}{
+		{"one patch below", "2.1.276 (Claude Code)", nil, upgradeHint + "\n"},
+		{"old major", "1.0.0 (Claude Code)", nil, strings.Replace(upgradeHint, "2.1.276", "1.0.0", 1) + "\n"},
+		{"minimum", "2.1.277 (Claude Code)", nil, ""},
+		{"next patch", "2.1.278 (Claude Code)", nil, ""},
+		{"next minor", "2.2.0 (Claude Code)", nil, ""},
+		{"next major", "3.0.0 (Claude Code)", nil, ""},
+		{"absent program", "", os.ErrNotExist, ""},
+		{"failing probe", "2.1.276 (Claude Code)", os.ErrDeadlineExceeded, ""},
+		{"unparseable output", "Claude Code, probably", nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stubAgentVersion(tc.output, tc.err)
+			out, stderr, code := run(t)
+			if code != 0 || stderr != tc.want {
+				t.Fatalf("code=%d stderr=%q want=%q", code, stderr, tc.want)
+			}
+			if normalizeTarget(out) != normalizeTarget(baseOut) {
+				t.Fatalf("stdout changed:\n%s\nwant:\n%s", out, baseOut)
+			}
+		})
+	}
+}
+
+// normalizeTarget drops the per-test target line so stdout comparisons ignore the temporary path.
+func normalizeTarget(out string) string {
+	var kept []string
+	for line := range strings.SplitSeq(out, "\n") {
+		if !strings.HasPrefix(line, "target: ") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }

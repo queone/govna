@@ -26,8 +26,8 @@ func TestRunCodeAndAlias(t *testing.T) {
 			if stdout.String() != target+"\n" || stderr.Len() != 0 {
 				t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 			}
-			if got, err := os.Readlink(filepath.Join(target, "CLAUDE.md")); err != nil || got != "AGENTS.md" {
-				t.Fatalf("symlink=%q err=%v", got, err)
+			if _, err := os.Lstat(filepath.Join(target, "CLAUDE.md")); !os.IsNotExist(err) {
+				t.Fatalf("render created CLAUDE.md: %v", err)
 			}
 			if runtime.GOOS != "windows" {
 				info, _ := os.Stat(filepath.Join(target, "build.sh"))
@@ -57,6 +57,9 @@ func TestRunDocPreservesUnrelated(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(target, "keep.txt")); string(got) != "keep\n" {
 		t.Fatalf("unrelated=%q", got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(target, "CLAUDE.md")); string(got) != "old\n" {
+		t.Fatalf("CLAUDE.md=%q", got)
 	}
 	if cycle, _ := os.ReadFile(filepath.Join(target, "govna", "editing-cycle.md")); strings.Contains(string(cycle), "reconciliation path") {
 		t.Fatal("DOC editing cycle contains CODE vocabulary")
@@ -297,11 +300,6 @@ func TestRenderRejectsUnsafeDestinationsBeforeWriting(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, "plan.md", "plan.md is a directory, not a regular file; move the directory aside and retry"},
-		{"directory at CLAUDE.md", func(dir string) {
-			if err := os.Mkdir(filepath.Join(dir, "CLAUDE.md"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-		}, "CLAUDE.md", "CLAUDE.md is a directory, not a regular file; move the directory aside and retry"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cwd := t.TempDir()
@@ -321,10 +319,8 @@ func TestRenderRejectsUnsafeDestinationsBeforeWriting(t *testing.T) {
 			if _, err := os.Lstat(filepath.Join(target, ".gitignore")); err == nil {
 				t.Fatal(".gitignore written before validation finished")
 			}
-			if tc.name != "directory at CLAUDE.md" {
-				if _, err := os.Lstat(filepath.Join(target, "CLAUDE.md")); err == nil {
-					t.Fatal("CLAUDE.md created before validation finished")
-				}
+			if _, err := os.Lstat(filepath.Join(target, "CLAUDE.md")); err == nil {
+				t.Fatal("CLAUDE.md created")
 			}
 			assertRenderFixture(t, sentinel, "sentinel\n", 0o600)
 			if entries, err := os.ReadDir(outside); err != nil || len(entries) != 1 {
@@ -354,9 +350,7 @@ func TestRenderReplacesRegularFilesAndAcceptsRootAlias(t *testing.T) {
 	if stdout.String() != alias+"\n" {
 		t.Fatalf("stdout=%q", stdout.String())
 	}
-	if got, err := os.Readlink(filepath.Join(real, "CLAUDE.md")); err != nil || got != "AGENTS.md" {
-		t.Fatalf("CLAUDE.md link=%q err=%v", got, err)
-	}
+	assertRenderFixture(t, filepath.Join(real, "CLAUDE.md"), "old\n", 0o644)
 	agents, err := os.ReadFile(filepath.Join(real, "AGENTS.md"))
 	if err != nil || string(agents) == "old\n" {
 		t.Fatalf("AGENTS.md not replaced: err=%v", err)

@@ -6,7 +6,7 @@ Govna helps you agree on a change, review its scope, and check the result with a
 
 **"Coding agent" in this README means a terminal CLI: [Claude Code](https://code.claude.com/docs/en/quickstart) (`claude`) or [Codex CLI](https://learn.chatgpt.com/docs/codex/cli) (`codex`) running in your repository.** Those CLIs are Govna's primary and only tested interaction target. Govna writes the files they read at startup; you keep talking to the agent in its terminal.
 
-**Not yet tested or supported:** the VS Code and JetBrains extensions of either agent, the Claude and ChatGPT desktop apps on Windows and macOS, their iOS and Android apps, and the web or cloud versions of either agent. They may read the same files, but nothing about Govna's workflow has been exercised there; `plan.md` tracks that exploration. Govna itself is exercised on macOS and Linux; on Windows, creating the `CLAUDE.md` link needs Developer Mode or administrator rights.
+**Not yet tested or supported:** the VS Code and JetBrains extensions of either agent, the Claude and ChatGPT desktop apps on Windows and macOS, their iOS and Android apps, and the web or cloud versions of either agent. They may read the same files, but nothing about Govna's workflow has been exercised there; `plan.md` tracks that exploration. Govna itself is exercised on macOS and Linux.
 
 [Try it in a disposable clone](#quick-start) · [Try it in place with an instant revert](#try-it-in-place-with-an-instant-git-revert) · [Leave the trial or remove Govna](#leave-the-trial-or-remove-govna) · [Command reference](#usage)
 
@@ -43,10 +43,10 @@ Run one of these from `govna-trial`:
 
 | Agent | Command | How it loads the rules |
 | --- | --- | --- |
-| Claude Code | `claude` | [Reads `CLAUDE.md`](https://code.claude.com/docs/en/memory), which Govna links to `AGENTS.md`. Type `/context` and check that `CLAUDE.md` is listed under Memory files. |
+| Claude Code | `claude` | [Reads `AGENTS.md` directly](https://code.claude.com/docs/en/memory#agents-md) from v2.1.277. Look for the session line `AGENTS.md loaded`; `/context` does not list the file. |
 | Codex CLI | `codex` | [Reads `AGENTS.md` before doing any work](https://learn.chatgpt.com/docs/agent-configuration/agents-md). |
 
-The contract makes the agent begin its first substantive reply with the line `Govna contract loaded.` If that line never appears, the rules did not load. When `apply` warned that an existing regular `CLAUDE.md` was kept, that file is why Claude Code did not see them.
+The contract makes the agent begin its first substantive reply with the line `Govna contract loaded.` If that line never appears, the rules did not load. `apply` and `audit` print a hint for the two common causes. A Claude Code older than v2.1.277 cannot read `AGENTS.md`; upgrade it with `claude update`. A repository's own `CLAUDE.md` makes Claude Code skip `AGENTS.md`; it can now be deleted once anything you still need has moved into `AGENTS.md`. Anthropic's [`AGENTS.md` documentation](https://code.claude.com/docs/en/memory#agents-md) covers the remaining cases.
 
 ### 4. Review the adoption, then try one change
 
@@ -73,7 +73,7 @@ To put everything back the way it was:
 
 ```bash
 git restore .        # restores every tracked file apply changed
-git clean -fd        # removes the new files: AGENTS.md, CLAUDE.md, govna/, and the adoption AC
+git clean -fd        # removes the new files: AGENTS.md, govna/, and the adoption AC
 git status --short   # prints nothing again
 ```
 
@@ -197,7 +197,9 @@ Flags:
 - `-m, --module-path <path>` — set the Go module path; otherwise read it from `go.mod`.
 - `-g, --init-git` — initialize Git on `main` when the target is not already a repository.
 
-Apply keeps an existing `README.md`, `CHANGELOG.md`, `arch.md`, or `plan.md`, merges every registered governance boundary whether or not an agent instruction file already exists, recognizes a boundary with LF or CRLF line endings, and reports every outcome in the adoption AC. Before writing anything, apply validates every destination: it rejects a symbolic link at a managed path or intermediate directory (the `CLAUDE.md` alias link excepted), a directory or special file where a regular file belongs, and any path outside the target, naming the path and the recovery action. Every read and write runs through a handle contained in the resolved target. After adoption, the repository owns its generated files and may adapt them to local needs.
+Apply keeps an existing `README.md`, `CHANGELOG.md`, `arch.md`, or `plan.md`, merges every registered governance boundary whether or not an agent instruction file already exists, recognizes a boundary with LF or CRLF line endings, and reports every outcome in the adoption AC. Before writing anything, apply validates every destination: it rejects a symbolic link at a managed path or intermediate directory, a directory or special file where a regular file belongs, and any path outside the target, naming the path and the recovery action. Every read and write runs through a handle contained in the resolved target. After adoption, the repository owns its generated files and may adapt them to local needs.
+
+Apply never creates `CLAUDE.md`. Earlier Govna versions created it as a symbolic link to `AGENTS.md`; apply deletes a link whose target is exactly `AGENTS.md`, prints `removed CLAUDE.md (retired Govna link)`, and records the removal in the adoption AC. It never changes any other `CLAUDE.md`; it records the kept file in the adoption AC instead. Apply prints the two Claude Code hints from [Start the agent and confirm it sees the rules](#3-start-the-agent-and-confirm-it-sees-the-rules) on stderr; they never change its exit code, stdout, or written files.
 
 ### `audit`
 
@@ -210,6 +212,8 @@ govna audit
 Audit reads the repository metadata and its baseline, the saved hashes of Govna-managed file regions previously installed there. It also reads the optional preserve registry, the list of files a Director chose to keep local. Each file receives a classification, which is the exact result label explaining its state. When Govna cannot safely act, the emitted AC asks for a routing decision: a Director choice to update, keep, migrate, or remove the file. The AC also records the repository check, meaning the command to run after updates or the reason no command applies. Audit does not make those choices or modify existing governed content.
 
 Audit reads every governed path without following links. It stops before emission, naming the path and its recovery action, when a path is a link, a directory, a special file, or unreadable, or when the saved baseline holds an entry that is not a normalized repository-relative path. Preserve phrases are read from the canonical Unreleased table row as well as from a legacy `## Unreleased` section.
+
+Audit classifies a `CLAUDE.md` symbolic link whose target is exactly `AGENTS.md` as `retired-link` and lists it in the adoption AC as a deletion that needs no Director choice. It reports nothing for any other `CLAUDE.md`. Audit prints the same two Claude Code hints as `apply` on stderr; they never change its exit code, stdout, JSON report, or emitted AC.
 
 Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
 
@@ -239,7 +243,7 @@ Write the selected CODE or DOC built-in governance files to a target directory f
 govna render --flavor code --stack Go --module-path example.com/my-service <target>
 ```
 
-Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned. Render validates destinations the same way apply does, rejects links, directories, and special files at managed paths before writing anything, and replaces a regular `CLAUDE.md` file with the alias link.
+Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned. Render validates destinations the same way apply does and rejects links, directories, and special files at managed paths before writing anything. It never creates or changes `CLAUDE.md`.
 
 ### `version`
 

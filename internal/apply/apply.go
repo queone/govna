@@ -100,14 +100,10 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		return 1
 	}
 	for _, file := range files {
-		if err := access.Preflight(file.Path, false); err != nil {
+		if err := access.Preflight(file.Path); err != nil {
 			fmt.Fprintf(stderr, "apply: check destination %s: %v\n", file.Path, err)
 			return 1
 		}
-	}
-	if err := access.Preflight("CLAUDE.md", true); err != nil {
-		fmt.Fprintf(stderr, "apply: check destination CLAUDE.md: %v\n", err)
-		return 1
 	}
 	outcomes := []Outcome{}
 	for _, file := range files {
@@ -152,23 +148,25 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		fmt.Fprintf(stdout, "wrote %s (Govna-managed file)\n", file.Path)
 		outcomes = append(outcomes, Outcome{file.Path, label})
 	}
-	symlink := "created"
-	if info, err := access.Lstat("CLAUDE.md"); err == nil && info.Mode().IsRegular() {
-		symlink = "preserved"
-		fmt.Fprintln(stderr, "warning: CLAUDE.md exists as a regular file; expected symlink to AGENTS.md — delete the file and re-run to create the symlink")
-	} else {
-		_ = access.Remove("CLAUDE.md")
-		if err := access.Symlink("AGENTS.md", "CLAUDE.md"); err != nil {
-			return fail(stderr, err)
-		}
-		fmt.Fprintln(stdout, "symlink CLAUDE.md -> AGENTS.md")
+	agentFile, err := access.AgentFile()
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: inspect %s: %v\n", repository.AgentFilePath, err)
+		return 1
 	}
+	if agentFile == repository.AgentFileRetiredLink {
+		if err := access.Remove(repository.AgentFilePath); err != nil {
+			fmt.Fprintf(stderr, "apply: remove %s: %v\n", repository.AgentFilePath, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "removed %s (retired Govna link)\n", repository.AgentFilePath)
+	}
+	access.WriteAgentHints(stderr)
 	n, err := emission.Next(cwd, nil)
 	if err != nil {
 		return fail(stderr, err)
 	}
 	rel := fmt.Sprintf("govna/ac%d-govna-apply.md", n)
-	body := adoption(n, name, string(flavor), programVersion, outcomes, symlink)
+	body := adoption(n, name, string(flavor), programVersion, outcomes, agentFile)
 	if err := access.WriteFile(rel, []byte(body), 0o644); err != nil {
 		fmt.Fprintf(stderr, "apply: write %s: %v\n", rel, err)
 		return 1
@@ -333,22 +331,24 @@ func merge(old, fresh []byte, path string) ([]byte, bool) {
 	}
 	return append(append([]byte{}, head...), tail...), true
 }
-func adoption(n int, name, flavor, programVersion string, out []Outcome, symlink string) string {
+func adoption(n int, name, flavor, programVersion string, out []Outcome, agentFile repository.AgentFileState) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# AC%d Review Files Added by Govna\n\nGovna executable v%s added its embedded governance files (canon v%s) for the %s repository %s.\n\n## Summary\n\nGovna executable v%s added its embedded governance files (canon v%s). The list below records whether each file was written, merged, or preserved.\n\n## In Scope\n\nFiles Govna processed:\n\n", n, programVersion, canon.Version, flavor, name, programVersion, canon.Version)
 	for _, o := range out {
 		fmt.Fprintf(&b, "- `%s` (%s)\n", o.Path, o.Label)
 	}
-	if symlink == "created" {
-		b.WriteString("- `CLAUDE.md` (agent alias link)\n")
-	} else {
-		b.WriteString("- `CLAUDE.md` (existing regular file preserved — not a symlink, see warning)\n")
+	switch agentFile {
+	case repository.AgentFileRetiredLink:
+		b.WriteString("- `CLAUDE.md` (retired Govna link removed)\n")
+	case repository.AgentFileOwned:
+		b.WriteString("- `CLAUDE.md` (existing file kept — Claude Code reads it instead of AGENTS.md; see the apply hint)\n")
 	}
 	b.WriteString("\n## Out Of Scope\n\n- Files not listed above.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.\n\n**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).\n\n")
-	if symlink == "created" {
-		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is a symlink to AGENTS.md.\n\n")
-	} else {
-		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md.\n\n")
+	switch agentFile {
+	case repository.AgentFileRetiredLink:
+		b.WriteString("**AT3** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.\n\n")
+	case repository.AgentFileOwned:
+		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n\n")
 	}
 	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
 	return b.String()

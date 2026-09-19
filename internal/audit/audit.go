@@ -192,6 +192,10 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		fmt.Fprintf(stderr, "audit: %v\n", err)
 		return 1
 	}
+	if hints, err := repository.Open(cwd); err == nil {
+		hints.WriteAgentHints(stderr)
+		hints.Close()
+	}
 	if !clean {
 		path, reused, err := emission.AuditPath(cwd, "v"+canon.Version, nil)
 		if err != nil {
@@ -476,6 +480,13 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 			fr.targetHash = fmt.Sprintf("%x", hash)
 		}
 		report.Files = append(report.Files, fr)
+	}
+	agentFile, err := access.AgentFile()
+	if err != nil {
+		return report, false, inspectError(repository.AgentFilePath, err)
+	}
+	if agentFile == repository.AgentFileRetiredLink {
+		report.Files = append(report.Files, FileResult{Path: repository.AgentFilePath, Classification: "retired-link", CanonReference: "retired Govna link to AGENTS.md", CompareCommand: "confirm " + repository.AgentFilePath + " is a symbolic link to AGENTS.md", targetPresent: true, targetInspected: true})
 	}
 	sort.Slice(report.Files, func(i, j int) bool { return report.Files[i].Path < report.Files[j].Path })
 	clean := true
@@ -1062,7 +1073,7 @@ func comparisonDescription(f FileResult, path string) string {
 	}
 }
 func actionable(c string) bool {
-	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon"
+	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon" || c == "retired-link"
 }
 
 type classificationInfo struct{ singular, plural, meaning string }
@@ -1070,7 +1081,7 @@ type classificationInfo struct{ singular, plural, meaning string }
 // classificationOrder fixes the rendering order for plainTally; classificationInfos is the
 // single source of truth for plainTally and classificationMeaning, plus the synthetic
 // "force-sync" entry used for a file whose Classification is overridden by forceSync.
-var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "force-sync"}
+var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "retired-link", "force-sync"}
 
 var classificationInfos = map[string]classificationInfo{
 	"match":               {"file needs no update", "files need no update", "the file already needs no Govna update"},
@@ -1081,6 +1092,7 @@ var classificationInfos = map[string]classificationInfo{
 	"missing-in-target":   {"missing Govna file", "missing Govna files", "a file from current Govna rules is missing from the repository"},
 	"target-has-no-canon": {"Govna-linked extra file", "Govna-linked extra files", "the file is absent from the selected current canon but specific repository evidence connects it to Govna"},
 	"migration-required":  {"missing required control file", "missing required control files", "a required Govna control file is missing and must be added through the AC"},
+	"retired-link":        {"retired Govna link", "retired Govna links", "a Govna link that Claude Code no longer needs and the AC deletes"},
 	"force-sync":          {"file always synced regardless of local edits", "files always synced regardless of local edits", "this file's governed structure always syncs to canon, regardless of local edits or the preserve list"},
 }
 
@@ -1218,7 +1230,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	if m := regexp.MustCompile(`^ac([0-9]+)-`).FindStringSubmatch(base); m != nil {
 		number = m[1]
 	}
-	var sync, migrate, preserve, review []FileResult
+	var sync, migrate, preserve, review, retired []FileResult
 	for _, f := range report.Files {
 		if f.forceSync {
 			sync = append(sync, f)
@@ -1233,12 +1245,18 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 			preserve = append(preserve, f)
 		case "ambiguity", "target-has-no-canon":
 			review = append(review, f)
+		case "retired-link":
+			retired = append(retired, f)
 		}
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "# AC%s Adopt Govna Governance Files v%s\n\n## Summary\n\n", number, canon.Version)
 	fmt.Fprintf(&b, "This AC updates `%s` to Govna's embedded governance files (canon v%s). The result label (classification) beside each path explains why Govna can update it, must leave it unchanged, or needs a Director choice. Installing the selected updates is the adoption step.\n\n", report.Header.RepoName, canon.Version)
-	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n## In Scope\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
+	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
+	if len(retired) > 0 {
+		b.WriteString("Govna also found 1 retired Govna link that this AC deletes.\n\n")
+	}
+	b.WriteString("## In Scope\n\n")
 	writeGroup := func(title string, files []FileResult) {
 		fmt.Fprintf(&b, "### %s\n\n", title)
 		if len(files) == 0 {
@@ -1258,6 +1276,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	writeGroup("Files ready to update", sync)
 	writeGroup("Required control files", migrate)
 	writeGroup("Files needing a Director choice", review)
+	if len(retired) > 0 {
+		b.WriteString("### Retired Govna link\n\n- `CLAUDE.md` — delete the retired Govna link; Claude Code v2.1.277 or later reads `AGENTS.md` directly.\n\n")
+	}
 	writeAuditReview(&b, sync, migrate, review)
 	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
 	if report.Header.Flavor == "code" {
@@ -1355,6 +1376,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	}
 	for _, f := range review {
 		writeRouteATs(&b, &at, f)
+	}
+	if len(retired) > 0 {
+		writeAT(&b, &at, "Verify CLAUDE.md no longer exists.")
 	}
 	if validation.kind == validationUnresolved {
 		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Choose the repository check in chat.\n\n", at)

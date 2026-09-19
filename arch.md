@@ -43,7 +43,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 
 The executable first detects whether stderr supports terminal color. Its command runner then sends each request to the matching package with explicit output writers and environment access.
 
-Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, validates every destination through the shared contained access, and writes it without first emptying the target. It applies deterministic file modes, writes the baseline—the saved hashes of installed Govna-managed regions—and recreates the `CLAUDE.md` symlink.
+Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, validates every destination through the shared contained access, and writes it without first emptying the target. It applies deterministic file modes and writes the baseline—the saved hashes of installed Govna-managed regions.
 
 Apply determines repository identity through `internal/repository`, renders the selected embedded files, validates every destination, and either writes them into a new repository or merges registered Govna sections into an existing one while keeping repository-owned documents. Adding those files is adoption. `internal/emission` writes one adoption AC that names the executable version and canon version separately. Apply never reads or changes legacy `governa/` content. Optional Git initialization runs last.
 

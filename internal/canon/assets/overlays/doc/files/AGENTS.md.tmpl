@@ -4,8 +4,6 @@
 
 - Edit governed sections only in AGENTS.md.
 
-Note: CLAUDE.md is a symlink that mirrors AGENTS.md.
-
 Detail and rationale live in `govna/editing-guidelines.md`, `govna/release.md`, `govna/editing-cycle.md`.
 
 Sections (fixed set):
@@ -478,7 +476,7 @@ Note: the Director flags scope concerns in chat during this window.
 - Never prescribe commit, push, or release actions in Ratify.
 
 Note: the Director triggers those actions; Ratify names what is pending.
-- Skip settled repo mechanics in completions, including symlink behavior, mirror mechanics, governance structure, and contract conventions.
+- Skip settled repo mechanics in completions, including governance structure and contract conventions.
 - Default to plain text and simple bullets.
 - Use tables or richer structure only when content clearly benefits.
 - Note skipped checks only when the omission is unusual or affects confidence.
@@ -504,8 +502,6 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Follow existing repo patterns unless an approved improvement says otherwise.
 - Avoid product or vendor names in identifiers.
 - Use product or vendor names only when an identifier names a real product-specific artifact or compatibility surface.
-
-Note: `CLAUDE.md` is an example of an exempt identifier — it names a product-specific compatibility symlink that mirrors AGENTS.md.
 
 - Name test identifiers, output labels, comments, and errors by behavior.
 - Reserve bare AC and AT identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, literal examples in `govna/ac-template.md`, and `Historical:` comments.

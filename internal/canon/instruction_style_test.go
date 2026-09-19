@@ -186,8 +186,8 @@ type generatedInstructionTemplate struct {
 var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I01", "Verify AGENTS.md reflects the repository's actual practices."},
 	{"I02", "Verify govna/roles.md reflects the repository's delivery model (Operator + Director)."},
-	{"I03", "Verify CLAUDE.md is a symlink to AGENTS.md."},
-	{"I04", "Verify CLAUDE.md remains the existing regular file instead of a symlink to AGENTS.md."},
+	{"I03", "Verify CLAUDE.md no longer exists."},
+	{"I04", "Verify CLAUDE.md is deleted or deliberately kept."},
 	{"I05", "Resolve every Director choice in chat."},
 	{"I06", "Leave this generated AC unchanged."},
 	{"I07", "Create a temporary copy of the embedded Govna files with govna render."},
@@ -418,8 +418,8 @@ func TestGeneratedInstructionAtomicity(t *testing.T) {
 
 func TestGeneratedGoldenInstructionGate(t *testing.T) {
 	expected := map[string]map[string]int{
-		"internal/apply/testdata/fresh-code-golden.md": {"I01": 1, "I02": 1, "I03": 1},
-		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1, "I02": 1, "I03": 1},
+		"internal/apply/testdata/fresh-code-golden.md": {"I01": 1, "I02": 1},
+		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1, "I02": 1},
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,

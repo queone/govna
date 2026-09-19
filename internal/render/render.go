@@ -83,15 +83,10 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	}
 	defer access.Close()
 	for _, file := range files {
-		if err := access.Preflight(file.Path, false); err != nil {
+		if err := access.Preflight(file.Path); err != nil {
 			fmt.Fprintf(stderr, "check destination %s: %v\n", filepath.Join(absTarget, filepath.FromSlash(file.Path)), err)
 			return 1
 		}
-	}
-	claude := filepath.Join(absTarget, "CLAUDE.md")
-	if err := access.Preflight("CLAUDE.md", true); err != nil {
-		fmt.Fprintf(stderr, "check destination %s: %v\n", claude, err)
-		return 1
 	}
 	for _, file := range files {
 		destination := filepath.Join(absTarget, filepath.FromSlash(file.Path))
@@ -103,11 +98,6 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 			fmt.Fprintf(stderr, "write %s: %v\n", destination, err)
 			return 1
 		}
-	}
-	_ = access.Remove("CLAUDE.md")
-	if err := access.Symlink("AGENTS.md", "CLAUDE.md"); err != nil {
-		fmt.Fprintf(stderr, "create symlink %s: %v\n", claude, err)
-		return 1
 	}
 	fmt.Fprintln(stdout, absTarget)
 	return 0
