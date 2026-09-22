@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.30.0 | AC49 DOC content entries direct by default, AC for plumbing; canon v0.65.0 |
 | 0.29.0 | AC48 drop the CLAUDE.md link; hint to upgrade old Claude Code; canon v0.64.0 |
 | 0.28.1 | AC47 README guide to DOC kinds; fix plan.md rubric reference; canon v0.63.1 |
 | 0.28.0 | AC46 refuse unprepared release commands in non-Go scripts; canon v0.63.0 |

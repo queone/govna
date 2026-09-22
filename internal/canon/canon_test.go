@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.64.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.65.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -907,6 +907,67 @@ func TestEmptyReleaseBatchFlavorRules(t *testing.T) {
 			if got := strings.Count(string(content), text); got != count {
 				t.Errorf("%s has %d of %q, want %d", path, got, text, count)
 			}
+		}
+	}
+}
+
+func TestDocContentEntryFlavorRules(t *testing.T) {
+	root := filepath.Join("..", "..")
+	const entryDefault = "- Handle a content entry and its index, register, and log companions directly by default.\n"
+	const plumbingAC = "- Require an AC for a checker, build, template, or site-structure change regardless of file count.\n"
+	const docNonTrivial = "- Treat every non-trivial change outside a content entry as AC-first work unless the Director explicitly overrides it.\n"
+	const codeNonTrivial = "- Treat every non-trivial change as AC-first work unless the Director explicitly overrides it.\n"
+	const readmeSentence = "A content entry, meaning one post, page, chapter, note, or scene, and its index, register, and log companions are handled directly by default; checker, build, template, site-structure, governance, and release changes take an AC."
+	codeCounts := map[string]int{entryDefault: 0, plumbingAC: 0, docNonTrivial: 0, codeNonTrivial: 1}
+	docCounts := map[string]int{entryDefault: 1, plumbingAC: 1, docNonTrivial: 1, codeNonTrivial: 0}
+	for path, want := range map[string]map[string]int{
+		"AGENTS.md": codeCounts,
+		"internal/canon/assets/base/AGENTS.md.tmpl":               codeCounts,
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl": docCounts,
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for text, count := range want {
+			if got := strings.Count(string(content), text); got != count {
+				t.Errorf("%s has %d of %q, want %d", path, got, text, count)
+			}
+		}
+	}
+	for path, count := range map[string]int{
+		"internal/canon/assets/overlays/code/files/README.md.tmpl": 0,
+		"internal/canon/assets/overlays/doc/files/README.md.tmpl":  1,
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Count(string(content), readmeSentence); got != count {
+			t.Errorf("%s has %d of the content-entry sentence, want %d", path, got, count)
+		}
+	}
+	for _, variant := range []struct {
+		name   string
+		config Config
+		want   map[string]int
+		readme int
+	}{
+		{name: "rendered CODE", config: Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"}, want: codeCounts, readme: 0},
+		{name: "rendered DOC", config: Config{Flavor: Doc, RepoName: "handbook"}, want: docCounts, readme: 1},
+	} {
+		files, err := Render(variant.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		agents := fileText(t, files, "AGENTS.md")
+		for text, count := range variant.want {
+			if got := strings.Count(agents, text); got != count {
+				t.Errorf("%s AGENTS.md has %d of %q, want %d", variant.name, got, text, count)
+			}
+		}
+		if got := strings.Count(fileText(t, files, "README.md"), readmeSentence); got != variant.readme {
+			t.Errorf("%s README.md has %d of the content-entry sentence, want %d", variant.name, got, variant.readme)
 		}
 	}
 }

@@ -212,12 +212,14 @@ Note: this rule does not prohibit batching independent commands.
 - Recommend direct handling when a change is small, bounded, low-risk, and materially simpler without an AC.
 - Treat quick documentation changes across linked references as direct-handling candidates.
 - Treat quick CLI output-formatting changes across a few files as direct-handling candidates.
+- Handle a content entry and its index, register, and log companions directly by default.
+- Require an AC for a checker, build, template, or site-structure change regardless of file count.
 - Count production and test source files when estimating change size.
 - Exclude documentation, generated outputs, fixtures, lockfiles, and governance templates from the count.
 - Treat changes exceeding eight counted files as presumptively AC-worthy.
 - Require an AC for architecture, schema, dependency, security, migration, external-integration, destructive, governance, or release decisions regardless of file count.
 - Preserve explicit authorization, scope, documentation, and same-pass test requirements for direct handling.
-- Treat every non-trivial change as AC-first work unless the Director explicitly overrides it.
+- Treat every non-trivial change outside a content entry as AC-first work unless the Director explicitly overrides it.
 - Describe each direct-handled companion change in the release message when the release batch already carries an AC.
 - Draft no retroactive AC for such a companion change.
 - Draft `govna/ac<N>-<slug>.md` before implementation using `govna/ac-template.md`.
