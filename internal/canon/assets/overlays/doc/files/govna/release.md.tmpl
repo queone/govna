@@ -43,7 +43,7 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
 
 ## Pre-Release Checklist
 
-- Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch.
+- Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch.
 - Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.
 
 1. **Verify completion.**

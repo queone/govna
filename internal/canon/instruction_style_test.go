@@ -1032,7 +1032,7 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Keep Go prep free of canonical build, Go build, and Go dependency commands.",
 			"- Reserve validation-token evidence for Rust prep.",
 			"- Refresh validation-token evidence for Rust prep.",
-			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch.",
+			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch.",
 			"- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 		},
 		"govna/code-stacks.md": {
@@ -1339,7 +1339,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 		}
 	}
 
-	const first = "Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch."
+	const first = "Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch."
 	checklistRules := []string{
 		first,
 		"Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",

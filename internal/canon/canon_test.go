@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.65.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.66.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -781,12 +781,12 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			"- Require the established release batch to equal the complete pending release batch.",
 			"- Reject Package while excluded implemented work remains in the unreleased repository state.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
-			"- Treat an explicit valid Package instruction for an established empty release batch as the same trigger.",
-			"- Define an empty release batch as an empty pending release batch with at least one unreleased direct-handled change.",
-			"- Treat an empty release batch as established only after an explicit Director Package request.",
-			"- Describe each direct-handled change in the release message for an empty release batch.",
+			"- Treat an explicit valid Package instruction for an established direct batch as the same trigger.",
+			"- Define a direct batch as one or more unreleased direct-handled changes while the pending release batch holds no AC.",
+			"- Treat a direct batch as established only after an explicit Director Package request.",
+			"- Describe each direct-handled change in the release message for a direct batch.",
 			"- Reject a release message without AC references while any unpackaged implemented AC exists.",
-			"- Apply standalone Package, package, pack, or prep to an established empty release batch when no AC can enter Package.",
+			"- Apply standalone Package, package, pack, or prep to an established direct batch when no AC can enter Package.",
 			"- Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.",
 			"- Treat only a Director-named complete pending release batch as an established multi-AC release batch.",
 			"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
@@ -822,7 +822,7 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		}
 		text := string(content)
 		for _, required := range []string{
-			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified or empty release batch.",
+			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch.",
 			"- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 		} {
 			if strings.Count(text, required) != 1 {
@@ -843,7 +843,7 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		text := string(content)
 		for _, required := range []string{
 			"- Apply `AGENTS.md` `### Phase-Advancement Rules` to every action instruction and release batch.",
-			"for the established Ratified or empty release batch only after separate Director authorization.",
+			"for the established Ratified release batch or direct batch only after separate Director authorization.",
 		} {
 			if strings.Count(text, required) != 1 {
 				t.Errorf("%s requires one empty-release-batch cycle rule %q", path, required)
@@ -863,7 +863,7 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Count(string(content), "- Exercise an empty release batch with direct-handled changes before Package prep.") != 1 {
+		if strings.Count(string(content), "- Exercise a direct batch before Package prep.") != 1 {
 			t.Errorf("%s omits the empty-release-batch safety scenario", path)
 		}
 	}
@@ -871,9 +871,9 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 
 func TestEmptyReleaseBatchFlavorRules(t *testing.T) {
 	root := filepath.Join("..", "..")
-	const buildEvidence = "- Use the successful final full build as current Package evidence for an empty release batch."
-	const codeInterpretation = "- Interpret standalone `Package`, `package`, `pack`, or `prep` as Package only after an explicit request for a Ratified or empty release batch."
-	const docInterpretation = "- Interpret `Package` as the release-preparation action only after an explicit Director request for a Ratified or empty release batch."
+	const buildEvidence = "- Use the successful final full build as current Package evidence for a direct batch."
+	const codeInterpretation = "- Interpret standalone `Package`, `package`, `pack`, or `prep` as Package only after an explicit request for a Ratified release batch or direct batch."
+	const docInterpretation = "- Interpret `Package` as the release-preparation action only after an explicit Director request for a Ratified release batch or direct batch."
 	const retiredInterpretation = "as post-Ratify Package only after acceptance and explicit request."
 	const retiredDocInterpretation = "as the post-Ratify release-preparation action only after Ratify acceptance and an explicit Director request."
 	for path, want := range map[string]map[string]int{
@@ -892,7 +892,7 @@ func TestEmptyReleaseBatchFlavorRules(t *testing.T) {
 		}
 	}
 
-	const checklistEvidence = "   - Use the successful final full build as current Package evidence for an empty release batch."
+	const checklistEvidence = "   - Use the successful final full build as current Package evidence for a direct batch."
 	const acceptWithout = "Accept a message without AC references."
 	for path, count := range map[string]int{
 		"govna/build-release.md": 1,
