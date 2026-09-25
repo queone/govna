@@ -529,11 +529,12 @@ func TestReplyLimitsFollowPlainLanguage(t *testing.T) {
 		"Use the active voice.",
 		"Use the passive voice only when the actor is unknown or unimportant.",
 		"Write complete sentences without dropping articles or verbs.",
+		"Exempt the terse status bullets that `## Review Style` requires from the complete-sentence limit.",
 		"Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.",
 	}
 	placement := "- Pair each necessary Govna label with its plain-language meaning at first use.\n\n" +
 		"### STE Replies\n\n- " + strings.Join(limits, "\n- ") + "\n\n" +
-		"Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement the repository's documentation style instead of replacing it.\n\n" +
+		"Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement `### Plain Language` and `## Review Style` instead of replacing them.\n\n" +
 		"### Session Entry\n"
 	for _, path := range agentsRewrittenPaths {
 		content := readSourceForLanguageTest(t, path)
