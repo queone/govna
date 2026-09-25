@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.31.1 | AC51 trial STE limits for agent replies here; link Ordenador from the README |
 | 0.31.0 | AC50 rename the empty release batch to direct batch; canon v0.66.0 |
 | 0.30.0 | AC49 DOC content entries direct by default, AC for plumbing; canon v0.65.0 |
 | 0.29.0 | AC48 drop the CLAUDE.md link; hint to upgrade old Claude Code; canon v0.64.0 |

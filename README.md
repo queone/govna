@@ -108,6 +108,8 @@ Beyond saving coordination time, the contract keeps decision-bearing choices wit
 
 Because the generated governance is file-based, adopted repositories remain self-contained, inspectable, and adaptable to local needs.
 
+Govna is one tool for the organizing described in [Ordenador](https://que.one/tech/ordenador.html): computers and AI put routine work in order, so people have more time for the work that order makes room for.
+
 ## What Govna Provides
 
 Govna carries a versioned set of governance files inside one dependency-free Go executable. That embedded file set is the canon.

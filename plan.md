@@ -10,3 +10,4 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 
 - IE1: Add complete canonical build adapters for Java, Node, and Python before making those CODE stacks selectable again.
 - IE3: Explore adopting, loading, reviewing, and removing Govna through IDE extensions and the vendors' desktop, mobile, and web agent apps; support stays limited to the Claude Code and Codex CLIs until then.
+- IE4: Review the Simplified Technical English reply trial in `AGENTS.md` `### STE Replies` by reply length, Director corrections, and clarity for non-native readers; then promote the limits to canon `### Plain Language`, keep them local, or drop them.
