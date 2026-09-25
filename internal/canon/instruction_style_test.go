@@ -516,6 +516,43 @@ func TestPlainLanguageContractAndMirrors(t *testing.T) {
 	}
 }
 
+func TestReplyLimitsFollowPlainLanguage(t *testing.T) {
+	limits := []string{
+		"Apply these limits to chat replies only.",
+		"Keep each sentence that tells the reader to act to 20 words or fewer.",
+		"Keep every other sentence to 25 words or fewer.",
+		"Keep each paragraph to six sentences or fewer.",
+		"Give one instruction per sentence.",
+		"Start each warning with the command or the condition.",
+		"Use one term for each concept.",
+		"Keep each noun cluster to three words or fewer.",
+		"Use the active voice.",
+		"Use the passive voice only when the actor is unknown or unimportant.",
+		"Write complete sentences without dropping articles or verbs.",
+		"Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.",
+	}
+	placement := "- Pair each necessary Govna label with its plain-language meaning at first use.\n\n" +
+		"### STE Replies\n\n- " + strings.Join(limits, "\n- ") + "\n\n" +
+		"Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement the repository's documentation style instead of replacing it.\n\n" +
+		"### Session Entry\n"
+	for _, path := range agentsRewrittenPaths {
+		content := readSourceForLanguageTest(t, path)
+		if count := strings.Count(content, "### STE Replies\n"); count != 1 {
+			t.Errorf("%s reply-limits group count=%d, want 1", path, count)
+		}
+		if !strings.Contains(content, placement) {
+			t.Errorf("%s does not carry the reply limits directly after Plain Language", path)
+		}
+	}
+	_, projectRules, ok := strings.Cut(readSourceForLanguageTest(t, "AGENTS.md"), "\n## Project Rules\n")
+	if !ok {
+		t.Fatal("AGENTS.md omits the Project Rules boundary")
+	}
+	if strings.Contains(projectRules, "### STE Replies") {
+		t.Error("AGENTS.md keeps a local reply-limits copy in Project Rules")
+	}
+}
+
 func TestPlainLanguageFirstUseExplanations(t *testing.T) {
 	root := filepath.Join("..", "..")
 	checks := map[string][]string{

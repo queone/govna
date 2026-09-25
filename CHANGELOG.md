@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.32.0 | AC52 move the STE reply limits into canon for all adopted repos; canon v0.67.0 |
 | 0.31.1 | AC51 trial STE limits for agent replies here; link Ordenador from the README |
 | 0.31.0 | AC50 rename the empty release batch to direct batch; canon v0.66.0 |
 | 0.30.0 | AC49 DOC content entries direct by default, AC for plumbing; canon v0.65.0 |

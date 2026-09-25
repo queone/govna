@@ -33,8 +33,8 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, repository.AgentFileAbsent)
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.66.0) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.66.0). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.67.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.67.0). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
 		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
@@ -45,7 +45,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.66.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT3**"} {
+	for _, invalid := range []string{"Applied govna v0.67.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT3**"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
