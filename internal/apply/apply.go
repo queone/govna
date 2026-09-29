@@ -19,6 +19,10 @@ type Config struct {
 	InitGit                             bool
 }
 type Outcome struct{ Path, Label string }
+
+// labelWritten marks a file that apply wrote whole from canon.
+const labelWritten = "written"
+
 type Command func(string, ...string) ([]byte, error)
 type assessment struct {
 	shape, risk       string
@@ -107,7 +111,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	}
 	outcomes := []Outcome{}
 	for _, file := range files {
-		label := "written"
+		label := labelWritten
 		if present(access, file.Path) {
 			switch file.Path {
 			case "README.md", "CHANGELOG.md", "arch.md", "plan.md":
@@ -343,15 +347,32 @@ func adoption(n int, name, flavor, programVersion string, out []Outcome, agentFi
 	case repository.AgentFileOwned:
 		b.WriteString("- `CLAUDE.md` (existing file kept — Claude Code reads it instead of AGENTS.md; see the apply hint)\n")
 	}
-	b.WriteString("\n## Out Of Scope\n\n- Files not listed above.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.\n\n**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).\n\n")
+	b.WriteString("\n## Out Of Scope\n\n- Files not listed above.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n")
+	at := 1
+	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify AGENTS.md and govna/roles.md match their hashes in govna/canon-baseline.txt.\n\n", at)
+	if holdsExistingContent(out) {
+		at++
+		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Verify each repository-owned section still holds this repository's own rules.\n\n", at)
+	}
 	switch agentFile {
 	case repository.AgentFileRetiredLink:
-		b.WriteString("**AT3** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.\n\n")
+		fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.\n\n", at+1)
 	case repository.AgentFileOwned:
-		b.WriteString("**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n\n")
+		fmt.Fprintf(&b, "**AT%d** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n\n", at+1)
 	}
 	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
 	return b.String()
+}
+
+// holdsExistingContent reports whether apply kept, merged, or replaced existing
+// content in a file that carries a repository-owned section.
+func holdsExistingContent(out []Outcome) bool {
+	for _, o := range out {
+		if _, mixed := canon.Boundary(o.Path); mixed && o.Label != labelWritten {
+			return true
+		}
+	}
+	return false
 }
 func exists(p string) bool                               { _, e := os.Lstat(p); return e == nil }
 func present(access *repository.Access, rel string) bool { _, e := access.Lstat(rel); return e == nil }

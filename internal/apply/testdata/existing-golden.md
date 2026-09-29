@@ -1,10 +1,10 @@
 # AC2 Review Files Added by Govna
 
-Govna executable v9.8.7 added its embedded governance files (canon v0.68.0) for the CODE repository widget.
+Govna executable v9.8.7 added its embedded governance files (canon v0.69.0) for the CODE repository widget.
 
 ## Summary
 
-Govna executable v9.8.7 added its embedded governance files (canon v0.68.0). The list below records whether each file was written, merged, or preserved.
+Govna executable v9.8.7 added its embedded governance files (canon v0.69.0). The list below records whether each file was written, merged, or preserved.
 
 ## In Scope
 
@@ -42,9 +42,9 @@ Files Govna processed:
 
 ## Acceptance Tests
 
-**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.
+**AT1** [Automated] [Pre-release gate] — Verify AGENTS.md and govna/roles.md match their hashes in govna/canon-baseline.txt.
 
-**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).
+**AT2** [Manual] [Pre-release gate] — Verify each repository-owned section still holds this repository's own rules.
 
 **AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.
 

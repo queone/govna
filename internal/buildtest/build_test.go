@@ -214,12 +214,14 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_count_program_version_declarations",
 		"_domain_coverage",
 		"_emit_usage_line",
+		"_empty_tree",
 		"_ensure_git_repo",
 		"_ensure_staticcheck",
 		"_extract_program_version",
 		"_extract_template_version",
 		"_failure",
 		"_go_quote",
+		"_head_is_unborn",
 		"_help_probe_fail",
 		"_install_validated_utility",
 		"_is_blank",
@@ -240,13 +242,16 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_prep_find_ac_files",
 		"_prep_find_ie_lines",
 		"_prep_module_basename",
+		"_prep_module_path",
 		"_prep_parse_ac_refs",
 		"_prep_prepare_expected_files",
 		"_prep_print_dry_run",
 		"_prep_remove_ie_lines",
 		"_prep_run_inner",
+		"_prep_strip_module_major",
 		"_prep_validate_ac_selection",
 		"_prep_validate_git_state",
+		"_prep_validate_module_major",
 		"_prep_validate_multi_utility_versions",
 		"_prep_validate_readme_usage",
 		"_prep_validate_version_plan",
@@ -1011,7 +1016,7 @@ func TestRenderedGoPrepDryRunValidatesEveryUtility(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()
 	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
-	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget/v3\n\ngo 1.27.0\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "cmd/alpha/main.go"), []byte("package main\nconst programVersion = \"1.2.3\"\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "cmd/beta/main.go"), []byte("package main\nconst (\n\tprogramVersion string = \"2.3.4\"\n)\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
@@ -1703,6 +1708,273 @@ func gitFixtureOutput(t *testing.T, dir string, args ...string) []byte {
 		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, out)
 	}
 	return out
+}
+
+// fakeReleaseGo stands in for the Go toolchain during a release: it compiles a
+// shell utility that reports the declared version and the committed revision.
+const fakeReleaseGo = `#!/bin/bash
+set -euo pipefail
+case "$1" in
+env)
+  case "$2" in
+  GOPATH) printf '%s\n' "$FAKE_GOPATH" ;;
+  GOEXE) printf '\n' ;;
+  *) exit 2 ;;
+  esac
+  ;;
+build)
+  shift
+  output=''
+  target=''
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    -o) shift; output="$1" ;;
+    -ldflags) shift ;;
+    ./cmd/*) target="${1#./cmd/}" ;;
+    esac
+    shift
+  done
+  mkdir -p "$(dirname "$output")"
+  cat >"$output" <<EOF
+#!/bin/bash
+case "\${1:-}" in
+-h | '-?' | --help)
+  printf '%s\n' '$target v$FAKE_VERSION' 'Fake $target utility' 'example.com/widget' '' 'Usage' '  $target [options]' ''
+  printf '%s\n' 'Options' '  -v, --version   print executable version' '  -h, -?, --help  show this help'
+  exit 0
+  ;;
+esac
+printf '$target v$FAKE_VERSION\n'
+EOF
+  chmod +x "$output"
+  ;;
+version)
+  printf 'path\tfixture\nbuild\tvcs.revision=%s\nbuild\tvcs.modified=false\n' "$(git rev-parse HEAD)"
+  ;;
+*) exit 4 ;;
+esac
+`
+
+func TestGoReleaseCreatesFirstCommitInRepositoryWithoutCommits(t *testing.T) {
+	root := repoRoot(t)
+	external := t.TempDir()
+	remote := filepath.Join(external, "origin.git")
+	dir := filepath.Join(external, "widget")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("create the empty remote: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "clone", "-q", remote, dir).CombinedOutput(); err != nil {
+		t.Fatalf("clone the empty remote: %v: %s", err, out)
+	}
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+	mainPath := filepath.Join(dir, "cmd/widget/main.go")
+	changelogPath := filepath.Join(dir, "CHANGELOG.md")
+	writeBuildFixture(t, mainPath, []byte("package main\nconst programVersion = \"0.9.0\"\nfunc main() {}\n"), 0o644)
+	writeBuildFixture(t, changelogPath, []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
+	if out, err := exec.Command("git", "-C", dir, "rev-parse", "-q", "--verify", "HEAD").CombinedOutput(); err == nil {
+		t.Fatalf("fixture already has a commit: %s", out)
+	}
+	const message = "first release"
+
+	mainBefore, changelogBefore := mustRead(t, mainPath), mustRead(t, changelogPath)
+	dry, err := run(t, dir, "", "./build.sh", "prep", "-n", "v1.0.0", message)
+	if err != nil || !strings.Contains(dry, "release command:") {
+		t.Fatalf("prep dry run without commits: %v: %s", err, dry)
+	}
+	if !bytes.Equal(mustRead(t, mainPath), mainBefore) || !bytes.Equal(mustRead(t, changelogPath), changelogBefore) {
+		t.Fatalf("prep dry run changed the fixture: %s", dry)
+	}
+
+	prepared, err := run(t, dir, "", "./build.sh", "prep", "v1.0.0", message)
+	if err != nil || !strings.Contains(prepared, "release command:") {
+		t.Fatalf("prep without commits: %v: %s", err, prepared)
+	}
+	if got := string(mustRead(t, mainPath)); !strings.Contains(got, `programVersion = "1.0.0"`) {
+		t.Fatalf("prepared version=%s", got)
+	}
+	if got := string(mustRead(t, changelogPath)); !strings.Contains(got, "| Unreleased | |\n| 1.0.0 | "+message+" |\n") {
+		t.Fatalf("prepared changelog=%s", got)
+	}
+
+	fakeBin := filepath.Join(external, "fakebin")
+	tmpRoot := filepath.Join(external, "tmp")
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeReleaseGo), 0o755)
+	release := exec.Command("/bin/bash", "./build.sh", "v1.0.0", message)
+	release.Dir = dir
+	release.Stdin = strings.NewReader("y\n")
+	release.Env = append(os.Environ(),
+		"NO_COLOR=1",
+		"TERM=dumb",
+		"FAKE_GOPATH="+filepath.Join(external, "gopath"),
+		"FAKE_VERSION=1.0.0",
+		"TMPDIR="+tmpRoot,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	out, err := release.CombinedOutput()
+	if err != nil {
+		t.Fatalf("release without commits: %v:\n%s", err, out)
+	}
+	output := string(out)
+	for _, added := range []string{"A\tCHANGELOG.md\n", "A\tbuild.sh\n", "A\tcmd/widget/main.go\n", "A\tgo.mod\n"} {
+		if !strings.Contains(output, added) {
+			t.Errorf("release preview omits %q:\n%s", added, output)
+		}
+	}
+	if strings.Contains(output, "Retry commit files:") {
+		t.Errorf("release without commits took the retry path:\n%s", output)
+	}
+
+	committed := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-list", "--count", "HEAD"))); got != "1" {
+		t.Fatalf("local commit count=%s, want 1", got)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "show", "-s", "--format=%B", "HEAD"))); got != message {
+		t.Fatalf("first commit message=%q", got)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/tags/v1.0.0^{commit}"))); got != committed {
+		t.Fatalf("remote tag commit=%s want %s", got, committed)
+	}
+	branches := strings.Fields(string(gitFixtureOutput(t, remote, "for-each-ref", "--format=%(objectname)", "refs/heads")))
+	if len(branches) != 1 || branches[0] != committed {
+		t.Fatalf("remote branches=%v, want one branch at %s", branches, committed)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-list", "--count", "--all"))); got != "1" {
+		t.Fatalf("remote commit count=%s, want 1", got)
+	}
+}
+
+func TestGoPrepDryRunFailsWherePrepFailsAtCapture(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("the superuser can read the unreadable fixture file")
+	}
+	dir := writeGoPrepBookkeepingFixture(t)
+	locked := filepath.Join(dir, "notes/locked.txt")
+	writeBuildFixture(t, locked, []byte("unreadable\n"), 0o644)
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	mainPath := filepath.Join(dir, "cmd/widget/main.go")
+	changelogPath := filepath.Join(dir, "CHANGELOG.md")
+	mainBefore, changelogBefore := mustRead(t, mainPath), mustRead(t, changelogPath)
+	const failure = "prep: capture candidate files in temporary index failed"
+
+	dry, dryErr := run(t, dir, "", "./build.sh", "prep", "-n", "v1.2.3", "AC29 capture")
+	real, realErr := run(t, dir, "", "./build.sh", "prep", "v1.2.3", "AC29 capture")
+	if dryErr == nil || !strings.Contains(dry, failure) {
+		t.Fatalf("prep dry run passed a failing capture: %v: %s", dryErr, dry)
+	}
+	if realErr == nil || !strings.Contains(real, failure) {
+		t.Fatalf("prep passed a failing capture: %v: %s", realErr, real)
+	}
+	if dry != real {
+		t.Fatalf("prep dry run and prep report different failures:\ndry run:\n%s\nprep:\n%s", dry, real)
+	}
+	if !bytes.Equal(mustRead(t, mainPath), mainBefore) || !bytes.Equal(mustRead(t, changelogPath), changelogBefore) {
+		t.Fatal("failed capture changed the fixture")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "govna/ac29-fixture.md")); err != nil {
+		t.Fatalf("failed capture removed the AC file: %v", err)
+	}
+}
+
+// writeGoModuleFixture writes a committed Go fixture whose utilities map names
+// to declared versions. An empty module path writes no go.mod file.
+func writeGoModuleFixture(t *testing.T, module string, utilities map[string]string) string {
+	t.Helper()
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	if module != "" {
+		writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module "+module+"\n\ngo 1.27.0\n"), 0o644)
+	}
+	for name, version := range utilities {
+		writeBuildFixture(t, filepath.Join(dir, "cmd", name, "main.go"), []byte(fmt.Sprintf("package main\nconst programVersion = %q\nfunc main() {}\n", version)), 0o644)
+	}
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+	return dir
+}
+
+func TestGoPrepGuardsModuleMajorVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name, module, version, required string
+	}{
+		{"second major without suffix", "example.com/tool", "v2.0.0", "example.com/tool/v2"},
+		{"third major with second suffix", "example.com/tool/v2", "v3.0.0", "example.com/tool/v3"},
+	} {
+		for _, dry := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s dry=%t", tc.name, dry), func(t *testing.T) {
+				dir := writeGoModuleFixture(t, tc.module, map[string]string{"tool": "1.9.0"})
+				before := gitState(t, dir)
+				args := []string{"./build.sh", "prep", tc.version, "guard the module path"}
+				if dry {
+					args = append(args, "-n")
+				}
+				out, err := run(t, dir, "", args...)
+				if err == nil {
+					t.Fatalf("prep accepted %s for module %s: %s", tc.version, tc.module, out)
+				}
+				for _, want := range []string{
+					"prep: tag " + tc.version + " requires go.mod module path " + tc.required + "; go.mod declares " + tc.module + "\n",
+					"set the go.mod module line to " + tc.required,
+					"go install " + tc.module + "/...@latest still resolves",
+				} {
+					if !strings.Contains(out, want) {
+						t.Errorf("guard output omits %q:\n%s", want, out)
+					}
+				}
+				if after := gitState(t, dir); after != before {
+					t.Fatalf("rejected prep changed the fixture:\nbefore:\n%s\nafter:\n%s", before, after)
+				}
+			})
+		}
+	}
+	for _, tc := range []struct {
+		name, module, version string
+	}{
+		{"second major with suffix", "example.com/tool/v2", "v2.0.0"},
+		{"first major without suffix", "example.com/tool", "v1.4.0"},
+		{"second major without a module file", "", "v2.0.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeGoModuleFixture(t, tc.module, map[string]string{"tool": "1.0.0"})
+			out, err := run(t, dir, "", "./build.sh", "prep", tc.version, "guard the module path")
+			if err != nil || strings.Contains(out, "requires go.mod module path") {
+				t.Fatalf("prep rejected %s for module %q: %v: %s", tc.version, tc.module, err, out)
+			}
+			want := fmt.Sprintf("programVersion = %q", strings.TrimPrefix(tc.version, "v"))
+			if got := string(mustRead(t, filepath.Join(dir, "cmd/tool/main.go"))); !strings.Contains(got, want) {
+				t.Fatalf("prepared version=%s, want %s", got, want)
+			}
+		})
+	}
+}
+
+func TestGoPrepKeepsPrimaryUtilityForMajorVersionModule(t *testing.T) {
+	dir := writeGoModuleFixture(t, "example.com/tool/v2", map[string]string{"tool": "1.9.0", "helper": "0.3.0"})
+	out, err := run(t, dir, "", "./build.sh", "prep", "v2.0.0", "keep the primary utility")
+	if err != nil {
+		t.Fatalf("prep: %v: %s", err, out)
+	}
+	if !strings.Contains(out, "primary cmd/tool/main.go bumped") {
+		t.Errorf("prep output omits the primary utility: %s", out)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/tool/main.go"))); !strings.Contains(got, `programVersion = "2.0.0"`) {
+		t.Errorf("primary utility version=%s", got)
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "cmd/helper/main.go"))); !strings.Contains(got, `programVersion = "0.3.0"`) {
+		t.Errorf("secondary utility version=%s", got)
+	}
 }
 
 func TestCanonAssetChangesRequireVersionIncrease(t *testing.T) {

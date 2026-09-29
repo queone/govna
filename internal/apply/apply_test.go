@@ -2,6 +2,8 @@ package apply
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,19 +35,18 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, repository.AgentFileAbsent)
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.68.0) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.68.0). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.69.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.69.0). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
-		"**AT1** [Manual] [Pre-release gate] — Verify AGENTS.md reflects the repository's actual practices.",
-		"**AT2** [Manual] [Pre-release gate] — Verify govna/roles.md reflects the repository's delivery model (Operator + Director).",
+		hashCheck,
 		"`PENDING` — apply emission; awaiting explicit Director Audit.",
 	} {
 		if !strings.Contains(created, want) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.68.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT3**"} {
+	for _, invalid := range []string{"Applied govna v0.69.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
@@ -53,7 +54,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	kept := adoption(8, "widget", "CODE", testProgramVersion, nil, repository.AgentFileOwned)
 	for _, want := range []string{
 		"- `CLAUDE.md` (existing file kept — Claude Code reads it instead of AGENTS.md; see the apply hint)\n",
-		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.",
+		"**AT2** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.",
 	} {
 		if !strings.Contains(kept, want) {
 			t.Errorf("kept adoption omits %q", want)
@@ -62,11 +63,80 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	removed := adoption(9, "widget", "CODE", testProgramVersion, nil, repository.AgentFileRetiredLink)
 	for _, want := range []string{
 		"- `CLAUDE.md` (retired Govna link removed)\n",
-		"**AT3** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.",
+		"**AT2** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.",
 	} {
 		if !strings.Contains(removed, want) {
 			t.Errorf("removed-link adoption omits %q", want)
 		}
+	}
+}
+
+const (
+	hashCheck   = "**AT1** [Automated] [Pre-release gate] — Verify AGENTS.md and govna/roles.md match their hashes in govna/canon-baseline.txt."
+	ownedReview = "**AT2** [Manual] [Pre-release gate] — Verify each repository-owned section still holds this repository's own rules."
+)
+
+func TestAdoptionReviewsRepositoryOwnedSectionsOnlyForExistingContent(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		outcomes []Outcome
+		review   bool
+	}{
+		{"fresh files", []Outcome{{"AGENTS.md", "written"}, {"govna/roles.md", "written"}, {"README.md", "written"}}, false},
+		{"kept repository documents", []Outcome{{"AGENTS.md", "written"}, {"README.md", "kept existing file"}, {"CHANGELOG.md", "kept existing file"}, {"arch.md", "kept existing file"}, {"plan.md", "kept existing file"}}, false},
+		{"merged contract", []Outcome{{"AGENTS.md", "updated Govna-managed section; kept repository-owned section"}}, true},
+		{"replaced contract", []Outcome{{"AGENTS.md", "replaced whole file because the Govna/local boundary was missing"}}, true},
+		{"merged DOC guidelines", []Outcome{{"AGENTS.md", "written"}, {"govna/editing-guidelines.md", "updated Govna-managed section; kept repository-owned section"}}, true},
+		{"kept release document", []Outcome{{"AGENTS.md", "written"}, {"govna/build-release.md", "kept existing file; add the missing Govna/local boundary and merge the Govna-managed section manually"}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := adoption(3, "widget", "CODE", testProgramVersion, tc.outcomes, repository.AgentFileOwned)
+			if !strings.Contains(body, hashCheck+"\n") {
+				t.Errorf("adoption omits the hash check:\n%s", body)
+			}
+			agentCheck := "**AT2** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n"
+			if tc.review {
+				agentCheck = "**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n"
+			}
+			if got := strings.Contains(body, ownedReview+"\n"); got != tc.review {
+				t.Errorf("repository-owned review emitted=%v want %v:\n%s", got, tc.review, body)
+			}
+			if !strings.Contains(body, agentCheck) {
+				t.Errorf("adoption omits %q:\n%s", agentCheck, body)
+			}
+		})
+	}
+}
+
+func TestFreshAdoptionMatchesBaselineHashes(t *testing.T) {
+	for _, args := range [][]string{{"-f", "code", "-s", "go", "-m", "example.com/widget"}, {"-f", "doc"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			d := filepath.Join(t.TempDir(), "widget")
+			if err := os.Mkdir(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if _, stderr, code := runAt(t, d, args...); code != 0 {
+				t.Fatal(stderr)
+			}
+			baseline, err := os.ReadFile(filepath.Join(d, "govna", "canon-baseline.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for path, scope := range map[string]string{"AGENTS.md": "before:## Project Rules", "govna/roles.md": "full"} {
+				content, err := os.ReadFile(filepath.Join(d, filepath.FromSlash(path)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				region, ok := canon.ComparisonRegion(path, content)
+				if !ok {
+					t.Fatalf("%s lacks its Govna-managed region", path)
+				}
+				want := fmt.Sprintf("%s\t%s\t%x\n", path, scope, sha256.Sum256(region))
+				if !strings.Contains(string(baseline), "\n"+want) {
+					t.Errorf("govna/canon-baseline.txt omits %q", want)
+				}
+			}
+		})
 	}
 }
 func TestFreshAndReapply(t *testing.T) {
@@ -599,7 +669,7 @@ func assertKeptAgentFile(t *testing.T, d, stdout, stderr string) {
 	}
 	for _, want := range []string{
 		"- `CLAUDE.md` (existing file kept — Claude Code reads it instead of AGENTS.md; see the apply hint)\n",
-		"**AT3** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n",
+		"**AT2** [Manual] [Pre-release gate] — Verify CLAUDE.md is deleted or deliberately kept.\n",
 	} {
 		if !strings.Contains(string(record), want) {
 			t.Errorf("adoption AC omits %q", want)
@@ -648,7 +718,7 @@ func TestApplyRemovesRetiredLink(t *testing.T) {
 	}
 	for _, want := range []string{
 		"- `CLAUDE.md` (retired Govna link removed)\n",
-		"**AT3** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.\n",
+		"**AT2** [Automated] [Pre-release gate] — Verify CLAUDE.md no longer exists.\n",
 	} {
 		if !strings.Contains(string(record), want) {
 			t.Errorf("adoption AC omits %q", want)

@@ -184,8 +184,8 @@ type generatedInstructionTemplate struct {
 }
 
 var generatedInstructionManifest = []generatedInstructionTemplate{
-	{"I01", "Verify AGENTS.md reflects the repository's actual practices."},
-	{"I02", "Verify govna/roles.md reflects the repository's delivery model (Operator + Director)."},
+	{"I01", "Verify AGENTS.md and govna/roles.md match their hashes in govna/canon-baseline.txt."},
+	{"I02", "Verify each repository-owned section still holds this repository's own rules."},
 	{"I03", "Verify CLAUDE.md no longer exists."},
 	{"I04", "Verify CLAUDE.md is deleted or deliberately kept."},
 	{"I05", "Resolve every Director choice in chat."},
@@ -418,8 +418,8 @@ func TestGeneratedInstructionAtomicity(t *testing.T) {
 
 func TestGeneratedGoldenInstructionGate(t *testing.T) {
 	expected := map[string]map[string]int{
-		"internal/apply/testdata/fresh-code-golden.md": {"I01": 1, "I02": 1},
-		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1, "I02": 1},
+		"internal/apply/testdata/fresh-code-golden.md": {"I01": 1},
+		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1},
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,
@@ -512,6 +512,32 @@ func TestPlainLanguageContractAndMirrors(t *testing.T) {
 			if strings.Count(string(content), text) != 1 {
 				t.Errorf("%s requires one occurrence of %q", path, text)
 			}
+		}
+	}
+}
+
+func TestPartAndIdeaIdentifiersAllowedInActiveACDocuments(t *testing.T) {
+	const rules = "- Reserve bare Class and Round identifiers for CHANGELOG rows, commit messages, and `Historical:` comments.\n" +
+		"- Reserve bare Part identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, and `Historical:` comments.\n" +
+		"- Reserve bare IE identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, `plan.md`'s own `IE<N>:` bullets, and `Historical:` comments.\n" +
+		"- Treat every other Markdown documentation file as out of bounds for bare AC, AT, Class, Part, Round, and IE identifiers.\n"
+	contracts := map[string]string{"AGENTS.md": readSourceForLanguageTest(t, "AGENTS.md")}
+	for name, config := range map[string]Config{
+		"rendered CODE AGENTS.md": {Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
+		"rendered DOC AGENTS.md":  {Flavor: Doc, RepoName: "handbook"},
+	} {
+		files, err := Render(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contracts[name] = fileText(t, files, "AGENTS.md")
+	}
+	for name, content := range contracts {
+		if strings.Count(content, rules) != 1 {
+			t.Errorf("%s requires one occurrence of the identifier rules:\n%s", name, rules)
+		}
+		if strings.Contains(content, "Reserve bare Class, Part, and Round identifiers") {
+			t.Errorf("%s keeps the rule that bars Part identifiers from active AC documents", name)
 		}
 	}
 }
