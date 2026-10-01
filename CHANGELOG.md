@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.35.0 | AC55 canon gate leaves every GitHub write to the Director; canon v0.70.0 |
 | 0.34.0 | AC54 first release, Go v2 guard, AC labels, adoption checks; IE6; canon v0.69.0 |
 | 0.33.0 | AC53 fix the STE note; exempt Review Style status bullets; canon v0.68.0 |
 | 0.32.0 | AC52 move the STE reply limits into canon for all adopted repos; canon v0.67.0 |

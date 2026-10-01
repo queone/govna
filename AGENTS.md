@@ -180,6 +180,9 @@ Note: these limits borrow from Simplified Technical English (ASD-STE100), and th
 - Ask for direction before proceeding.
 - Wait for explicit user request before preparing, executing, publishing, deploying, or distributing — including drafting commit messages, commit commands, version bumps, or release notes.
 - **Leave every `git commit` for the user to execute. No EXCEPTION.**
+- Leave every GitHub write for the Director to execute.
+- Treat issue closes, comments, labels, pull requests, releases, and pushes as GitHub writes.
+- Present the exact GitHub write command in chat for the Director to run.
 - Treat an explicit valid Package instruction for an established Ratified release batch as the trigger for release-prep bookkeeping.
 - Treat an explicit valid Package instruction for an established direct batch as the same trigger.
 - Follow the Pre-Release Checklist in `govna/build-release.md` when executing release-prep bookkeeping.
@@ -581,7 +584,6 @@ Note: the Director triggers those actions; Ratify names what is pending.
 
 - Preserve externally observable behavior unless the Director approves an intentional difference.
 - Record each intentional difference in the active AC and its affected documentation and tests.
-- Require the Director to execute every GitHub write operation.
 - Keep Go tests beside the packages they exercise.
 - Keep repository-specific governance verification under `govna/`.
 - Prohibit a top-level `tests/` directory.

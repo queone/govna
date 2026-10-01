@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.69.0"
+const Version = "0.70.0"
 
 const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
