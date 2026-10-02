@@ -130,10 +130,12 @@ func TestCommandHelpPages(t *testing.T) {
 		"  Compare a repository's Govna files with the files built into this executable.\n" +
 		"  Run from the repository root with no positional arguments. Writes a reviewable\n" +
 		"  AC under govna/ when updates or Director choices are needed.\n" +
+		"  Use --check to report the result without writing anything.\n" +
 		"\n" +
 		"Options\n" +
 		"  -f, --flavor code|doc  Govna file set (CODE or DOC; default: auto-detect)\n" +
 		"  -s, --stack NAME       CODE stack (default: inferred from manifests)\n" +
+		"  -c, --check            report updates without writing an AC (exit 3 when found)\n" +
 		"  -j, --json             emit JSON report alongside markdown emission\n" +
 		"  -l, --diff-lines N     diff truncation limit (default: 200)\n" +
 		"  -n, --repo-name NAME   override repo name (default: basename of cwd)\n" +
@@ -233,7 +235,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.70.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.71.0.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -243,7 +245,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.70.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.71.0.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}

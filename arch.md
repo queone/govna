@@ -47,7 +47,7 @@ Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for pa
 
 Apply determines repository identity through `internal/repository`, renders the selected embedded files, validates every destination, and either writes them into a new repository or merges registered Govna sections into an existing one while keeping repository-owned documents. Adding those files is adoption. `internal/emission` writes one adoption AC that names the executable version and canon version separately. Apply never reads or changes legacy `governa/` content. Optional Git initialization runs last.
 
-Audit validates a repository that has adopted Govna, reads metadata, the baseline, the optional preserve registry—the files a Director chose to keep local—and the optional repository-check registry `govna/repo-check.txt`—the Director's standing answer to the emitted repository check—and compares Govna-managed regions in byte order through the shared contained access. A link, directory, special file, or unreadable governed path fails the audit before any emission, and preserve phrases come from the canonical Unreleased table row or a legacy Unreleased section. Each exact classification label explains whether a file needs no update, can be updated safely, stays local, or needs a Director choice. Clean audits write nothing. Actionable audits write or reuse one unedited AC keyed by canon version. A valid configured repository check emits pre-resolved to the configured command; a malformed registry fails the audit before any emission. Its marker records the executable and canon versions separately, and JSON uses the same report data. When an agent is explicitly asked to run the command, the Operator immediately reviews that AC, resumes no-edit Refine after blockers are resolved, runs the final readiness check, and stops before Implement. Active phase state remains in the session rather than the immutable AC.
+Audit validates a repository that has adopted Govna, reads metadata, the baseline, the optional preserve registry—the files a Director chose to keep local—and the optional repository-check registry `govna/repo-check.txt`—the Director's standing answer to the emitted repository check—and compares Govna-managed regions in byte order through the shared contained access. A link, directory, special file, or unreadable governed path fails the audit before any emission, and preserve phrases come from the canonical Unreleased table row or a legacy Unreleased section. Each exact classification label explains whether a file needs no update, can be updated safely, stays local, or needs a Director choice. Clean audits write nothing. Actionable audits write or reuse one unedited AC keyed by canon version. Check mode writes nothing for either result and exits 3 when updates or Director choices are needed. A valid configured repository check emits pre-resolved to the configured command; a malformed registry fails the audit before any emission. Its marker records the executable and canon versions separately, and JSON uses the same report data. When an agent is explicitly asked to run the command, the Operator immediately reviews that AC, resumes no-edit Refine after blockers are resolved, runs the final readiness check, and stops before Implement. Active phase state remains in the session rather than the immutable AC.
 
 Removal reads the same repository identity and preserve information. It compares current Govna files and examines repository-only entries without following symlinks. It sorts files into remove, keep, and Director-choice groups, removes preserve control state last, and writes or safely reuses one canon-version-keyed removal AC. The removal marker records executable and canon versions separately and upgrades unedited legacy markers. The command carries out no removal choice.
 
@@ -153,7 +153,45 @@ Note: exact unresolved repository-check question: ``<N>. **Repository check**: W
 
 ## Architecture Notes
 
+### Intentional Differences
+
 - Record approved intentional differences in the owning AC, documentation, and tests.
+
+### Guidance, Not Enforcement
+
+- Treat Govna canon as guidance that agents follow, not as an enforcement layer.
+- Leave capability enforcement to harness permissions, sandboxing, and Director review.
+- Write no harness permission settings from any Govna command.
+
+Note: the canon stays guidance for these reasons.
+
+- Committed instructions shape agent behavior, but they cannot stop a misunderstanding, a hostile context, or a model that ignores them.
+- Audit trusts the canon embedded in the executable.
+- Baseline hashes detect drift rather than authorship.
+- Hard boundaries such as commits, GitHub writes, and governed-path edits hold only through controls outside the model.
+
+### Canon Delivery
+
+- Deliver canon to each adopted repository as committed files rendered by the executable.
+- Keep each canon update visible as an instruction diff in the adopted repository's history.
+- Load the contract through each supported CLI's native `AGENTS.md` discovery.
+
+Note: the Director kept in-repository delivery over three alternatives: a fetch of canon from a URL at session start, a per-machine versioned canon install with a per-repository pin, and a harness plugin that injects canon at session start. Revisit this choice if canon-update review becomes a real burden across many repositories on one machine.
+
+Cons of the alternatives:
+
+- No supported CLI loads instructions from a URL at startup.
+- An agent-run fetch is a tool call whose result a harness may summarize or block.
+- A pin with a digest shows reviewers only a changed hash, not the instruction text being adopted.
+- Codex CLI's only machine-level discovery is one global `~/.codex/AGENTS.md`, so a per-repository pin needs an extra loading adapter.
+- A plugin covers only the harness that hosts it.
+- A shared install spreads one bad update to every repository on the machine.
+- Moving canon out of the repository leaves the in-repository loader file equally editable, so it adds no meaningful protection.
+
+Accepted costs of in-repository delivery:
+
+- Each adopted repository carries its own copy of the governance text.
+- Each canon update produces a diff in every adopted repository.
 
 ## Conventions
 

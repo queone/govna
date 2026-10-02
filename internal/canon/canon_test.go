@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	efficiencyPurposeDefinition = "Govna exists to make programming and publishing ceremonies—the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release—more effective and efficient."
+	efficiencyPurposeDefinition = "Govna exists to make programming and publishing ceremonies more effective and efficient. Those ceremonies are the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release."
 	efficiencyGateBoundary      = "Efficiency does not weaken authorization, review, verification, or release gates."
 )
 
@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.70.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.71.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -1735,5 +1735,59 @@ func TestCanonAGENTSReferencesResolve(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCheckModeDocumentation(t *testing.T) {
+	const stackLine = "- `-s, --stack <name>` — CODE stack (default: inferred from manifests; not accepted with `--flavor doc`).\n"
+	const checkLine = "- `-c, --check` — report the result without writing an AC; exit `3` when updates or Director choices are needed.\n"
+	const checkParagraph = "A check-mode audit (`-c` or `--check`) runs the same comparison and writes nothing. It performs no AC-number allocation, stub inspection, directory creation, or file write. A clean result prints the clean-result line above and exits `0`. An actionable result prints `Govna updates or Director choices found`, followed by a plain result tally and `Run govna audit without --check to write the review AC.`, and exits `3`. With `--json`, the complete report is printed with `emitted` set to `null` and no additional prose. Because check mode emits no AC, it starts no agent-mediated adoption review."
+	const legacyPurposeDefinition = "Govna exists to make programming and publishing ceremonies—the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release—more effective and efficient."
+	const phaseSentence = "A clean result, a check-mode result, or a pre-emission failure enters no AC phase."
+	const readmeUsage = "Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--check` (`-c`) to report the result without writing anything; it exits `3` when updates or Director choices are needed and `0` when none are."
+	const archSentence = "Actionable audits write or reuse one unedited AC keyed by canon version. Check mode writes nothing for either result and exits 3 when updates or Director choices are needed."
+	documents := map[string]map[string]string{}
+	for name, config := range map[string]Config{
+		"CODE": {Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
+		"DOC":  {Flavor: Doc, RepoName: "handbook"},
+	} {
+		files, err := Render(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		documents[name] = map[string]string{}
+		for _, path := range []string{"govna/audit.md", "govna/operator-contract-rationale.md", "README.md"} {
+			documents[name][path] = fileText(t, files, path)
+		}
+	}
+	root := filepath.Join("..", "..")
+	documents["repository"] = map[string]string{}
+	for _, path := range []string{"govna/audit.md", "govna/operator-contract-rationale.md", "README.md", "arch.md"} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		documents["repository"][path] = string(content)
+	}
+	for name, docs := range documents {
+		if count := strings.Count(docs["govna/audit.md"], stackLine+checkLine); count != 1 {
+			t.Errorf("%s govna/audit.md check flag line after stack line count=%d, want 1", name, count)
+		}
+		if count := strings.Count(docs["govna/audit.md"], checkParagraph); count != 1 {
+			t.Errorf("%s govna/audit.md check-mode paragraph count=%d, want 1", name, count)
+		}
+		rationale := docs["govna/operator-contract-rationale.md"]
+		if count := strings.Count(rationale, efficiencyPurposeDefinition); count != 1 || strings.Contains(rationale, legacyPurposeDefinition) {
+			t.Errorf("%s govna/operator-contract-rationale.md purpose definition count=%d, legacy=%t", name, count, strings.Contains(rationale, legacyPurposeDefinition))
+		}
+		if count := strings.Count(docs["README.md"], phaseSentence); count != 1 {
+			t.Errorf("%s README.md check-mode phase sentence count=%d, want 1", name, count)
+		}
+	}
+	if !strings.Contains(documents["repository"]["README.md"], readmeUsage) {
+		t.Error("README.md omits the --check usage sentence after the --json sentence")
+	}
+	if !strings.Contains(documents["repository"]["arch.md"], archSentence) {
+		t.Error("arch.md omits the check-mode sentence after the actionable-audit sentence")
 	}
 }

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.36.0 | AC56 audit --check writes no AC; arch and README notes; canon v0.71.0 |
 | 0.35.0 | AC55 canon gate leaves every GitHub write to the Director; canon v0.70.0 |
 | 0.34.0 | AC54 first release, Go v2 guard, AC labels, adoption checks; IE6; canon v0.69.0 |
 | 0.33.0 | AC53 fix the STE note; exempt Review Style status bullets; canon v0.68.0 |

@@ -24,6 +24,8 @@ govna version
 
 If you set a custom `GOBIN`, add that directory to `PATH` instead. The `PATH` change lasts for the current shell session.
 
+To pin a release instead of the newest one, replace `@latest` with its tag, such as `@vX.Y.Z`. Go checks each downloaded release against its public checksum database, so a pinned tag installs the same code on every machine.
+
 ### 2. Adopt Govna in a disposable clone
 
 Pick a Go, Rust, Swift, or Terraform code repository, or a documentation repository; other stacks are not yet selectable. Clone it to a new directory so your real checkout, including uncommitted work, is never touched:
@@ -102,11 +104,13 @@ Removal keeps `plan.md`, `arch.md`, every file registered in `govna/preserve.txt
 
 ## Why
 
-Govna exists to make programming and publishing ceremonies—the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release—more effective and efficient. By making those checkpoints explicit and reusable, Directors and Operators spend less time reconstructing or renegotiating process from transient session context and more time delivering the change.
+Govna distributes behavioral policy for coding agents: versioned, readable rules for how an agent scopes, changes, verifies, and releases work in your repository. It exists to make programming and publishing ceremonies more effective and efficient. Those ceremonies are the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release. By making those checkpoints explicit and reusable, Directors and Operators spend less time reconstructing or renegotiating process from transient session context and more time delivering the change.
 
 Beyond saving coordination time, the contract keeps decision-bearing choices with the human Director while giving the agent Operator clear authority for settled mechanical work. Bounded scope and testable acceptance criteria reduce ambiguity, scope drift, and missed paths; recorded decisions improve continuity across sessions; and versioned governance files plus auditing make the workflow reproducible and governance drift detectable.
 
-Because the generated governance is file-based, adopted repositories remain self-contained, inspectable, and adaptable to local needs.
+Like any dependency, that policy has a supply chain, and Govna keeps it short and visible. The rules ship inside one executable, arrive in each repository as ordinary files, and change only when you review and commit a new version. Adopted repositories therefore remain self-contained, inspectable, and adaptable to local needs.
+
+The policy guides the agent; it does not enforce anything. Harness permissions, sandboxing, and your review of each commit remain the real controls.
 
 Govna is one tool for the organizing described in [Ordenador](https://que.one/tech/ordenador.html): computers and AI put routine work in order, so people have more time for the work that order makes room for.
 
@@ -219,9 +223,9 @@ Audit classifies a `CLAUDE.md` symbolic link whose target is exactly `AGENTS.md`
 
 Audit stub filenames remain keyed by canon version. Their guarded markers record both the executable and canon versions; an unedited legacy canon-only marker upgrades in place without changing the AC number, while an edited body remains rejected.
 
-An explicit agent-mediated request to run `govna audit` also authorizes immediate review of one emitted or reused adoption AC. The executable still performs only deterministic comparison and emission. The Operator performs Audit, completes no-edit Refine after every blocker is resolved, runs Pre-Implementation Verification, reports readiness only when that checklist passes, and stops before Implement. A clean result or pre-emission failure enters no AC phase. A correction that would change the immutable AC requires a new audit emission.
+An explicit agent-mediated request to run `govna audit` also authorizes immediate review of one emitted or reused adoption AC. The executable still performs only deterministic comparison and emission. The Operator performs Audit, completes no-edit Refine after every blocker is resolved, runs Pre-Implementation Verification, reports readiness only when that checklist passes, and stops before Implement. A clean result, a check-mode result, or a pre-emission failure enters no AC phase. A correction that would change the immutable AC requires a new audit emission.
 
-Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
+Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--check` (`-c`) to report the result without writing anything; it exits `3` when updates or Director choices are needed and `0` when none are. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
 
 ### `rm`
 

@@ -30,6 +30,7 @@ const repoCheckPath = "govna/repo-check.txt"
 type Config struct {
 	Flavor, Stack, RepoName string
 	JSON                    bool
+	Check                   bool
 	DiffLines               int
 	invocation              string
 }
@@ -181,6 +182,9 @@ var nameReferenceRE = regexp.MustCompile(`(?:^|[[:space:]'"])(govna/[A-Za-z0-9._
 var consumerACRE = regexp.MustCompile(`^govna/ac[0-9]+-[^/]+\.md$`)
 var adoptionCommitRE = regexp.MustCompile(`(?i)(govna|^govern[a-z]*)`)
 
+// Run executes govna audit for cwd and returns its exit status: 0 for a clean
+// result or a written AC, 1 for an audit error, 2 for a usage error, and 3 when
+// check mode finds updates or Director choices.
 func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) int {
 	cfg, err := parse(args)
 	if err != nil {
@@ -196,7 +200,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		hints.WriteAgentHints(stderr)
 		hints.Close()
 	}
-	if !clean {
+	if !clean && !cfg.Check {
 		path, reused, err := emission.AuditPath(cwd, "v"+canon.Version, nil)
 		if err != nil {
 			fmt.Fprintf(stderr, "audit: %v\n", err)
@@ -232,8 +236,13 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		}
 	} else if clean {
 		fmt.Fprintf(stdout, "No Govna updates or Director choices found (%s). No AC was written.\n", plainTally(report.Files))
+	} else if cfg.Check {
+		fmt.Fprintf(stdout, "Govna updates or Director choices found (%s). Run govna audit without --check to write the review AC.\n", plainTally(report.Files))
 	} else {
 		fmt.Fprintf(stdout, "Wrote %s for review (%s).\n", report.Emitted.ACStub, plainTally(report.Files))
+	}
+	if cfg.Check && !clean {
+		return 3
 	}
 	return 0
 }
@@ -259,6 +268,8 @@ func parse(args []string) (Config, error) {
 			}
 		case "-j", "--json":
 			c.JSON = true
+		case "-c", "--check":
+			c.Check = true
 		case "-l", "--diff-lines":
 			i++
 			if i >= len(args) {
@@ -288,6 +299,9 @@ func parse(args []string) (Config, error) {
 func inspect(cfg Config, root string) (Report, bool, error) {
 	var report Report
 	if repository.IsSource(root) {
+		if cfg.Check {
+			return report, false, fmt.Errorf("check mode cannot run inside the Govna source checkout at %s; run this command from the target repository", root)
+		}
 		return report, false, fmt.Errorf("an audit AC cannot be created inside the Govna source checkout at %s; run this command from the target repository", root)
 	}
 	if err := repository.RequireAdopted(root); err != nil {

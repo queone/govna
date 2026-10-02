@@ -12,8 +12,8 @@ import (
 	"github.com/queone/govna/internal/render"
 )
 
-const programVersion = "0.35.0"
-const canonVersion = "0.70.0"
+const programVersion = "0.36.0"
+const canonVersion = "0.71.0"
 
 type environment struct {
 	stdoutTerminal bool
@@ -154,10 +154,11 @@ func renderPage() help.Page {
 
 func auditPage() help.Page {
 	return help.Utility(programVersion,
-		help.Section{Title: "Usage", Rows: []help.Row{{Form: "govna audit [options]"}}, Note: "Compare a repository's Govna files with the files built into this executable.\nRun from the repository root with no positional arguments. Writes a reviewable\nAC under govna/ when updates or Director choices are needed."},
+		help.Section{Title: "Usage", Rows: []help.Row{{Form: "govna audit [options]"}}, Note: "Compare a repository's Govna files with the files built into this executable.\nRun from the repository root with no positional arguments. Writes a reviewable\nAC under govna/ when updates or Director choices are needed.\nUse --check to report the result without writing anything."},
 		help.Section{Title: "Options", Rows: []help.Row{
 			{Form: "-f, --flavor code|doc", Meaning: "Govna file set (CODE or DOC; default: auto-detect)"},
 			{Form: "-s, --stack NAME", Meaning: "CODE stack (default: inferred from manifests)"},
+			{Form: "-c, --check", Meaning: "report updates without writing an AC (exit 3 when found)"},
 			{Form: "-j, --json", Meaning: "emit JSON report alongside markdown emission"},
 			{Form: "-l, --diff-lines N", Meaning: "diff truncation limit (default: 200)"},
 			{Form: "-n, --repo-name NAME", Meaning: "override repo name (default: basename of cwd)"},
