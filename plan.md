@@ -12,3 +12,4 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 - IE3: Explore adopting, loading, reviewing, and removing Govna through IDE extensions and the vendors' desktop, mobile, and web agent apps; support stays limited to the Claude Code and Codex CLIs until then.
 - IE5: Revert the canon `### STE Replies` limits if the wider trial finds them too cumbersome.
 - IE6: Let the Rust, Swift, Terraform, and DOC build scripts run the first build and release in a repository with no commits, as the Go script does; the Rust full build needs `HEAD` for its validation token, and under default Git settings the first push needs an upstream branch in every stack.
+- IE7: Pin `GOTOOLCHAIN` from `go.mod` in the Go `build.sh` so builds stay on the declared Go when a newer local Go breaks the pinned staticcheck; deferred until a staticcheck release reads Go 1.27.2 export data (go-tools issue 1832) → govna/ac57-go-build-pins-toolchain.md
