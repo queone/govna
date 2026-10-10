@@ -51,12 +51,11 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
    - Verify all in-scope AC work is complete.
    - Verify every AC acceptance test passes.
 2. **Determine the version.**
-   - Classify the change set under semver.
-   - Use PATCH for formatting, fixes, or user-invisible refactors.
-   - Use MINOR for user-visible structure, navigation, or schema changes.
-   - Bump the semver version from the latest tag.
    - Use today's zero-padded `YY.MM.DD` for a dated version.
    - Append `a` for the first dated release of the day and the next letter for each later one.
+   - Classify a semver change set as PATCH for formatting, fixes, or user-invisible refactors.
+   - Classify a semver change set as MINOR for user-visible structure, navigation, or schema changes.
+   - Bump the semver version from the latest tag.
 3. **Derive the release message.**
    - Summarize the delivered user-visible result in no more than 80 bytes.
    - Name each direct-handled companion change inside that user-visible result without an AC reference.

@@ -521,8 +521,8 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Use strict semver `vMAJOR.MINOR.PATCH` or the dated form `vYY.MM.DDa` for every release tag.
 - Keep one version scheme per repository.
 - Assign `a` to the first dated release of a day and the next letter to each later one.
-- Follow semver with PATCH for invisible changes and MINOR for user-visible changes.
-- Batch PATCH-level changes.
+- Use PATCH for invisible changes and MINOR for user-visible changes under semver.
+- Batch PATCH-level changes under semver.
 - Complete any repo-owned validation before preparing any commit handoff.
 - Label each acceptance test with source axis (`[Automated]` / `[Manual]`) and timing axis (`[Pre-release gate]` default; `[Post-release verification]` explicit). See `govna/ac-template.md`.
 - Follow existing repo patterns unless an approved improvement says otherwise.

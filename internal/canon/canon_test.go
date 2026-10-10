@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.73.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.74.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -1822,8 +1822,6 @@ func TestDocReleaseAcceptsDatedVersions(t *testing.T) {
 		},
 		"govna/release.md": {
 			"Accept strict semver `vMAJOR.MINOR.PATCH` or the dated form `vYY.MM.DDa` as the release tag.\n",
-			"   - Use today's zero-padded `YY.MM.DD` for a dated version.\n",
-			"   - Append `a` for the first dated release of the day and the next letter for each later one.\n",
 			"- Versions are unprefixed (`0.29.0` or `26.10.10a`, not `v0.29.0`).\n",
 		},
 	} {
@@ -1836,6 +1834,54 @@ func TestDocReleaseAcceptsDatedVersions(t *testing.T) {
 	}
 	if strings.Contains(fileText(t, goFiles, "AGENTS.md"), "dated form") {
 		t.Error("rendered CODE AGENTS.md mentions the dated version form")
+	}
+
+	// The semver bullets apply only under the semver scheme in DOC; CODE stays semver-only.
+	scoped := []string{
+		"- Use PATCH for invisible changes and MINOR for user-visible changes under semver.\n",
+		"- Batch PATCH-level changes under semver.\n",
+	}
+	unscoped := []string{
+		"- Follow semver with PATCH for invisible changes and MINOR for user-visible changes.\n",
+		"- Batch PATCH-level changes.\n",
+	}
+	docAgents := fileText(t, docFiles, "AGENTS.md")
+	goAgents := fileText(t, goFiles, "AGENTS.md")
+	for i := range scoped {
+		if got := strings.Count(docAgents, scoped[i]); got != 1 {
+			t.Errorf("rendered DOC AGENTS.md count=%d for %q", got, scoped[i])
+		}
+		if strings.Contains(docAgents, unscoped[i]) {
+			t.Errorf("rendered DOC AGENTS.md keeps the unscoped bullet %q", unscoped[i])
+		}
+		if got := strings.Count(goAgents, unscoped[i]); got != 1 {
+			t.Errorf("rendered CODE AGENTS.md count=%d for %q", got, unscoped[i])
+		}
+		if strings.Contains(goAgents, scoped[i]) {
+			t.Errorf("rendered CODE AGENTS.md gained the DOC-scoped bullet %q", scoped[i])
+		}
+	}
+	release := fileText(t, docFiles, "govna/release.md")
+	steps := []string{
+		"   - Use today's zero-padded `YY.MM.DD` for a dated version.\n",
+		"   - Append `a` for the first dated release of the day and the next letter for each later one.\n",
+		"   - Classify a semver change set as PATCH for formatting, fixes, or user-invisible refactors.\n",
+		"   - Classify a semver change set as MINOR for user-visible structure, navigation, or schema changes.\n",
+		"   - Bump the semver version from the latest tag.\n",
+	}
+	last := -1
+	for _, step := range steps {
+		if got := strings.Count(release, step); got != 1 {
+			t.Errorf("rendered DOC govna/release.md count=%d for %q", got, step)
+		}
+		if at := strings.Index(release, step); at < last {
+			t.Errorf("rendered DOC govna/release.md lists %q before an earlier step", step)
+		} else {
+			last = at
+		}
+	}
+	if strings.Contains(release, "Classify the change set under semver.") {
+		t.Error("rendered DOC govna/release.md keeps the unscoped classification step")
 	}
 }
 

@@ -1,5 +1,5 @@
 govna-canon-baseline-v1
-canon_version = v0.73.0
+canon_version = v0.74.0
 .gitignore	full	ded465d4ba1e99164a955bbc640f5f99b252457bc0661cbfd92691960fca452b
 AGENTS.md	before:## Project Rules	dee2197e2988b0ceaed12bf36cde9455ed5736030d052f573ce97fb9215b9bf8
 CHANGELOG.md	full	8a6db4684ca6bcf7fa1bfbc485ed6edbcbbfbc257d934d7422916871521a6b3c
@@ -14,7 +14,7 @@ govna/canon-cycle.md	full	505a16c595912811eb2a8886490ce8d138510e865707a071126d7f
 govna/code-stacks.md	full	6cbfd6484e921f2cd433a268de326484efa53c037cae53ee7ae1cb56ec59816d
 govna/development-cycle.md	full	0e5d9f1ed0b2d71b3da7bd716334b554a168ff9aa924468443aa1adbb46592c5
 govna/development-guidelines.md	before:## Project Practices	5b44496e6667eb9a156b3a9da17432644f46fe9ddc8263f6e07dd7a1342f9397
-govna/metadata.txt	full	d69f25d36831713e73ae7bcef75c34fffd7499d24c60b501329c265f7f114948
+govna/metadata.txt	full	81e77c8991d38fe5836c1c721e5360de3794c005ee9f260f71add3bf0c50f61d
 govna/operator-contract-rationale.md	full	a05c25d9023863310e8c00d9b23f58c6da649c72a9d0a1179ab103fc01ee7fc9
 govna/roles.md	full	9d7608962d038fadfccb2d74724c6cb8d79852a831f1f68b689397b5598595a2
 plan.md	full	3476f1a7797ec1350fa3e17a1cc6d426cd9ca0ae2d1faf8ca5b5739a129e5bdf
