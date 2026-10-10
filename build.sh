@@ -386,6 +386,9 @@ EOF
     }
   fi
 
+  printf '\n%s\n' "$(yel7 '==> Pin the Go toolchain from go.mod')"
+  printf '    GOTOOLCHAIN=%s\n' "${GOTOOLCHAIN:-}"
+
   printf '\n%s\n' "$(yel7 '==> Update go.mod to reflect actual dependencies')"
   run_streaming grn3 go mod tidy
 
@@ -656,6 +659,26 @@ _validate_utility_version_output() { # $1=binary $2=utility ID $3=declared versi
     return 1
   fi
   rm -rf "$probe_dir"
+}
+
+_pin_go_toolchain() { # exports GOTOOLCHAIN from go.mod's toolchain or go directive; otherwise leaves it untouched
+  local line directive='' toolchain=''
+  [ -f go.mod ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+    toolchain\ * | toolchain"$(printf '\t')"*) [ -n "$toolchain" ] || toolchain=$(_trim "${line#toolchain}") ;;
+    go\ * | go"$(printf '\t')"*) [ -n "$directive" ] || directive=$(_trim "${line#go}") ;;
+    esac
+  done <go.mod
+  if [ -n "$toolchain" ]; then
+    case "$toolchain" in
+    go[0-9]*) export GOTOOLCHAIN="$toolchain" ;;
+    esac
+    return 0
+  fi
+  [ -n "$directive" ] || return 0
+  if printf '%s' "$directive" | LC_ALL=C grep -Eq '^[0-9]+\.[0-9]+$'; then directive="$directive.0"; fi
+  export GOTOOLCHAIN="go$directive"
 }
 
 _module_path() { # -> go.mod module path without a trailing major-version segment, or empty
@@ -2266,6 +2289,7 @@ EOF
 
 main() {
   _color_init
+  _pin_go_toolchain
 
   if [ "${1:-}" = prep ]; then
     shift

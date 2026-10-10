@@ -170,6 +170,14 @@ _is_strict_stable_semver() { # $1=version -> success when MAJOR.MINOR.PATCH
   printf '%s' "$1" | LC_ALL=C grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 }
 
+_is_dated_version() { # $1=version -> success when YY.MM.DD plus one lowercase letter
+  printf '%s' "$1" | LC_ALL=C grep -Eq '^[0-9]{2}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])[a-z]$'
+}
+
+_is_release_version() { # $1=version -> success for strict SemVer or a dated version
+  _is_strict_stable_semver "$1" || _is_dated_version "$1"
+}
+
 _release_refuse() { # $1=condition $2=tag $3=message
   printf 'release: %s in %s; run ./build.sh prep %s %s in the intended repository\n' \
     "$1" "$PWD" "$2" "$(_go_quote "$3")" >&2
@@ -199,8 +207,8 @@ _validate_changelog_release_row() { # $1=path $2=version $3=message
 # message shape, no existing tag, and the exact CHANGELOG row after Unreleased.
 _release_validate_prepared() { # $1=tag $2=message
   local tag="$1" message="$2" version="${1#v}"
-  { [ "$tag" = "v$version" ] && _is_strict_stable_semver "$version"; } ||
-    { _release_refuse "tag must use strict stable SemVer vMAJOR.MINOR.PATCH ($(_go_quote "$tag"))" "$tag" "$message"; return 1; }
+  { [ "$tag" = "v$version" ] && _is_release_version "$version"; } ||
+    { _release_refuse "tag must use strict stable SemVer vMAJOR.MINOR.PATCH or dated vYY.MM.DDa ($(_go_quote "$tag"))" "$tag" "$message"; return 1; }
   [ -n "$message" ] || { _release_refuse 'message must be non-empty' "$tag" "$message"; return 1; }
   [ "$(_byte_len "$message")" -le 80 ] ||
     { _release_refuse "message must be 80 bytes or fewer (got $(_byte_len "$message"))" "$tag" "$message"; return 1; }
@@ -264,6 +272,8 @@ prep vX.Y.Z "release message" [--dry-run|-n]
 
 Stages a release by inserting a CHANGELOG row, deleting completed AC files,
 sweeping matching plan.md IE entries, and printing the release command.
+
+Version: vMAJOR.MINOR.PATCH or dated vYY.MM.DDa (a to z orders one day).
 
 Flags:
   -h, -?, --help   show this help
@@ -413,8 +423,8 @@ EOF
 
 prep_run() {
   local dry="$1" version="$2" message="$3" root="$PWD" vstripped="${2#v}"
-  if ! printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-    printf 'prep: version must match vMAJOR.MINOR.PATCH: %s\n' "$(_go_quote "$version")" >&2
+  if ! { printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { [ "$version" = "v$vstripped" ] && _is_dated_version "$vstripped"; }; }; then
+    printf 'prep: version must match vMAJOR.MINOR.PATCH or dated vYY.MM.DDa: %s\n' "$(_go_quote "$version")" >&2
     return 1
   fi
   if [ -z "$message" ]; then printf 'prep: message must be non-empty\n' >&2; return 1; fi
@@ -482,8 +492,8 @@ rel_main() {
   local tag message
   tag=$(_trim "$1")
   message=$(_trim "$2")
-  if [ "$tag" != "v${tag#v}" ] || ! _is_strict_stable_semver "${tag#v}"; then
-    printf 'release tag must use strict stable SemVer vMAJOR.MINOR.PATCH: %s\n' "$(_go_quote "$tag")" >&2
+  if [ "$tag" != "v${tag#v}" ] || ! _is_release_version "${tag#v}"; then
+    printf 'release tag must use strict stable SemVer vMAJOR.MINOR.PATCH or dated vYY.MM.DDa: %s\n' "$(_go_quote "$tag")" >&2
     return 2
   fi
   if [ -z "$message" ]; then printf 'release message must be non-empty\n' >&2; return 2; fi
@@ -516,7 +526,7 @@ prep_main() {
 main() {
   _color_init
   if [ "${1:-}" = prep ]; then shift; prep_main "$@"; return $?; fi
-  if [ "$#" -ge 1 ] && printf '%s' "$1" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then rel_main "$@"; return $?; fi
+  if [ "$#" -ge 1 ] && printf '%s' "$1" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+[A-Za-z]*$'; then rel_main "$@"; return $?; fi
   build_main "$@"
 }
 

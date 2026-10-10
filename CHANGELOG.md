@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.37.0 | AC57+AC58 Go build pins GOTOOLCHAIN; DOC dated tags vYY.MM.DDa; canon v0.73.0 |
 | 0.36.0 | AC56 audit --check writes no AC; arch and README notes; canon v0.71.0 |
 | 0.35.0 | AC55 canon gate leaves every GitHub write to the Director; canon v0.70.0 |
 | 0.34.0 | AC54 first release, Go v2 guard, AC labels, adoption checks; IE6; canon v0.69.0 |

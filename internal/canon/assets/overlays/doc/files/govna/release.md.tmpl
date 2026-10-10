@@ -6,6 +6,7 @@ Use this release, pre-release, and acceptance-test reference under the authorita
 
 Run `./build.sh vX.Y.Z "release message"` to show status and planned Git steps.
 Require its confirmation prompt before `git add → commit → annotated tag → push tag → push branch`.
+Accept strict semver `vMAJOR.MINOR.PATCH` or the dated form `vYY.MM.DDa` as the release tag.
 
 `build.sh` is self-contained Bash 3.2+ tooling. DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command.
 
@@ -50,10 +51,12 @@ Source axis (`[Automated]` / `[Manual]`) names who verifies. Timing axis (`[Pre-
    - Verify all in-scope AC work is complete.
    - Verify every AC acceptance test passes.
 2. **Determine the version.**
-   - Classify the change set using semver.
+   - Classify the change set under semver.
    - Use PATCH for formatting, fixes, or user-invisible refactors.
    - Use MINOR for user-visible structure, navigation, or schema changes.
-   - Bump from the latest tag.
+   - Bump the semver version from the latest tag.
+   - Use today's zero-padded `YY.MM.DD` for a dated version.
+   - Append `a` for the first dated release of the day and the next letter for each later one.
 3. **Derive the release message.**
    - Summarize the delivered user-visible result in no more than 80 bytes.
    - Name each direct-handled companion change inside that user-visible result without an AC reference.
@@ -85,5 +88,5 @@ The agent never runs the release command. Only the director does.
 - Add one row per release.
 - Keep summaries single-line and no longer than 500 characters.
 - Lead summaries with the AC reference when one exists.
-- Versions are unprefixed (`0.29.0`, not `v0.29.0`).
+- Versions are unprefixed (`0.29.0` or `26.10.10a`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).

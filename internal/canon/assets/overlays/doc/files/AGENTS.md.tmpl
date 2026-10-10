@@ -518,6 +518,9 @@ Note: the Director triggers those actions; Ratify names what is pending.
 
 ## Base Rules
 
+- Use strict semver `vMAJOR.MINOR.PATCH` or the dated form `vYY.MM.DDa` for every release tag.
+- Keep one version scheme per repository.
+- Assign `a` to the first dated release of a day and the next letter to each later one.
 - Follow semver with PATCH for invisible changes and MINOR for user-visible changes.
 - Batch PATCH-level changes.
 - Complete any repo-owned validation before preparing any commit handoff.

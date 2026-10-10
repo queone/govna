@@ -171,6 +171,7 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 		"for d in cmd/*/; do\n    [ -f \"${d}main.go\" ] || continue\n    discovered_targets+=(\"$(basename \"$d\")\")\n  done",
 		"discovered_list=$(printf '%s\\n' \"${discovered_targets[@]}\" | LC_ALL=C sort)",
 		"_install_validated_utility()",
+		"_pin_go_toolchain()",
 		"trap '_build_signal_exit 143' TERM",
 	} {
 		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
@@ -199,7 +200,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 	if err := closure.validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_release_compile_validate_install", "_tmp_root", "_utility_count_label", "_validate_changelog_shape"} {
+	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_pin_go_toolchain", "_release_compile_validate_install", "_tmp_root", "_utility_count_label", "_validate_changelog_shape"} {
 		if closure.definitions[helper] != 1 {
 			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
 		}
@@ -232,6 +233,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_md_files",
 		"_module_path",
 		"_next_patch_tag",
+		"_pin_go_toolchain",
 		"_prep_apply_changelog_insert",
 		"_prep_apply_readme_usage",
 		"_prep_apply_version_bump",
@@ -398,6 +400,7 @@ func TestRenderedGoBuildExecutesWithoutNetwork(t *testing.T) {
 	fakeGo := `#!/bin/bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_TRACE"
+printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
 case "$1" in
 list)
   printf '%s\n' 'example.com/widget'
@@ -437,7 +440,7 @@ tool)
 install)
   [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.1' ]
   mkdir -p "$FAKE_GOPATH/bin"
-  printf '%s\n' '#!/bin/bash' 'printf '\''staticcheck %s\n'\'' "$*" >>"$FAKE_TRACE"' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
+  printf '%s\n' '#!/bin/bash' 'printf '\''staticcheck %s\n'\'' "$*" >>"$FAKE_TRACE"' 'printf '\''%s\n'\'' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
   chmod +x "$FAKE_GOPATH/bin/staticcheck"
   ;;
 build)
@@ -528,6 +531,20 @@ esac
 	}
 	if strings.Contains(output, "cmd/shared: programVersion") {
 		t.Fatalf("rendered full build treated shared package as a utility:\n%s", output)
+	}
+	pinAt := strings.Index(output, "==> Pin the Go toolchain from go.mod\n    GOTOOLCHAIN=go1.27.0\n")
+	tidyAt := strings.Index(output, "==> Update go.mod to reflect actual dependencies")
+	if pinAt < 0 || tidyAt < 0 || pinAt > tidyAt {
+		t.Fatalf("rendered build does not print the toolchain pin before the go.mod update:\n%s", output)
+	}
+	toolchainLines := strings.Split(strings.TrimSpace(string(mustRead(t, trace+".toolchain"))), "\n")
+	if len(toolchainLines) < 2 {
+		t.Fatalf("toolchain trace recorded %d calls, want the go calls plus staticcheck", len(toolchainLines))
+	}
+	for _, line := range toolchainLines {
+		if line != "go1.27.0" {
+			t.Fatalf("a go or staticcheck call ran without the go.mod toolchain pin: GOTOOLCHAIN=%q", line)
+		}
 	}
 	if strings.Contains(output, "command not found") {
 		t.Fatalf("rendered build has undefined command:\n%s", output)
@@ -1576,6 +1593,9 @@ func TestReleaseCommandEmissionStandardized(t *testing.T) {
 			}
 			if !strings.Contains(text, `v[0-9]+\.[0-9]+\.[0-9]+`) && !strings.Contains(text, "_is_strict_stable_semver") {
 				t.Error("adapter lacks tag validation confining the tag to v, digits, and dots")
+			}
+			if hasDated := strings.Contains(text, "_is_dated_version"); hasDated != (profile.name == "DOC") {
+				t.Errorf("dated-version acceptance present=%v, want DOC only", hasDated)
 			}
 			dir := t.TempDir()
 			writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
@@ -3145,4 +3165,184 @@ func TestNonGoReleaseReachesPromptWhenPrepared(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRenderedDocReleaseVersionHelpers(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/doc/files/build.sh.tmpl")), 0o755)
+	for _, version := range []string{"26.10.10a", "26.01.01z", "99.12.31a"} {
+		if out, err := run(t, dir, "", "-c", `source ./build.sh; _is_dated_version "$1"`, "fixture", version); err != nil {
+			t.Errorf("valid dated version %q rejected: %v: %s", version, err, out)
+		}
+	}
+	for _, version := range []string{"26.10.10", "26.10.10A", "2026.10.10a", "26.1.10a", "26.13.10a", "26.10.32a", "26.10.10ab", "0.110.0", "v26.10.10a", ""} {
+		if _, err := run(t, dir, "", "-c", `source ./build.sh; _is_dated_version "$1"`, "fixture", version); err == nil {
+			t.Errorf("invalid dated version %q accepted", version)
+		}
+	}
+	for _, version := range []string{"0.110.0", "26.10.10a"} {
+		if out, err := run(t, dir, "", "-c", `source ./build.sh; _is_release_version "$1"`, "fixture", version); err != nil {
+			t.Errorf("valid release version %q rejected: %v: %s", version, err, out)
+		}
+	}
+	for _, version := range []string{"26.10.10A", "01.0.0"} {
+		if _, err := run(t, dir, "", "-c", `source ./build.sh; _is_release_version "$1"`, "fixture", version); err == nil {
+			t.Errorf("invalid release version %q accepted", version)
+		}
+	}
+}
+
+// writeDocPrepFixture renders the DOC build script beside an empty CHANGELOG in
+// a committed Git work tree with no tags.
+func writeDocPrepFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	files, err := canon.Render(canon.Config{Flavor: canon.Doc, RepoName: "handbook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if file.Path == "build.sh" {
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), file.Content, 0o755)
+		}
+	}
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+	return dir
+}
+
+func TestDocPrepAcceptsDatedVersion(t *testing.T) {
+	dir := writeDocPrepFixture(t)
+	const message = "dated versions"
+	out, err := run(t, dir, "", "./build.sh", "prep", "-h")
+	if err != nil || !strings.Contains(out, "Version: vMAJOR.MINOR.PATCH or dated vYY.MM.DDa (a to z orders one day).") {
+		t.Fatalf("prep usage omits the version line: %v: %s", err, out)
+	}
+	out, err = run(t, dir, "", "./build.sh", "prep", "-n", "v26.10.10A", message)
+	if err == nil || !strings.Contains(out, "prep: version must match vMAJOR.MINOR.PATCH or dated vYY.MM.DDa: \"v26.10.10A\"") {
+		t.Fatalf("prep accepted a dated version with an uppercase letter: %v: %s", err, out)
+	}
+	before := gitState(t, dir)
+	out, err = run(t, dir, "", "./build.sh", "prep", "-n", "v26.10.10a", message)
+	if err != nil || !strings.Contains(out, "CHANGELOG.md: | 26.10.10a | "+message+" |") {
+		t.Fatalf("dry run omits the dated CHANGELOG row: %v: %s", err, out)
+	}
+	if gitState(t, dir) != before {
+		t.Fatal("dry run changed Git state")
+	}
+	out, err = run(t, dir, "", "./build.sh", "prep", "v26.10.10a", message)
+	if err != nil {
+		t.Fatalf("dated prep failed: %v: %s", err, out)
+	}
+	if changelog := string(mustRead(t, filepath.Join(dir, "CHANGELOG.md"))); !strings.Contains(changelog, "| Unreleased | |\n| 26.10.10a | "+message+" |\n") {
+		t.Fatalf("dated prep did not insert the row after Unreleased: %s", changelog)
+	}
+	before = gitState(t, dir)
+	out, err = run(t, dir, "n\n", "./build.sh", "v26.10.10a", message)
+	if err == nil || !strings.Contains(out, "Proceed") || !strings.Contains(out, "release aborted") {
+		t.Fatalf("prepared dated release did not reach the prompt and cancel: %v: %s", err, out)
+	}
+	if gitState(t, dir) != before {
+		t.Fatal("cancellation changed Git state")
+	}
+}
+
+func TestDocReleaseAcceptsDatedTag(t *testing.T) {
+	docConfig := canon.Config{Flavor: canon.Doc, RepoName: "handbook"}
+	t.Run("prepared dated tag reaches the prompt", func(t *testing.T) {
+		dir := t.TempDir()
+		prepareProfileReleaseFixture(t, docConfig, dir, "26.10.10a", "dated release", "")
+		before := gitState(t, dir)
+		out, err := run(t, dir, "n\n", "./build.sh", "v26.10.10a", "dated release")
+		if err == nil || !strings.Contains(out, "release aborted") || !strings.Contains(out, "Proceed") {
+			t.Fatalf("prepared dated release did not reach the prompt and cancel: %v: %s", err, out)
+		}
+		if gitState(t, dir) != before {
+			t.Fatal("cancellation changed Git state")
+		}
+	})
+	const want = "strict stable SemVer vMAJOR.MINOR.PATCH or dated vYY.MM.DDa"
+	for _, tc := range []struct{ name, tag string }{
+		{"uppercase letter", "v26.10.10A"},
+		{"bad month", "v26.13.10a"},
+		{"leading zero semver", "v01.0.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			prepareProfileReleaseFixture(t, docConfig, dir, "26.10.10a", "dated release", "")
+			before := gitState(t, dir)
+			out, err := run(t, dir, "", "./build.sh", tc.tag, "dated release")
+			assertRefusedBeforePrompt(t, dir, out, err, want)
+			if gitState(t, dir) != before {
+				t.Fatal("refusal changed Git state")
+			}
+		})
+	}
+}
+
+func TestCodeReleasePathsRefuseDatedTag(t *testing.T) {
+	t.Run("Swift release", func(t *testing.T) {
+		dir := t.TempDir()
+		prepareProfileReleaseFixture(t, canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"}, dir, "26.10.10a", "dated release", "")
+		before := gitState(t, dir)
+		out, err := run(t, dir, "", "./build.sh", "v26.10.10a", "dated release")
+		assertRefusedBeforePrompt(t, dir, out, err, "version must match vMAJOR.MINOR.PATCH")
+		if gitState(t, dir) != before {
+			t.Fatal("refusal changed Git state")
+		}
+	})
+	t.Run("Go prep", func(t *testing.T) {
+		dir := writeGoPrepBookkeepingFixture(t)
+		out, err := run(t, dir, "", "./build.sh", "prep", "--dry-run", "v26.10.10a", "dated release")
+		if err == nil || !strings.Contains(out, "prep: version must match strict vMAJOR.MINOR.PATCH") {
+			t.Fatalf("Go prep accepted a dated version: %v: %s", err, out)
+		}
+	})
+}
+
+func TestRenderedGoPinsToolchainFromGoMod(t *testing.T) {
+	root := repoRoot(t)
+	script := mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
+	for _, tc := range []struct {
+		name, gomod, preset, want string
+	}{
+		{"toolchain directive wins", "module example.com/widget\n\ngo 1.27.0\ntoolchain go1.27.1\n", "", "go1.27.1"},
+		{"two-part go directive gains .0", "module example.com/widget\n\ngo 1.27\n", "", "go1.27.0"},
+		{"prerelease go directive passes through", "module example.com/widget\n\ngo 1.28rc1\n", "", "go1.28rc1"},
+		{"pin replaces a preset value", "module example.com/widget\n\ngo 1.27.0\n", "local", "go1.27.0"},
+		{"no go directive leaves the preset", "module example.com/widget\n", "local", "local"},
+		{"missing go.mod leaves the preset", "", "local", "local"},
+		{"non-version toolchain directive leaves the preset", "module example.com/widget\n\ngo 1.27.0\ntoolchain default\n", "local", "local"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+			if tc.gomod != "" {
+				writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte(tc.gomod), 0o644)
+			}
+			command := "unset GOTOOLCHAIN\n"
+			if tc.preset != "" {
+				command = "export GOTOOLCHAIN=" + tc.preset + "\n"
+			}
+			command += "source ./build.sh\n_pin_go_toolchain\nprintf '%s' \"${GOTOOLCHAIN:-}\"\n"
+			out, err := run(t, dir, "", "-c", command)
+			if err != nil || out != tc.want {
+				t.Fatalf("GOTOOLCHAIN=%q err=%v, want %q", out, err, tc.want)
+			}
+		})
+	}
+	t.Run("main pins before dispatch", func(t *testing.T) {
+		dir := t.TempDir()
+		writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+		writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+		out, err := run(t, dir, "", "-c", "unset GOTOOLCHAIN\nsource ./build.sh\nmain -h >/dev/null\nprintf '%s' \"${GOTOOLCHAIN:-}\"\n")
+		if err != nil || out != "go1.27.0" {
+			t.Fatalf("GOTOOLCHAIN after main -h=%q err=%v, want go1.27.0", out, err)
+		}
+	})
 }

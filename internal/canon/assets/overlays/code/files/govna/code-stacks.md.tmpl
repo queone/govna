@@ -38,6 +38,7 @@
 - Infer Go from `go.mod`.
 - Select Go explicitly with `--stack Go`.
 - Require the Go toolchain and the pinned staticcheck version installed by `build.sh`.
+- Pin `GOTOOLCHAIN` in `build.sh` to the `go.mod` `toolchain` directive, or else to its `go` directive, before the first Go command.
 - Run dependency tidying, formatting, fixes, vetting, tests with coverage, staticcheck, and compilation.
 - Install command binaries into `$(go env GOPATH)/bin`.
 - Bump the single detected `programVersion` during release prep.
