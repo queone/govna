@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.74.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.75.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -1528,7 +1528,7 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 			t.Errorf("rendered Go build unexpectedly contains %q", marker)
 		}
 	}
-	for _, helper := range []string{"_print_coverage_summary()", "_domain_coverage()", "_extract_program_version()", "_is_strict_stable_semver()", "_pin_go_toolchain()"} {
+	for _, helper := range []string{"_print_coverage_summary()", "_domain_coverage()", "_extract_program_version()", "_is_strict_stable_semver()", "_pin_go_toolchain()", "_staticcheck_failure_hint()"} {
 		if strings.Count(goBuild, helper) != 1 {
 			t.Errorf("rendered Go build helper %q count=%d", helper, strings.Count(goBuild, helper))
 		}
@@ -1536,7 +1536,7 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 	if !strings.Contains(goBuild, "export GOTOOLCHAIN=") {
 		t.Fatal("rendered Go build does not export the go.mod toolchain pin")
 	}
-	if !strings.Contains(goBuild, "honnef.co/go/tools/cmd/staticcheck@v0.8.1") || strings.Contains(goBuild, "staticcheck@v0.8.0") {
+	if strings.Count(goBuild, "honnef.co/go/tools/cmd/staticcheck@v0.8.2") != 1 || strings.Count(goBuild, "cmd/staticcheck@v") != 1 {
 		t.Fatal("rendered Go build does not use the repository-governed Staticcheck pin")
 	}
 	if !strings.Contains(goBuild, "validation-token options are unsupported for Go") {
@@ -1882,6 +1882,38 @@ func TestDocReleaseAcceptsDatedVersions(t *testing.T) {
 	}
 	if strings.Contains(release, "Classify the change set under semver.") {
 		t.Error("rendered DOC govna/release.md keeps the unscoped classification step")
+	}
+}
+
+func TestStaticcheckPinRulesRenderOnce(t *testing.T) {
+	root := filepath.Join("..", "..")
+	const stackRule = "- Name the pinned staticcheck, the active `GOTOOLCHAIN`, and both remedies when staticcheck cannot decode the toolchain's export data.\n"
+	const practice = "- Bump the `go.mod` `go` directive and the `staticcheck` pin together, after the `staticcheck` release notes name the new Go version.\n"
+	files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type check struct{ name, text, want string }
+	checks := []check{
+		{"rendered govna/code-stacks.md", fileText(t, files, "govna/code-stacks.md"), stackRule},
+		{"rendered govna/development-guidelines.md", fileText(t, files, "govna/development-guidelines.md"), practice},
+	}
+	for path, want := range map[string]string{
+		"govna/code-stacks.md": stackRule,
+		"internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl": stackRule,
+		"govna/development-guidelines.md":                                     practice,
+		"internal/canon/assets/stack-guidelines/go.md":                        practice,
+	} {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		checks = append(checks, check{path, string(content), want})
+	}
+	for _, c := range checks {
+		if got := strings.Count(c.text, c.want); got != 1 {
+			t.Errorf("%s count=%d for %q", c.name, got, c.want)
+		}
 	}
 }
 

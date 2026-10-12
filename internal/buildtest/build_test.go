@@ -172,6 +172,7 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 		"discovered_list=$(printf '%s\\n' \"${discovered_targets[@]}\" | LC_ALL=C sort)",
 		"_install_validated_utility()",
 		"_pin_go_toolchain()",
+		"_staticcheck_failure_hint()",
 		"trap '_build_signal_exit 143' TERM",
 	} {
 		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
@@ -200,7 +201,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 	if err := closure.validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_pin_go_toolchain", "_release_compile_validate_install", "_tmp_root", "_utility_count_label", "_validate_changelog_shape"} {
+	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_pin_go_toolchain", "_release_compile_validate_install", "_staticcheck_failure_hint", "_tmp_root", "_utility_count_label", "_validate_changelog_shape"} {
 		if closure.definitions[helper] != 1 {
 			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
 		}
@@ -270,6 +271,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_run_git",
 		"_scan_nested_fences",
 		"_shell_quote",
+		"_staticcheck_failure_hint",
 		"_tmp_root",
 		"_trim",
 		"_utility_count_label",
@@ -438,9 +440,24 @@ tool)
   printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
   ;;
 install)
-  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.1' ]
+  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.2' ]
   mkdir -p "$FAKE_GOPATH/bin"
-  printf '%s\n' '#!/bin/bash' 'printf '\''staticcheck %s\n'\'' "$*" >>"$FAKE_TRACE"' 'printf '\''%s\n'\'' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
+  cat >"$FAKE_GOPATH/bin/staticcheck" <<'STATICCHECK'
+#!/bin/bash
+printf 'staticcheck %s\n' "$*" >>"$FAKE_TRACE"
+printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
+case "${FAKE_STATICCHECK_FAIL:-}" in
+export)
+  printf '%s\n' '-: # math/bits' 'error in importing "math/bits" (cannot decode "math/bits", export data version 5 is greater than maximum supported version 4); please report an issue'
+  exit 1
+  ;;
+issue)
+  printf '%s\n' 'cmd/alpha/main.go:3:7: const programVersion is unused (U1000)'
+  exit 1
+  ;;
+esac
+exit 0
+STATICCHECK
   chmod +x "$FAKE_GOPATH/bin/staticcheck"
   ;;
 build)
@@ -621,7 +638,7 @@ esac
 	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget,./cmd/zeta,./cmd/zeta" {
 		t.Fatalf("scoped utility order=%v trace:\n%s", got, traceBody)
 	}
-	if !strings.Contains(traceBody, "install honnef.co/go/tools/cmd/staticcheck@v0.8.1\n") {
+	if !strings.Contains(traceBody, "install honnef.co/go/tools/cmd/staticcheck@v0.8.2\n") {
 		t.Fatalf("go trace omits exact Staticcheck pin:\n%s", traceBody)
 	}
 	if strings.Count(traceBody, "staticcheck ./cmd/zeta\n") != 1 {
@@ -725,6 +742,38 @@ esac
 	}
 	assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
 	assertNoGoBuildArtifacts(t, tmpRoot, gopath)
+
+	for _, tc := range []struct {
+		mode         string
+		want, absent []string
+	}{
+		{"export", []string{
+			"error in importing \"math/bits\" (cannot decode \"math/bits\", export data version 5 is greater than maximum supported version 4); please report an issue\n",
+			"staticcheck v0.8.2 cannot decode export data from GOTOOLCHAIN=go1.27.0\n",
+			"fix: keep go.mod on a Go version this staticcheck release supports, or bump the staticcheck pin in build.sh after its release notes name this Go version\n",
+		}, []string{"staticcheck found issues"}},
+		{"issue", []string{"cmd/alpha/main.go:3:7: const programVersion is unused (U1000)\n", "staticcheck found issues\n"}, []string{"cannot decode export data", "fix: keep go.mod"}},
+	} {
+		mismatch := exec.Command("/bin/bash", "./build.sh")
+		mismatch.Dir = dir
+		mismatch.Env = append(append([]string{}, cmd.Env...), "FAKE_STATICCHECK_FAIL="+tc.mode)
+		mismatchOut, mismatchErr := mismatch.CombinedOutput()
+		if mismatchErr == nil {
+			t.Fatalf("staticcheck %s failure did not fail the rendered build:\n%s", tc.mode, mismatchOut)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(string(mismatchOut), want) {
+				t.Errorf("staticcheck %s failure output omits %q:\n%s", tc.mode, want, mismatchOut)
+			}
+		}
+		for _, absent := range tc.absent {
+			if strings.Contains(string(mismatchOut), absent) {
+				t.Errorf("staticcheck %s failure output unexpectedly contains %q:\n%s", tc.mode, absent, mismatchOut)
+			}
+		}
+	}
+	assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
+	assertNoGoBuildArtifacts(t, tmpRoot, gopath)
 }
 
 func assertInstalledUtilitiesUnchanged(t *testing.T, gopath string, expected map[string]string) {
@@ -824,7 +873,7 @@ tool)
   printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
   ;;
 install)
-  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.1' ]
+  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.2' ]
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$FAKE_GOPATH/bin/staticcheck"
   chmod 0755 "$FAKE_GOPATH/bin/staticcheck"
   ;;
