@@ -116,7 +116,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.75.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.76.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -1920,7 +1920,7 @@ func TestStaticcheckPinRulesRenderOnce(t *testing.T) {
 func TestGoToolchainPinRulesRenderOnce(t *testing.T) {
 	root := filepath.Join("..", "..")
 	const stackRule = "- Pin `GOTOOLCHAIN` in `build.sh` to the `go.mod` `toolchain` directive, or else to its `go` directive, before the first Go command.\n"
-	const practice = "- Build with the Go toolchain that `go.mod` declares; `build.sh` exports `GOTOOLCHAIN` from the `toolchain` or `go` directive.\n"
+	const practice = "- Build with the Go toolchain that `go.mod` declares.\n"
 	files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
 	if err != nil {
 		t.Fatal(err)

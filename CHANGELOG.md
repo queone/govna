@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.40.0 | AC61 Go practices canon states the toolchain rule as one command; canon v0.76.0 |
 | 0.39.0 | AC60 Go build pins staticcheck v0.8.2, names toolchain mismatch; canon v0.75.0 |
 | 0.38.0 | AC59 DOC semver rules apply only under semver; canon v0.74.0 |
 | 0.37.0 | AC57+AC58 Go build pins GOTOOLCHAIN; DOC dated tags vYY.MM.DDa; canon v0.73.0 |

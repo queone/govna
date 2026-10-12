@@ -120,7 +120,7 @@ Note: colors are xterm-256 index 231 with bold for the name and headings (one se
 - Pin `staticcheck` to the repository-governed version and invoke the pinned installation path directly.
 - Bump the `go.mod` `go` directive and the `staticcheck` pin together, after the `staticcheck` release notes name the new Go version.
 - Treat `go vet` and `staticcheck` findings as build failures.
-- Build with the Go toolchain that `go.mod` declares; `build.sh` exports `GOTOOLCHAIN` from the `toolchain` or `go` directive.
+- Build with the Go toolchain that `go.mod` declares.
 - Scan all `.go` and `.go.tmpl` files for stale import paths after a module rename.
 
 ## Project Practices
