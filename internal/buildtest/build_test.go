@@ -37,6 +37,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 	type binding struct {
 		claim, implementation, regression string
 		shellRegression                   bool
+		claimsPath                        string
 	}
 	profiles := []struct {
 		name, claimsPath string
@@ -66,16 +67,16 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Rust", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
 			bindings: []binding{
-				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
+				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Require one literal `PROGRAM_VERSION: &str` strict stable SemVer declaration in each declared binary path.", implementation: "_validate_utility_declarations", regression: "test_utility_declaration_validation", shellRegression: true},
-				{claim: "Validate every declaration before compilation and each compiled binary before installation.", implementation: "_validate_compiled_utility \"$target\" \"$version\"", regression: "test_compiled_version_output", shellRegression: true},
+				{claim: "Validate each compiled utility result before installing that utility.", implementation: "_validate_compiled_utility \"$target\" \"$version\"", regression: "test_compiled_version_output", shellRegression: true, claimsPath: "govna/build-release.md"},
 			},
 		},
 		{
 			name: "Swift", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
 			bindings: []binding{
-				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
+				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Keep SwiftPM artifacts in one invocation-owned external scratch directory and clean it on success, failure, and handled signals.", implementation: "govna-swift-build.XXXXXX", regression: "TestSupportedProfileCommandParity"},
 				{claim: "Run strict toolchain formatting, debug compilation, tests, and release compilation with compiler warnings as errors.", implementation: "-Xswiftc -warnings-as-errors", regression: "TestSupportedProfileCommandParity"},
 			},
@@ -84,7 +85,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Terraform", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
 			bindings: []binding{
-				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
+				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform fmt -check -recursive", regression: "TestSupportedProfileCommandParity"},
 				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform validate", regression: "TestSupportedProfileCommandParity"},
 			},
@@ -115,7 +116,11 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 				t.Fatalf("rendered build syntax: %v: %s", err, output)
 			}
 			for _, item := range profile.bindings {
-				if !strings.Contains(claims, item.claim) {
+				governing := claims
+				if item.claimsPath != "" {
+					governing = rendered[item.claimsPath]
+				}
+				if !strings.Contains(governing, item.claim) {
 					t.Errorf("governing claims omit %q", item.claim)
 				}
 				if !strings.Contains(script, item.implementation) {

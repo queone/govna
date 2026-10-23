@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -116,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.76.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.77.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -308,7 +309,7 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	if gotParts[0] != wantZone {
 		t.Error("base AGENTS canon zone differs from authority")
 	}
-	if strings.TrimSpace(gotParts[1]) != "- Follow existing repo patterns unless an approved improvement says otherwise." {
+	if strings.TrimSpace(gotParts[1]) != "" {
 		t.Errorf("unexpected Project Rules seed: %s", gotParts[1])
 	}
 }
@@ -424,7 +425,23 @@ func TestPackageCompletionContract(t *testing.T) {
 		"Start every Package completion report with the plain, unbulleted, unindented line `Package complete.`.",
 		"Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report.",
 		"Present the exact drafted release command.",
+		"Apply these rules to the Package completion report's self-review in place of roles.md's self-review reporting rules.",
+		"Limit each self-review heading to one sentence.",
+		"State the semver reason under `Verified:`.",
+		"State what changed after the Package evidence under `Red-teamed:`.",
+		"State the remaining manual check, or that none remains, under `Not checked:`.",
 	}
+	const reportGroupings = "- Present the exact drafted release command.\n\n### Package Self-review\n\n" +
+		"- Apply these rules to the Package completion report's self-review in place of roles.md's self-review reporting rules.\n" +
+		"- Limit each self-review heading to one sentence.\n" +
+		"- State the semver reason under `Verified:`.\n" +
+		"- State what changed after the Package evidence under `Red-teamed:`.\n" +
+		"- State the remaining manual check, or that none remains, under `Not checked:`.\n\n### Completed Release\n\n" +
+		"- Treat the Director's `shipped` or `released` as a completed release.\n" +
+		"- Run no git or gh command to confirm a completed release.\n" +
+		"- Acknowledge a completed release in one line.\n" +
+		"- Name the next one to three `plan.md` items after that line.\n" +
+		"- Recommend one of those items.\n\n## "
 	releaseRules := []string{
 		"End the structured Package completion report with `Run below to release:`.",
 		"Place the exact release command immediately after that line.",
@@ -441,6 +458,9 @@ func TestPackageCompletionContract(t *testing.T) {
 			if count := strings.Count(agents, rule); count != 1 {
 				t.Errorf("%s AGENTS rule count=%d, want 1: %s", name, count, rule)
 			}
+		}
+		if strings.Count(agents, reportGroupings) != 1 {
+			t.Errorf("%s AGENTS lacks the Package Self-review and Completed Release groupings after the release-command rule", name)
 		}
 		position := -1
 		for _, rule := range releaseRules {
@@ -549,7 +569,6 @@ func TestCandidateCanonReviewContract(t *testing.T) {
 	}
 	for _, rule := range []string{
 		"- Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.",
-		"- Block canon-change Implement completion while that review has an unresolved Govna-canon finding.",
 	} {
 		if strings.Count(string(agents), rule) != 1 {
 			t.Errorf("AGENTS.md requires one maintainer gate: %s", rule)
@@ -575,15 +594,12 @@ func TestCandidateCanonReviewContract(t *testing.T) {
 			"- Compare every actionable path without JSON diff fields.",
 			"- Keep the emitted AC and consumer fixture byte-identical during review.",
 			"- Remove the exact scratch directory before completing review.",
-			"- Audit every actionable emitted AC immediately.",
 			"- Exercise one-AC and fitting multi-AC pending batches.",
 			"- Exercise an oversized projected batch before another Implement.",
 			"- Exercise oversized, partial, and partly unaccepted batches before Package prep.",
-			"- Require every implemented pending-batch member to complete Ratify before Package.",
 			"- Verify whole-tree release staging cannot bypass complete-batch rules.",
 			"- Verify 80-byte acceptance with ASCII and multibyte messages.",
 			"- Reject 81-byte messages before release-prep mutation.",
-			"- Verify numbered Audit and Refine steps remain atomic in CODE and DOC renders.",
 			"- Map every provided command or executable artifact to its governing claims.",
 			"- Map every governing claim to a named behavioral regression.",
 			"- Verify every supported profile provides its required canonical command implementation.",
@@ -663,8 +679,6 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		"- Require a new audit emission when a required correction would change the immutable AC.",
 		"- Complete Refine without editing the emitted AC when no blocker remains.",
 		"- Run Pre-Implementation Verification after integrated Refine.",
-		"- Report implementation readiness only when Pre-Implementation Verification passes.",
-		"- Remain in Refine when Pre-Implementation Verification finds a gap.",
 		"- Stop integrated audit adoption before Implement.",
 		"- Track the active phase in the session instead of the emitted AC.",
 	}
@@ -685,6 +699,7 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 			"- Block automatic Refine entry on any unresolved contract-integrity finding.",
 			"- Report every autonomously resolved Audit finding with its resolution in the Refine completion.",
 			"- Run Pre-Implementation Verification after eligible automatic Refine completion.",
+			"- Remain in Refine when the checklist finds a gap.",
 			"- Exempt completed-Draft automatic Audit entry from a fresh Audit action instruction.",
 			"- Pause immediately when an automatic-transition eligibility condition fails.",
 			"- Prevent automatic advancement from authorizing Implement, Ratify, Package, release preparation, publication, delegation, or commits.",
@@ -736,6 +751,7 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		}
 	}
 
+	const cyclePointer = "- Apply `AGENTS.md` `### Four-Phase Workflow`, `### Phase-Advancement Rules`, and `### Audit Adoption` to this cycle."
 	docRequirements := map[string]string{
 		"README.md":       "An explicit agent-mediated request to run `govna audit` also authorizes immediate review",
 		"arch.md":         "Integrated audit adoption is the only command-mediated phase exception.",
@@ -745,9 +761,9 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 		"internal/canon/assets/overlays/code/files/arch.md.tmpl":                    "Integrated audit adoption is the only command-mediated phase exception.",
 		"internal/canon/assets/overlays/code/files/govna/README.md.tmpl":            "continues through immediate Operator Audit and no-edit Refine",
 		"internal/canon/assets/overlays/doc/files/govna/README.md.tmpl":             "continues through immediate Operator Audit and no-edit Refine",
-		"govna/development-cycle.md":                                                "Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
-		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl": "Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
-		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl":      "Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
+		"govna/development-cycle.md":                                                cyclePointer,
+		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl": cyclePointer,
+		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl":      cyclePointer,
 	}
 	for path, required := range docRequirements {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -762,6 +778,7 @@ func TestIntegratedAuditAdoptionContract(t *testing.T) {
 
 func TestRatifiedReleaseBatchContract(t *testing.T) {
 	root := filepath.Join("..", "..")
+	const cyclePointer = "- Apply `AGENTS.md` `### Four-Phase Workflow`, `### Phase-Advancement Rules`, and `### Audit Adoption` to this cycle."
 	agentPaths := []string{
 		"AGENTS.md",
 		"internal/canon/assets/base/AGENTS.md.tmpl",
@@ -774,14 +791,12 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		}
 		text := string(content)
 		for _, required := range []string{
-			"- Treat an explicit valid Package instruction for an established Ratified release batch as the trigger for release-prep bookkeeping.",
 			"- Define the pending release batch as every unpackaged AC whose implementation is present in the unreleased repository state.",
 			"- Include an implemented AC in the pending release batch while it awaits Ratify.",
 			"- Require every pending release-batch member to complete Ratify before Package.",
 			"- Require the established release batch to equal the complete pending release batch.",
 			"- Reject Package while excluded implemented work remains in the unreleased repository state.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
-			"- Treat an explicit valid Package instruction for an established direct batch as the same trigger.",
 			"- Define a direct batch as one or more unreleased direct-handled changes while the pending release batch holds no AC.",
 			"- Treat a direct batch as established only after an explicit Director Package request.",
 			"- Describe each direct-handled change in the release message for a direct batch.",
@@ -792,7 +807,6 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
 			"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
 			"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
-			"- Reject a named release batch that contains a non-Ratified AC.",
 			"- Measure the projected complete pending release batch with one private provisional prefix-plus-summary string before another AC enters Implement.",
 			"- Use the provisional string only for the 80-byte fit check.",
 			"- Discard the provisional string after the fit check.",
@@ -823,7 +837,6 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		text := string(content)
 		for _, required := range []string{
 			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch.",
-			"- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 		} {
 			if strings.Count(text, required) != 1 {
 				t.Errorf("%s requires one release-batch checklist rule %q", path, required)
@@ -841,13 +854,8 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(content)
-		for _, required := range []string{
-			"- Apply `AGENTS.md` `### Phase-Advancement Rules` to every action instruction and release batch.",
-			"for the established Ratified release batch or direct batch only after separate Director authorization.",
-		} {
-			if strings.Count(text, required) != 1 {
-				t.Errorf("%s requires one empty-release-batch cycle rule %q", path, required)
-			}
+		if strings.Count(text, cyclePointer) != 1 {
+			t.Errorf("%s requires one AGENTS.md cycle pointer %q", path, cyclePointer)
 		}
 		if strings.Contains(text, "as equivalent post-Ratify release-preparation actions.") {
 			t.Errorf("%s retains the Ratify-only Package naming rule", path)
@@ -903,10 +911,11 @@ func TestEmptyReleaseBatchFlavorRules(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, text := range []string{checklistEvidence, acceptWithout} {
-			if got := strings.Count(string(content), text); got != count {
-				t.Errorf("%s has %d of %q, want %d", path, got, text, count)
-			}
+		if got := strings.Count(string(content), checklistEvidence); got != 0 {
+			t.Errorf("%s repeats the AGENTS.md direct-batch evidence rule %q", path, checklistEvidence)
+		}
+		if got := strings.Count(string(content), acceptWithout); got != count {
+			t.Errorf("%s has %d of %q, want %d", path, got, acceptWithout, count)
 		}
 	}
 }
@@ -1192,10 +1201,11 @@ func TestGovernanceScenarios(t *testing.T) {
 		"- Use the complete primary-repository state as the default dependency boundary.",
 		"- Narrow the dependency boundary only when repository evidence proves that a reused check cannot read the excluded state.",
 		"- Treat the snapshot as incomplete when a relevant ignored or external input cannot be identified.",
-		"- Apply `AGENTS.md` evidence-currentness rules before repeating validation.",
+		"- Treat evidence as current only when the snapshot is present, complete, and identity-matching.",
 		"- Run `./build.sh` only when required build evidence is missing or stale.",
 		"- Run each acceptance test in the active AC when its current disposition is unavailable.",
-		"- Report each current acceptance-test disposition.",
+		"- Report each failed, pending, manual, or unexercised acceptance test in the Implement completion report.",
+		"- Cover every passing automated acceptance test in one line of that report.",
 		"- Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.",
 		"- Enter Refine automatically when Audit completes with only advancement-eligible findings.",
 		"## Why Clean Ratify Reuses Implement Evidence",
@@ -1246,7 +1256,6 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
 		"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
 		"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
-		"- Reject a named release batch that contains a non-Ratified AC.",
 		"- Recheck the complete pending release batch and exact release message before Package runs prep.",
 		"- Reject an oversized or partial release batch.",
 		"- Prohibit automatic release-batch splitting.",
@@ -1301,7 +1310,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 
 	assertCycleRules := func(t *testing.T, path, content string) {
 		t.Helper()
-		if !strings.Contains(content, "- Apply `AGENTS.md` `### Phase-Advancement Rules` to every action instruction and release batch.") {
+		if !strings.Contains(content, "- Apply `AGENTS.md` `### Four-Phase Workflow`, `### Phase-Advancement Rules`, and `### Audit Adoption` to this cycle.") {
 			t.Errorf("%s does not reference Phase-Advancement Rules", path)
 		}
 		normalized := strings.ReplaceAll(content, "`", "")
@@ -1415,7 +1424,6 @@ func TestPhaseAuthorizationMatrix(t *testing.T) {
 	guards := []string{
 		"- Require fresh approval for every new action.",
 		"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
-		"- Continue Director-authorized Implement authority only for an eligible bounded completeness correction under ### Four-Phase Workflow.",
 		"- Pause after Audit until the Director requests Refine unless integrated audit adoption or eligible automatic Refine entry applies.",
 		"- Pause after Refine and await explicit Director implementation-ready confirmation to Implement.",
 		"- Apply the bounded completeness exception only after the Director authorizes Implement.",
@@ -1625,16 +1633,172 @@ func dedupProfiles() []dedupProfile {
 	return profiles
 }
 
-// canonZoneRules collects the rule bullets above the repo-owned boundary
-// heading, stripping the leading "- " and every backtick.
-func canonZoneRules(content, boundary string) map[string]bool {
-	rules := map[string]bool{}
+// ruleLinePattern matches a bullet at any indent or a numbered step.
+var ruleLinePattern = regexp.MustCompile(`^\s*(?:- |\d+\. )(.+)$`)
+
+// ruleWordPattern matches one content word of a normalized rule.
+var ruleWordPattern = regexp.MustCompile(`[a-z0-9.\-/<>]+`)
+
+// ruleStopWords lists words ignored when comparing rule content. Negation and
+// ordering words stay, so rules that differ only by them are not near duplicates.
+var ruleStopWords = map[string]bool{}
+
+func init() {
+	for word := range strings.FieldsSeq("a an the and or of to in on for with by as at from each every any all is are be this that its it their when under into than one") {
+		ruleStopWords[word] = true
+	}
+}
+
+// normalizeRule lowercases a rule and strips markup and trailing punctuation.
+func normalizeRule(rule string) string {
+	rule = strings.ToLower(rule)
+	rule = strings.NewReplacer("`", "", "*", "").Replace(rule)
+	return strings.TrimRight(strings.TrimSpace(rule), ".:;")
+}
+
+// codeSpanOnly matches a bullet that is a single code span, such as a path.
+var codeSpanOnly = regexp.MustCompile("^`[^`]+`$")
+
+// ruleTexts returns the bullet and numbered-step texts in content, stopping at
+// boundary when it is non-empty. A bullet that is a single code span is skipped.
+func ruleTexts(content, boundary string) []string {
+	var rules []string
 	for line := range strings.SplitSeq(content, "\n") {
-		if line == boundary {
+		if boundary != "" && line == boundary {
 			break
 		}
-		if rule, ok := strings.CutPrefix(line, "- "); ok {
-			rules[strings.ReplaceAll(rule, "`", "")] = true
+		if match := ruleLinePattern.FindStringSubmatch(line); match != nil && !codeSpanOnly.MatchString(strings.TrimSpace(match[1])) {
+			rules = append(rules, match[1])
+		}
+	}
+	return rules
+}
+
+// canonZoneRules collects normalized rules above the repo-owned boundary.
+func canonZoneRules(content, boundary string) map[string]bool {
+	rules := map[string]bool{}
+	for _, rule := range ruleTexts(content, boundary) {
+		rules[normalizeRule(rule)] = true
+	}
+	return rules
+}
+
+// tailRules collects normalized rules below the repo-owned boundary.
+func tailRules(content, boundary string) map[string]bool {
+	_, tail, ok := strings.Cut(content, boundary+"\n")
+	if !ok {
+		return map[string]bool{}
+	}
+	return canonZoneRules(tail, "")
+}
+
+// repeatedRules reports every document rule that repeats an AGENTS.md rule or
+// a rule from another document.
+func repeatedRules(agents map[string]bool, documents map[string]map[string]bool) []string {
+	paths := make([]string, 0, len(documents))
+	for path := range documents {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	var repeats []string
+	owner := map[string]string{}
+	for _, path := range paths {
+		rules := make([]string, 0, len(documents[path]))
+		for rule := range documents[path] {
+			rules = append(rules, rule)
+		}
+		sort.Strings(rules)
+		for _, rule := range rules {
+			switch {
+			case agents[rule] && !sharedInvariantRules[rule]:
+				repeats = append(repeats, fmt.Sprintf("%s repeats an AGENTS.md rule: %s", path, rule))
+			case owner[rule] != "":
+				repeats = append(repeats, fmt.Sprintf("%s repeats a %s rule: %s", path, owner[rule], rule))
+			default:
+				owner[rule] = path
+			}
+		}
+	}
+	return repeats
+}
+
+// governanceRule is one rule with the file it came from.
+type governanceRule struct {
+	path, text string
+	words      map[string]bool
+}
+
+// contentWords returns the normalized content words of a rule.
+func contentWords(rule string) map[string]bool {
+	words := map[string]bool{}
+	for _, word := range ruleWordPattern.FindAllString(normalizeRule(rule), -1) {
+		if !ruleStopWords[word] {
+			words[word] = true
+		}
+	}
+	return words
+}
+
+// nearDuplicateThreshold is the Jaccard similarity at which two rules repeat.
+const nearDuplicateThreshold = 0.8
+
+// guardWords lists negation and ordering words. Two rules whose guard words
+// differ state different permissions or orderings, however similar the rest.
+var guardWords = map[string]bool{"not": true, "no": true, "never": true, "only": true, "without": true, "unless": true, "before": true, "after": true}
+
+// sameGuards reports whether two rules carry the same guard words.
+func sameGuards(a, b map[string]bool) bool {
+	for word := range guardWords {
+		if a[word] != b[word] {
+			return false
+		}
+	}
+	return true
+}
+
+// nearDuplicates reports every rule pair with the same guard words whose
+// content-word Jaccard similarity reaches nearDuplicateThreshold.
+func nearDuplicates(rules []governanceRule) []string {
+	var pairs []string
+	for i := range rules {
+		for j := i + 1; j < len(rules); j++ {
+			a, b := rules[i].words, rules[j].words
+			if !sameGuards(a, b) {
+				continue
+			}
+			shared := 0
+			for word := range a {
+				if b[word] {
+					shared++
+				}
+			}
+			union := len(a) + len(b) - shared
+			if union > 0 && float64(shared)/float64(union) >= nearDuplicateThreshold {
+				pairs = append(pairs, fmt.Sprintf("%s: %s\n  %s: %s", rules[i].path, rules[i].text, rules[j].path, rules[j].text))
+			}
+		}
+	}
+	return pairs
+}
+
+// renderedGovernanceRules collects the canon rules of AGENTS.md and every
+// rendered govna/*.md document.
+func renderedGovernanceRules(files []File) []governanceRule {
+	var rules []governanceRule
+	for _, file := range files {
+		boundary := ""
+		switch {
+		case file.Path == "AGENTS.md":
+			boundary = "## Project Rules"
+		case strings.HasPrefix(file.Path, "govna/") && strings.HasSuffix(file.Path, ".md"):
+			boundary = "## Project Practices"
+		default:
+			continue
+		}
+		for _, text := range ruleTexts(string(file.Content), boundary) {
+			if words := contentWords(text); len(words) >= 3 {
+				rules = append(rules, governanceRule{path: file.Path, text: text, words: words})
+			}
 		}
 	}
 	return rules
@@ -1648,17 +1812,118 @@ func TestCanonDocumentsDoNotRepeatAGENTSRules(t *testing.T) {
 				t.Fatal(err)
 			}
 			agents := canonZoneRules(fileText(t, files, "AGENTS.md"), "## Project Rules")
+			documents := map[string]map[string]bool{}
 			for _, file := range files {
 				if file.Path == "AGENTS.md" || !strings.HasSuffix(file.Path, ".md") {
 					continue
 				}
-				for rule := range canonZoneRules(string(file.Content), "## Project Practices") {
-					if agents[rule] && !sharedInvariantRules[rule] {
-						t.Errorf("%s repeats an AGENTS.md rule: %s", file.Path, rule)
-					}
-				}
+				documents[file.Path] = canonZoneRules(string(file.Content), "## Project Practices")
+			}
+			for _, repeat := range repeatedRules(agents, documents) {
+				t.Error(repeat)
 			}
 		})
+	}
+}
+
+func TestRepositoryTailsDoNotRepeatAGENTSRules(t *testing.T) {
+	root := filepath.Join("..", "..")
+	read := func(path string) string {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(content)
+	}
+	agentsText := read("AGENTS.md")
+	agents := canonZoneRules(agentsText, "## Project Rules")
+	tails := map[string]map[string]bool{
+		"AGENTS.md":                       tailRules(agentsText, "## Project Rules"),
+		"govna/build-release.md":          tailRules(read("govna/build-release.md"), "## Project Practices"),
+		"govna/development-guidelines.md": tailRules(read("govna/development-guidelines.md"), "## Project Practices"),
+	}
+	for path, rules := range tails {
+		for rule := range rules {
+			if agents[rule] {
+				t.Errorf("%s repo-owned tail repeats an AGENTS.md rule: %s", path, rule)
+			}
+		}
+	}
+}
+
+func TestCanonRulesHaveNoNearDuplicates(t *testing.T) {
+	for _, profile := range dedupProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, pair := range nearDuplicates(renderedGovernanceRules(files)) {
+				t.Errorf("near-duplicate rules:\n  %s", pair)
+			}
+		})
+	}
+}
+
+func TestRepeatDetectorsCatchInjectedRepeats(t *testing.T) {
+	agents := canonZoneRules("- Keep the closure-audit working record out of chat replies.\n", "")
+	indented := canonZoneRules("1. **Step.**\n   - Keep the closure-audit working record out of chat replies.\n", "## Project Practices")
+	if repeats := repeatedRules(agents, map[string]map[string]bool{"govna/a.md": indented}); len(repeats) != 1 {
+		t.Errorf("indented AGENTS.md repeat reports=%q, want one", repeats)
+	}
+	documents := map[string]map[string]bool{
+		"govna/a.md": canonZoneRules("- Verify every offered routing outcome is executable.\n", ""),
+		"govna/b.md": canonZoneRules("- Verify every offered routing outcome is `executable`\n", ""),
+	}
+	if repeats := repeatedRules(map[string]bool{}, documents); len(repeats) != 1 {
+		t.Errorf("cross-document repeat reports=%q, want one", repeats)
+	}
+	short := canonZoneRules("- Skip preamble summaries.\n", "")
+	if repeats := repeatedRules(short, map[string]map[string]bool{"govna/roles.md": short}); len(repeats) != 1 {
+		t.Errorf("short-rule repeat reports=%q, want one", repeats)
+	}
+	if paths := canonZoneRules("- `AGENTS.md`\n- `plan.md`\n", ""); len(paths) != 0 {
+		t.Errorf("file-list bullets treated as rules: %v", paths)
+	}
+	paraphrase := []governanceRule{
+		{path: "AGENTS.md", text: "Keep the emitted AC and consumer repository unchanged during integrated Audit and Refine."},
+		{path: "govna/audit.md", text: "Keep the emitted AC and consumer repository unchanged during Audit and Refine."},
+	}
+	for index := range paraphrase {
+		paraphrase[index].words = contentWords(paraphrase[index].text)
+	}
+	if pairs := nearDuplicates(paraphrase); len(pairs) != 1 {
+		t.Errorf("paraphrase reports=%q, want one", pairs)
+	}
+	longParaphrase := []governanceRule{
+		{path: "govna/build-release.md", text: "Validate every compiled utility result before release-metadata writes in every supported stack."},
+		{path: "govna/code-stacks.md", text: "Validate each compiled utility result before release-metadata writes in every supported stack."},
+	}
+	for index := range longParaphrase {
+		longParaphrase[index].words = contentWords(longParaphrase[index].text)
+	}
+	if pairs := nearDuplicates(longParaphrase); len(pairs) != 1 {
+		t.Errorf("long paraphrase with matching guards reports=%q, want one", pairs)
+	}
+	distinct := []governanceRule{
+		{path: "govna/roles.md", text: "Do not negotiate scope questions without the director in the loop."},
+		{path: "govna/roles.md", text: "Do not resolve scope questions without the director in the loop."},
+		{path: "AGENTS.md", text: "Run `./build.sh` before prep."},
+		{path: "AGENTS.md", text: "Run `./build.sh` after prep."},
+		{path: "AGENTS.md", text: "Treat the snapshot as current."},
+		{path: "AGENTS.md", text: "Treat the snapshot as not current."},
+		{path: "govna/code-stacks.md", text: "Validate every compiled utility's help output before installation during release compilation."},
+		{path: "govna/code-stacks.md", text: "Validate every compiled utility's help output after installation during release compilation."},
+		{path: "AGENTS.md", text: "Use isolated binary smoke commands before validation only when they do not claim repository health."},
+		{path: "AGENTS.md", text: "Use isolated binary smoke commands before validation when they do not claim repository health."},
+		{path: "AGENTS.md", text: "Rerun applicable validation before prep when Package evidence is missing or stale for the release batch."},
+		{path: "AGENTS.md", text: "Rerun applicable validation before prep unless Package evidence is missing or stale for the release batch."},
+	}
+	for index := range distinct {
+		distinct[index].words = contentWords(distinct[index].text)
+	}
+	if pairs := nearDuplicates(distinct); len(pairs) != 0 {
+		t.Errorf("distinct rules reported as near duplicates: %q", pairs)
 	}
 }
 

@@ -4,8 +4,6 @@
 - Declare every installable Cargo binary with an explicit literal `[[bin]]` name and path.
 - Declare exactly one literal `PROGRAM_VERSION: &str` strict stable SemVer value in each declared binary path.
 - Print exactly `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline for `--version` with no stderr output.
-- Validate every utility declaration before compilation.
-- Validate each compiled utility before installing it.
 - Validate every compiled utility before writing release metadata.
 - Use space-separated binary names for scoped builds.
 - Keep selected target order deterministic under the byte locale.

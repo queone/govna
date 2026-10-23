@@ -155,20 +155,29 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 	{"Update every reference in the same pass.", "Update every reference in the same pass.", editingRewrittenPaths, reviewClean},
 }
 
+// retiredReviewedInstructions lists reviewed instructions whose current
+// wording was later deleted because another governance file owns the rule.
+var retiredReviewedInstructions = map[string]bool{
+	"Report the result of each exercised acceptance test.":          true,
+	"Run ordinary canonical pre-change validation for Go prep.":     true,
+	"Make repository edits only after explicit user authorization.": true,
+}
+
 var currentInstructionReplacements = map[string]string{
+	"State explicitly why each unexercised acceptance test was only reasoned about.":                                                             "State why an unexercised acceptance test was only reasoned about when its labels do not explain it.",
 	"Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.": "Require `--version` to print exactly `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.",
-	"Place the count paragraph first under `## Summary`.":                                                                               "Place the repository paragraph first under `## Summary`.",
-	"Start the count paragraph with `This adoption covers`.":                                                                            "Start the count paragraph with `Govna found`.",
-	"Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).": "Run `./build.sh` only when required build evidence is missing or stale.",
-	"Confirm that `./build.sh` passes when the change touches code or build-relevant files.":                                            "Confirm that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
-	"Run each acceptance test in the active AC when it can be exercised.":                                                               "Run each acceptance test in the active AC when its current disposition is unavailable.",
-	"Report the result of each exercised acceptance test.":                                                                              "Report each current acceptance-test disposition.",
-	"Run ordinary canonical pre-change validation for Go prep.":                                                                         "Use the successful final full build and clean Ratify review as current Package evidence.",
-	"Run ordinary canonical post-change validation for Go prep.":                                                                        "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
-	"Rebuild a release from its clean tagged commit before publication.":                                                                "Require clean committed `HEAD` before release compilation.",
-	"Install the rebuilt release before publication.":                                                                                   "Install every validated utility by atomic adjacent replacement.",
-	"Run ordinary canonical pre-change validation during Go release prep.":                                                              "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
-	"Run ordinary canonical post-change validation during Go release prep.":                                                             "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
+	"Place the count paragraph first under `## Summary`.":                                                                                        "Place the repository paragraph first under `## Summary`.",
+	"Start the count paragraph with `This adoption covers`.":                                                                                     "Start the count paragraph with `Govna found`.",
+	"Run `./build.sh` when the change touches code or build-relevant files (skip for AC critique, doc-only review, design discussion).":          "Run `./build.sh` only when required build evidence is missing or stale.",
+	"Confirm that `./build.sh` passes when the change touches code or build-relevant files.":                                                     "Check that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
+	"Run each acceptance test in the active AC when it can be exercised.":                                                                        "Run each acceptance test in the active AC when its current disposition is unavailable.",
+	"Report the result of each exercised acceptance test.":                                                                                       "Report each current acceptance-test disposition.",
+	"Run ordinary canonical pre-change validation for Go prep.":                                                                                  "Use the successful final full build and clean Ratify review as current Package evidence.",
+	"Run ordinary canonical post-change validation for Go prep.":                                                                                 "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
+	"Rebuild a release from its clean tagged commit before publication.":                                                                         "Require clean committed `HEAD` before release compilation.",
+	"Install the rebuilt release before publication.":                                                                                            "Install every validated utility by atomic adjacent replacement.",
+	"Run ordinary canonical pre-change validation during Go release prep.":                                                                       "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
+	"Run ordinary canonical post-change validation during Go release prep.":                                                                      "Keep Go prep free of canonical build, Go build, and Go dependency commands.",
 }
 
 func currentReviewedInstruction(review rewrittenInstructionReview) string {
@@ -496,7 +505,7 @@ func TestPlainLanguageContractAndMirrors(t *testing.T) {
 		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
 	}
 	required := []string{
-		"### Plain Language\n\n- Apply plain-language rules to responses, ACs, findings, completion reports, and release summaries.\n- Lead with the concrete problem, effect, or decision in plain language.\n- Pair each necessary Govna label with its plain-language meaning at first use.",
+		"### Plain Language\n\n- Apply plain-language rules to responses, ACs, findings, completion reports, and release summaries.\n- Lead with the concrete problem, effect, or decision in plain language.\n- Pair each necessary Govna label with its plain-language meaning at first use in a document.",
 		"- Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.",
 		"- Confirm the AC title and Summary lead with the concrete outcome in plain language.",
 		"- Resolve an unresolved emitted repository check in chat.",
@@ -555,10 +564,10 @@ func TestReplyLimitsFollowPlainLanguage(t *testing.T) {
 		"Use the active voice.",
 		"Use the passive voice only when the actor is unknown or unimportant.",
 		"Write complete sentences without dropping articles or verbs.",
-		"Exempt the terse status bullets that `## Review Style` requires from the complete-sentence limit.",
+		"Exempt chat bullets from the complete-sentence limit.",
 		"Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.",
 	}
-	placement := "- Pair each necessary Govna label with its plain-language meaning at first use.\n\n" +
+	placement := "- Pair each necessary Govna label with its plain-language meaning at first use in a document.\n\n" +
 		"### STE Replies\n\n- " + strings.Join(limits, "\n- ") + "\n\n" +
 		"Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement `### Plain Language` and `## Review Style` instead of replacing them.\n\n" +
 		"### Session Entry\n"
@@ -595,10 +604,6 @@ func TestPlainLanguageFirstUseExplanations(t *testing.T) {
 			"repository check, meaning the command to run after updates or the reason no command applies",
 			"This temporary copy is a scratch render",
 			"A consumer repository is any repository that has adopted Govna.",
-		},
-		"govna/roles.md": {
-			"effective implementation scope as a narrow exception for a directly broken supporting artifact whose result the Director already settled",
-			"bounded completeness correction as an Implement-time fix for a missed path or instruction whose required result is already settled by the active AC",
 		},
 		"govna/operator-contract-rationale.md": {
 			"A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug.",
@@ -1092,12 +1097,10 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Compare every actionable path through the emitted `### Audit Review` instructions.",
 		},
 		"govna/build-release.md": {
-			"- Use the successful final full build and clean Ratify review as current Package evidence.",
 			"- Keep Go prep free of canonical build, Go build, and Go dependency commands.",
 			"- Reserve validation-token evidence for Rust prep.",
 			"- Refresh validation-token evidence for Rust prep.",
 			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch.",
-			"- Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 		},
 		"govna/code-stacks.md": {
 			"- Bump the root package version during release prep.",
@@ -1112,8 +1115,7 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 		},
 		"govna/roles.md": {
 			"- Run each acceptance test in the active AC when its current disposition is unavailable.",
-			"- Report each current acceptance-test disposition.",
-			"- State explicitly why each unexercised acceptance test was only reasoned about.",
+			"- State why an unexercised acceptance test was only reasoned about when its labels do not explain it.",
 		},
 		"AGENTS.md": {
 			"- Name the exact sections to change during every update.",
@@ -1140,37 +1142,24 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 	}
 }
 
-func TestNumberedAuditAndRefineStepsAreAtomic(t *testing.T) {
+func TestCycleDocumentsDoNotRestatePhaseSteps(t *testing.T) {
 	paths := []string{
 		"govna/development-cycle.md",
 		"internal/canon/assets/overlays/code/files/govna/development-cycle.md.tmpl",
 		"internal/canon/assets/overlays/doc/files/govna/editing-cycle.md.tmpl",
 	}
-	want := []string{
+	restated := []string{
 		"2. **Audit.**",
-		"   - Review the AC for missing scope, unsafe assumptions, and untestable requirements without editing it.",
-		"   - Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
 		"3. **Refine.**",
-		"   - Update a hand-authored AC with settled findings and Director decisions.",
-		"   - Keep an audit-emitted AC unchanged.",
-		"   - Record its resolved decisions in the active session.",
-	}
-	retired := []string{
-		"2. **Audit.** Review the AC",
-		"3. **Refine.** Update a hand-authored AC",
-		"Keep an audit-emitted AC unchanged and record its resolved decisions",
+		"Review the AC for missing scope, unsafe assumptions, and untestable requirements without editing it.",
+		"Keep an audit-emitted AC unchanged.",
 	}
 	corpus := governanceCorpus(t)
 	for _, path := range paths {
 		content := corpus[path]
-		for _, line := range want {
-			if strings.Count(content, line+"\n") != 1 {
-				t.Errorf("%s numbered-cycle line count is not one: %s", path, line)
-			}
-		}
-		for _, phrase := range retired {
+		for _, phrase := range restated {
 			if strings.Contains(content, phrase) {
-				t.Errorf("%s retains combined cycle instruction %q", path, phrase)
+				t.Errorf("%s restates an AGENTS.md phase step: %s", path, phrase)
 			}
 		}
 	}
@@ -1180,7 +1169,6 @@ func TestCandidateCanonAndPackageInstructions(t *testing.T) {
 	want := map[string][]string{
 		"AGENTS.md": {
 			"Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.",
-			"Block canon-change Implement completion while that review has an unresolved Govna-canon finding.",
 		},
 		"govna/build-release.md": {
 			"End the structured Package completion report with `Run below to release:`.",
@@ -1195,8 +1183,6 @@ func TestCandidateCanonAndPackageInstructions(t *testing.T) {
 			"Exercise an oversized projected batch before another Implement.",
 			"Exercise oversized, partial, and partly unaccepted batches before Package prep.",
 			"Verify 80-byte acceptance with ASCII and multibyte messages.",
-			"Verify numbered Audit and Refine steps remain atomic in CODE and DOC renders.",
-			"Audit every actionable emitted AC immediately.",
 			"Map every provided command or executable artifact to its governing claims.",
 			"Map every governing claim to a named behavioral regression.",
 			"Verify every supported profile provides its required canonical command implementation.",
@@ -1315,6 +1301,12 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 				t.Errorf("governance corpus omits reviewed path %s", path)
 				continue
 			}
+			if retiredReviewedInstructions[review.v033] {
+				if countRuleInstruction(content, current) != 0 {
+					t.Errorf("%s retains retired instruction: %s", path, current)
+				}
+				continue
+			}
 			if countRuleInstruction(content, current) != 1 {
 				t.Errorf("%s does not contain exactly one current instruction: %s", path, current)
 			}
@@ -1404,10 +1396,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 	}
 
 	const first = "Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch."
-	checklistRules := []string{
-		first,
-		"Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
-	}
+	checklistRules := []string{first}
 	checklistOpening := "- " + strings.Join(checklistRules, "\n- ") + "\n"
 	codeOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
 	for _, path := range buildReleaseRewrittenPaths {
@@ -1545,5 +1534,172 @@ func TestInteractionSurfaceDocumentation(t *testing.T) {
 				t.Errorf("%s omits interaction-surface statement %q", path, phrase)
 			}
 		}
+	}
+}
+
+// stateEachRuleOnceRules lists every rule that the one-owner and terse-reply
+// change adds or rewrites, keyed by the rendered file that owns it.
+var stateEachRuleOnceRules = map[string][]string{
+	"AGENTS.md": {
+		"Apply these rules to the Package completion report's self-review in place of roles.md's self-review reporting rules.",
+		"Limit each self-review heading to one sentence.",
+		"State the semver reason under `Verified:`.",
+		"State what changed after the Package evidence under `Red-teamed:`.",
+		"State the remaining manual check, or that none remains, under `Not checked:`.",
+		"Treat the Director's `shipped` or `released` as a completed release.",
+		"Run no git or gh command to confirm a completed release.",
+		"Acknowledge a completed release in one line.",
+		"Name the next one to three `plan.md` items after that line.",
+		"Recommend one of those items.",
+		"Report each automatic phase transition in one line of the next completion report.",
+		"Report each failed, pending, manual, or unexercised acceptance test in the Implement completion report.",
+		"Cover every passing automated acceptance test in one line of that report.",
+		"Keep the closure-audit working record out of chat replies.",
+		"Record added, removed, and net AGENTS.md line and rule-shaped-bullet counts in the closure-audit working record.",
+		"Report a clean checklist in one line.",
+		"Pair each necessary Govna label with its plain-language meaning at first use in a document.",
+		"Exempt chat bullets from the complete-sentence limit.",
+		"Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits.",
+		"Paste the literal output in a code block when the Director asks to see a file or command output.",
+		"Add no attribution trailer to a drafted commit or release message.",
+		"Exclude wording preferences, raw size, speculative maintainability concerns, speculative conflicts, and disagreement with a settled Director decision.",
+		"Treat any repeated rule, misplaced procedural detail, excessive flat density with operational effect, or demonstrated retrieval or execution impairment as contract-growth evidence.",
+		"Keep each rule in exactly one governance file.",
+		"Reference the owning section by heading instead of restating its rule.",
+		"Cite file paths, line numbers, and concrete behavior.",
+		"Remain in Refine when the checklist finds a gap.",
+		"Default to plain text.",
+		"Color `Verified:`, `Red-teamed:`, and `Not checked:` cyan only when the response channel explicitly supports native color or ANSI color and color is enabled.",
+	},
+	"govna/roles.md": {
+		"Verify changed scope, behavior, content, claims, references, structure, terminology, and tests against governing contracts.",
+		"State why an unexercised acceptance test was only reasoned about when its labels do not explain it.",
+		"Write `None` on the heading line of a self-review section with no findings.",
+		"Check that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
+		"Do not set product vision.",
+		"Do not set backlog priority.",
+		"Do not approve the roadmap.",
+	},
+	"govna/canon-cycle.md": {
+		"Keep the review record in the closure-audit working record.",
+	},
+	"govna/audit.md": {
+		"Require `AGENTS.md` to carry the integrated-audit Refine-entry exemption and pre-Implement stop.",
+	},
+}
+
+// stateEachRuleOnceRetired lists wording the one-owner change deletes from
+// every rendered governance file.
+var stateEachRuleOnceRetired = []string{
+	"Report each automatic phase transition and its evidence.",
+	"Report every acceptance-test disposition in the Implement completion report.",
+	"State zero unresolved implementation findings in the Implement completion report before Ratify.",
+	"Report added, removed, and net AGENTS.md line and rule-shaped-bullet counts.",
+	"List ✓ for each check.",
+	"Exempt the terse status bullets that `## Review Style` requires from the complete-sentence limit.",
+	"Treat an explicit valid Package instruction for an established Ratified release batch as the trigger for release-prep bookkeeping.",
+	"Treat an explicit valid Package instruction for an established direct batch as the same trigger.",
+	"Start `Package` only after an explicit Director request.",
+	"Report implementation readiness only when that verification passes.",
+	"Report implementation readiness only when Pre-Implementation Verification passes.",
+	"Act as the Operator automatically and without announcement.",
+	"Present release commands for the Director.",
+	"Cite findings by file and line.",
+	"Confirm scope, claims, citations, reference integrity, structure, terminology, and tests for every code change.",
+	"Red-team assumptions and underspecified behavior.",
+	"Report each current acceptance-test disposition.",
+	"Cite non-trivial findings.",
+	"Explain each necessary Govna workflow label after that plain result.",
+	"Summarize ACs rather than reproduce them in chat.",
+	"Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
+	"Validate every compiled binary before release-metadata writes.",
+	"Audit every actionable emitted AC immediately.",
+	"Skip an immediate audit rerun.",
+	"Check rule overlap and placement.",
+	"Measure prospective contract growth.",
+	"## Director Responsibilities (reference)",
+	"Record an authorized correction in the governance document that owns the topic.",
+	"Continue prohibiting memory entries",
+	"Wait for explicit user confirmation that the AC is implementation-ready before starting implementation.",
+	"### AC Critique Gate",
+	"Apply the effective-scope exception in `### Effective Implementation Scope`",
+	"Continue Director-authorized Implement authority",
+	"section below to every new or rewritten instruction in this file.",
+	"Prefer instruction wording that is easiest for an LLM to follow",
+	"Skip preamble summaries.",
+	"Never infer a shell command from an action name.",
+	"Reject a named release batch that contains a non-Ratified AC.",
+	"Keep the current task strictly within its authorized scope.",
+	"Prefer targeted edits over broad rewrites.",
+	"Make repository edits only after explicit user authorization.",
+	"Default to plain text and simple bullets.",
+	"Preserve plain-text self-review headings when response color is unavailable or disabled.",
+	"harmless redundancy",
+}
+
+func TestStateEachRuleOnceRules(t *testing.T) {
+	type profile struct {
+		name      string
+		config    Config
+		cyclePath string
+	}
+	profiles := []profile{{name: "DOC", config: Config{Flavor: Doc, RepoName: "handbook"}, cyclePath: "govna/editing-cycle.md"}}
+	for _, stack := range Stacks() {
+		config := Config{Flavor: Code, RepoName: "widget", Stack: stack}
+		if stack == "Go" {
+			config.ModulePath = "example.com/widget"
+		}
+		profiles = append(profiles, profile{name: "CODE/" + stack, config: config, cyclePath: "govna/development-cycle.md"})
+	}
+	for _, p := range profiles {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rules := map[string][]string{}
+			for path, list := range stateEachRuleOnceRules {
+				rules[path] = append(rules[path], list...)
+			}
+			rules[p.cyclePath] = append(rules[p.cyclePath], "Apply `AGENTS.md` `### Four-Phase Workflow`, `### Phase-Advancement Rules`, and `### Audit Adoption` to this cycle.")
+			release := "govna/release.md"
+			if p.config.Flavor == Code {
+				release = "govna/build-release.md"
+				rules["govna/code-stacks.md"] = append(rules["govna/code-stacks.md"], "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.")
+			}
+			rules["AGENTS.md"] = append(rules["AGENTS.md"], "Follow the Pre-Release Checklist in `"+release+"` during Package.")
+			for path, list := range rules {
+				content := fileText(t, files, path)
+				for _, rule := range list {
+					if count := countRuleInstruction(content, rule); count != 1 {
+						t.Errorf("%s rule count=%d, want 1: %s", path, count, rule)
+					}
+					if !focusedImperativeStarter(rule) {
+						t.Errorf("%s rule lacks an imperative starter: %s", path, rule)
+					}
+					if secondAction.MatchString(rule) {
+						t.Errorf("%s rule contains a second action: %s", path, rule)
+					}
+				}
+			}
+			if count := strings.Count(fileText(t, files, "AGENTS.md"), "Follow existing repo patterns unless an approved improvement says otherwise."); count != 1 {
+				t.Errorf("AGENTS.md repo-patterns rule count=%d, want 1", count)
+			}
+			for _, file := range files {
+				if strings.HasSuffix(file.Path, "-guidelines.md") {
+					if _, tail, _ := strings.Cut(string(file.Content), "## Project Practices\n"); strings.TrimSpace(tail) != "" {
+						t.Errorf("%s seeds its repo-owned tail: %s", file.Path, tail)
+					}
+				}
+				if file.Path != "AGENTS.md" && !strings.HasPrefix(file.Path, "govna/") {
+					continue
+				}
+				for _, retired := range stateEachRuleOnceRetired {
+					if strings.Contains(string(file.Content), retired) {
+						t.Errorf("%s retains deleted wording: %s", file.Path, retired)
+					}
+				}
+			}
+		})
 	}
 }

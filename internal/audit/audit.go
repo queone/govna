@@ -120,6 +120,11 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Start every Package completion report with the plain, unbulleted, unindented line `Package complete.`.",
 		"Keep `Verified:`, `Red-teamed:`, `Not checked:`, and `Run below to release:` in the Package completion report.",
 		"Present the exact drafted release command.",
+		"Apply these rules to the Package completion report's self-review in place of roles.md's self-review reporting rules.",
+		"Limit each self-review heading to one sentence.",
+		"State the semver reason under `Verified:`.",
+		"State what changed after the Package evidence under `Red-teamed:`.",
+		"State the remaining manual check, or that none remains, under `Not checked:`.",
 		"Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction.",
 		"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
 		"Resume Refine after the Director resolves every blocking finding and decision.",
@@ -148,7 +153,6 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Complete one bounded scratch review for every actionable emitted AC.",
 		"Exercise an oversized projected batch before another Implement.",
 		"Exercise oversized, partial, and partly unaccepted batches before Package prep.",
-		"Verify numbered Audit and Refine steps remain atomic in CODE and DOC renders.",
 	},
 }}
 
@@ -157,19 +161,11 @@ var releaseContentCoherenceRule = contentCoherenceRule{
 		"End the structured Package completion report with `Run below to release:`.",
 		"Place the exact release command immediately after that line.",
 		"Add nothing after the release command.",
-		"Apply the Package gates in `AGENTS.md` `### Four-Phase Workflow` and `### Phase-Advancement Rules` before prep.",
 	},
 	Forbidden: []string{
 		"Present only the release command after prep.",
 		"Do not add trailing commentary about wrapper routing or prompts.",
 		"Do not add trailing commentary after presenting the command.",
-	},
-}
-
-var cycleContentCoherenceRule = contentCoherenceRule{
-	Required: []string{
-		"2. **Audit.**\n   - Review the AC for missing scope, unsafe assumptions, and untestable requirements without editing it.\n   - Start this review immediately when an explicit agent-mediated `govna audit` request emits or reuses one guarded adoption AC.",
-		"3. **Refine.**\n   - Update a hand-authored AC with settled findings and Director decisions.\n   - Keep an audit-emitted AC unchanged.\n   - Record its resolved decisions in the active session.",
 	},
 }
 
@@ -615,15 +611,6 @@ func checkCoherence(files map[string][]byte) error {
 		if err := checkContentCoherence(files, rule); err != nil {
 			return err
 		}
-	}
-	cycleRule := cycleContentCoherenceRule
-	if _, ok := files["govna/development-cycle.md"]; ok {
-		cycleRule.Reference = "govna/development-cycle.md"
-	} else {
-		cycleRule.Reference = "govna/editing-cycle.md"
-	}
-	if err := checkContentCoherence(files, cycleRule); err != nil {
-		return err
 	}
 	return nil
 }
