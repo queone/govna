@@ -12,4 +12,3 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 - IE3: Explore adopting, loading, reviewing, and removing Govna through IDE extensions and the vendors' desktop, mobile, and web agent apps; support stays limited to the Claude Code and Codex CLIs until then.
 - IE5: Revert the canon `### STE Replies` limits if the wider trial finds them too cumbersome.
 - IE7: Explore a monorepo version of Govna: one root `AGENTS.md` holding the canon once, and each project directory with its own `AGENTS.md` holding only its project rules; weigh the alternatives and whether Sapling, Jujutsu, Josh, or git's own subtree, sparse checkout, and worktrees help; research in `brainstorm.md`.
-- IE8: Fix the Rust shell regression `test_compiled_version_output`, which still expects a bare `tool 1.2.3` version line that the Rust build now rejects in favor of `tool v1.2.3`, so the rendered Rust suite fails before its later tests run.

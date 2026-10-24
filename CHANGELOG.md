@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.44.1 | Fix and run Rust shell suite; rotate fixture on any canon bump; canon v0.80.1 |
 | 0.44.0 | AC65 rel runs prep and the release in one step; canon v0.80.0 |
 | 0.43.0 | AC64 Every stack makes the first release without commits; canon v0.79.0 |
 | 0.42.0 | AC63 Agents release on rel; canon ACs list fixture rotation; canon v0.78.0 |

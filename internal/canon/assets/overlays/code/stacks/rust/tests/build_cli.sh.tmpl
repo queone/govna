@@ -78,7 +78,12 @@ test_compiled_version_output() {
   _cargo_target="$fixture"
 
   write_version_binary "$fixture/release/tool" 'tool 1.2.3\n' '' 0
-  _validate_compiled_utility tool 1.2.3 >/dev/null || fail 'bare version rejected'
+  set +e
+  output=$(_validate_compiled_utility tool 1.2.3 2>&1)
+  rc=$?
+  set -e
+  assert_equal "$rc" 1
+  assert_contains "$output" 'print the v form'
   write_version_binary "$fixture/release/tool" 'tool v1.2.3\n' '' 0
   _validate_compiled_utility tool 1.2.3 >/dev/null || fail 'v-prefixed version rejected'
 

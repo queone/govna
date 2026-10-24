@@ -3789,3 +3789,29 @@ func TestDetachedHeadReleaseIsRefused(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderedRustBuildSuitePasses(t *testing.T) {
+	files, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	found := false
+	for _, file := range files {
+		mode := os.FileMode(0o644)
+		if file.Path == "build.sh" || strings.HasSuffix(file.Path, ".sh") {
+			mode = 0o755
+		}
+		if file.Path == "tests/build_cli.sh" {
+			found = true
+		}
+		writeBuildFixture(t, filepath.Join(dir, filepath.FromSlash(file.Path)), file.Content, mode)
+	}
+	if !found {
+		t.Fatal("Rust render omits tests/build_cli.sh")
+	}
+	out, err := run(t, dir, "", "tests/build_cli.sh")
+	if err != nil || !strings.Contains(out, "build CLI tests:") {
+		t.Fatalf("rendered Rust build suite: %v:\n%s", err, out)
+	}
+}
