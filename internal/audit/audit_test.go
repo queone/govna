@@ -2797,6 +2797,21 @@ func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 			match:  []string{"govna/ac-template.md", "govna/operator-contract-rationale.md", "govna/roles.md"},
 		},
 		{
+			name: "CODE/Rust", fixture: "rust", stack: "Rust", flavor: canon.Code,
+			update: []string{"AGENTS.md", "govna/canon-baseline.txt", "govna/metadata.txt"},
+			match:  []string{"govna/ac-template.md", "govna/operator-contract-rationale.md", "govna/roles.md"},
+		},
+		{
+			name: "CODE/Swift", fixture: "swift", stack: "Swift", flavor: canon.Code,
+			update: []string{"AGENTS.md", "govna/canon-baseline.txt", "govna/metadata.txt"},
+			match:  []string{"govna/ac-template.md", "govna/operator-contract-rationale.md", "govna/roles.md"},
+		},
+		{
+			name: "CODE/Terraform", fixture: "terraform", stack: "Terraform", flavor: canon.Code,
+			update: []string{"AGENTS.md", "govna/canon-baseline.txt", "govna/metadata.txt"},
+			match:  []string{"govna/ac-template.md", "govna/operator-contract-rationale.md", "govna/roles.md"},
+		},
+		{
 			name: "DOC", fixture: "doc", flavor: canon.Doc,
 			update: []string{"AGENTS.md", "govna/canon-baseline.txt", "govna/metadata.txt"},
 			match:  []string{"govna/ac-template.md", "govna/editing-guidelines.md", "govna/operator-contract-rationale.md", "govna/roles.md"},
