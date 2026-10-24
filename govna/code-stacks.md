@@ -16,6 +16,10 @@
 - Confine the tag to `v`, digits, and dots through each adapter's existing validation before emission.
 - Route each adapter's release-command prints through one emit helper.
 - Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.
+- Accept `--yes` or `-y` after the two release arguments in every stack.
+- Print the same candidate files and release sequence under `--yes` as the interactive release.
+- Skip only the approval prompt under `--yes`.
+- Keep `--yes` out of the printed release command.
 
 ## Go
 

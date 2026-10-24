@@ -1546,7 +1546,7 @@ var stateEachRuleOnceRules = map[string][]string{
 		"State the semver reason under `Verified:`.",
 		"State what changed after the Package evidence under `Red-teamed:`.",
 		"State the remaining manual check, or that none remains, under `Not checked:`.",
-		"Treat the Director's `shipped` or `released` as a completed release.",
+		"Treat the Director's `shipped` as a completed release.",
 		"Run no git or gh command to confirm a completed release.",
 		"Acknowledge a completed release in one line.",
 		"Name the next one to three `plan.md` items after that line.",
@@ -1559,9 +1559,9 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Report a clean checklist in one line.",
 		"Pair each necessary Govna label with its plain-language meaning at first use in a document.",
 		"Exempt chat bullets from the complete-sentence limit.",
-		"Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits.",
+		"Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits outside `### Agent Release`.",
 		"Paste the literal output in a code block when the Director asks to see a file or command output.",
-		"Add no attribution trailer to a drafted commit or release message.",
+		"Add no attribution trailer to a drafted or agent-run commit or release message.",
 		"Exclude wording preferences, raw size, speculative maintainability concerns, speculative conflicts, and disagreement with a settled Director decision.",
 		"Treat any repeated rule, misplaced procedural detail, excessive flat density with operational effect, or demonstrated retrieval or execution impairment as contract-growth evidence.",
 		"Keep each rule in exactly one governance file.",
@@ -1697,6 +1697,68 @@ func TestStateEachRuleOnceRules(t *testing.T) {
 				for _, retired := range stateEachRuleOnceRetired {
 					if strings.Contains(string(file.Content), retired) {
 						t.Errorf("%s retains deleted wording: %s", file.Path, retired)
+					}
+				}
+			}
+		})
+	}
+}
+
+// agentReleaseRules lists every rule that the agent-run release keyword adds
+// or rewrites, keyed by the rendered file that owns it.
+var agentReleaseRules = map[string][]string{
+	"AGENTS.md": {
+		"**Leave every `git commit` for the user to execute, except under `### Agent Release`.**",
+		"Leave every GitHub write for the Director to execute, except the release push under `### Agent Release`.",
+		"Present the exact GitHub write command in chat for the Director to run, except under `### Agent Release`.",
+		"Interpret standalone `release` or `rel` only as an agent-run release under `### Agent Release`.",
+		"Apply these rules at each Package completion and when the Director sends standalone `release` or `rel`.",
+		"Treat standalone `release` or `rel` as authorization for one agent-run release.",
+		"Accept the keyword only after a clean Package completion in the active session.",
+		"Record the `git status --porcelain` output at each Package completion.",
+		"Keep that record in the active session.",
+		"Reject the keyword when the current `git status --porcelain` output differs from that record.",
+		"Run the exact release command from that Package report with `--yes` appended.",
+		"Run no other git or GitHub write under the keyword.",
+		"Retry nothing after a release failure.",
+		"Report the failure output and the printed recovery command to the Director.",
+		"Treat a successful agent-run release as a completed release under `### Completed Release`.",
+	},
+	"govna/roles.md": {
+		"Execute a release command only under `AGENTS.md` `### Agent Release`.",
+	},
+}
+
+func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
+	for _, p := range dedupProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rules := map[string][]string{}
+			for path, list := range agentReleaseRules {
+				rules[path] = append(rules[path], list...)
+			}
+			if p.config.Flavor == Code {
+				rules["govna/build-release.md"] = append(rules["govna/build-release.md"], "Append `--yes` or `-y` to skip that prompt only for an agent-run release under `AGENTS.md` `### Agent Release`.")
+				rules["govna/code-stacks.md"] = append(rules["govna/code-stacks.md"],
+					"Accept `--yes` or `-y` after the two release arguments in every stack.",
+					"Print the same candidate files and release sequence under `--yes` as the interactive release.",
+					"Skip only the approval prompt under `--yes`.",
+					"Keep `--yes` out of the printed release command.")
+			}
+			for path, list := range rules {
+				content := fileText(t, files, path)
+				for _, rule := range list {
+					if count := countRuleInstruction(content, rule); count != 1 {
+						t.Errorf("%s rule count=%d, want 1: %s", path, count, rule)
+					}
+					if !focusedImperativeStarter(rule) {
+						t.Errorf("%s rule lacks an imperative starter: %s", path, rule)
+					}
+					if secondAction.MatchString(rule) {
+						t.Errorf("%s rule contains a second action: %s", path, rule)
 					}
 				}
 			}

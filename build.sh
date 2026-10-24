@@ -8,10 +8,11 @@
 # Dispatch:
 #   ./build.sh [target ...] [-v|--verbose]      build + validate
 #   ./build.sh prep [flags] vX.Y.Z "message"    stage a release
-#   ./build.sh vX.Y.Z "message"                 run the release
+#   ./build.sh vX.Y.Z "message" [--yes|-y]      run the release
 set -euo pipefail
 
 _rel_tag_for_recovery=''
+_rel_assume_yes=0
 _staticcheck_path=''
 _staticcheck_pin='honnef.co/go/tools/cmd/staticcheck@v0.8.2'
 _git_err=''
@@ -1023,7 +1024,8 @@ _lint_test_naming() {
 # ════════════════════════════════════════════════════════════════════════════
 
 rel_usage() {
-  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message"'
+  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message" [--yes|-y]'
+  _emit_usage_line '-y, --yes' 'skip the approval prompt for an agent-run release'
   _emit_usage_line '-h, -?, --help' 'show this help'
   printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
@@ -1121,7 +1123,12 @@ _rel_run_inner() {
 
   printf '%s' "$(yel7 'Review the file list and sequence above. Proceed with release? (y/N): ')"
   local answer=''
-  IFS= read -r answer || true
+  if [ "$_rel_assume_yes" -eq 1 ]; then
+    answer=y
+    printf '%s\n' 'y (--yes)'
+  else
+    IFS= read -r answer || true
+  fi
   case "$answer" in
   y | Y) ;;
   *)
@@ -2349,8 +2356,11 @@ rel_main() {
   if [ "$#" -eq 1 ]; then
     case "$1" in -h | -\? | --help) rel_usage; return 0 ;; esac
   fi
+  if [ "$#" -eq 3 ]; then
+    case "$3" in -y | --yes) _rel_assume_yes=1; set -- "$1" "$2" ;; esac
+  fi
   if [ "$#" -ne 2 ]; then
-    printf 'usage: rel vX.Y.Z "release message"\n' >&2
+    printf 'usage: rel vX.Y.Z "release message" [--yes|-y]\n' >&2
     return 2
   fi
   local tag message

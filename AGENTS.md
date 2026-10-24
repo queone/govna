@@ -93,7 +93,7 @@ Note: these limits borrow from Simplified Technical English (ASD-STE100), and th
 - Treat AGENTS.md as the active operating contract for this repository.
 - State "Govna contract loaded." before the first substantive govna-governed action of a session, and only after internalizing AGENTS.md.
 - Treat planning, editing, reviewing, command choice, and implementation work as substantive actions.
-- Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits.
+- Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits outside `### Agent Release`.
 - Route ancillary-repository and path changes through `### Primary And Ancillary Scope`.
 - Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.
 - Resolve instruction conflicts in this order: user instruction within authorized scope, then AGENTS.md, then referenced govna docs, then model defaults.
@@ -175,11 +175,11 @@ Note: these limits borrow from Simplified Technical English (ASD-STE100), and th
 - Stop when a request is ambiguous or the change is hard to reverse.
 - Ask for direction before proceeding.
 - Wait for explicit user request before preparing, executing, publishing, deploying, or distributing — including drafting commit messages, commit commands, version bumps, or release notes.
-- **Leave every `git commit` for the user to execute. No EXCEPTION.**
-- Add no attribution trailer to a drafted commit or release message.
-- Leave every GitHub write for the Director to execute.
+- **Leave every `git commit` for the user to execute, except under `### Agent Release`.**
+- Add no attribution trailer to a drafted or agent-run commit or release message.
+- Leave every GitHub write for the Director to execute, except the release push under `### Agent Release`.
 - Treat issue closes, comments, labels, pull requests, releases, and pushes as GitHub writes.
-- Present the exact GitHub write command in chat for the Director to run.
+- Present the exact GitHub write command in chat for the Director to run, except under `### Agent Release`.
 - Follow the Pre-Release Checklist in `govna/build-release.md` during Package.
 
 ### Effective Implementation Scope
@@ -377,6 +377,21 @@ Note: this rule does not prohibit batching independent commands.
 - Do not interpret `run ./build.sh prep ...`, `pack the binary`, `prepare the build`, or non-standalone `prep` as workflow advancement.
 - Treat ordinary coding language such as `build`, `package the binary`, or a package-manager command as unrelated to phase advancement.
 - Require explicit operational wording such as `run ./build.sh` before executing a repository command.
+- Interpret standalone `release` or `rel` only as an agent-run release under `### Agent Release`.
+
+### Agent Release
+
+- Apply these rules at each Package completion and when the Director sends standalone `release` or `rel`.
+- Treat standalone `release` or `rel` as authorization for one agent-run release.
+- Accept the keyword only after a clean Package completion in the active session.
+- Record the `git status --porcelain` output at each Package completion.
+- Keep that record in the active session.
+- Reject the keyword when the current `git status --porcelain` output differs from that record.
+- Run the exact release command from that Package report with `--yes` appended.
+- Run no other git or GitHub write under the keyword.
+- Retry nothing after a release failure.
+- Report the failure output and the printed recovery command to the Director.
+- Treat a successful agent-run release as a completed release under `### Completed Release`.
 
 ### Primary And Ancillary Scope
 
@@ -507,7 +522,7 @@ Note: the Director triggers those actions; Ratify names what is pending.
 
 ### Completed Release
 
-- Treat the Director's `shipped` or `released` as a completed release.
+- Treat the Director's `shipped` as a completed release.
 - Run no git or gh command to confirm a completed release.
 - Acknowledge a completed release in one line.
 - Name the next one to three `plan.md` items after that line.

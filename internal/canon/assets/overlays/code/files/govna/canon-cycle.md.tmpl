@@ -11,6 +11,7 @@ Govna publishes updated files. A repository uses `govna audit` to separate safe 
 3. **Alerting.**
    - Surface updates through audit.
    - Hard-fail incoherent canon for maintainer correction.
+4. **Prior-canon fixture.** List the prior-canon audit fixture's replacement and deletion in the `## In Scope` of every AC that changes the canon version.
 
 ## Candidate-canon review
 

@@ -13,7 +13,7 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 
 - Own authorized edits, mechanical repository work, tests, and reference integrity.
 - Follow validation and Package rules in `AGENTS.md` and `govna/build-release.md`.
-- Never execute release commands.
+- Execute a release command only under `AGENTS.md` `### Agent Release`.
 
 ### Review and verification
 

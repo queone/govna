@@ -80,6 +80,7 @@ Note: the operator flow has two steps.
    - Run `./build.sh vX.Y.Z "message"`.
    - Confirm the displayed candidate files and exact release sequence.
    - Approve the interactive prompt to commit, compile, validate, install, tag, and push.
+   - Append `--yes` or `-y` to skip that prompt only for an agent-run release under `AGENTS.md` `### Agent Release`.
 
 - End the structured Package completion report with `Run below to release:`.
 - Place the exact release command immediately after that line.

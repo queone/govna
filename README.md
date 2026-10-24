@@ -370,7 +370,7 @@ Release preparation performs bookkeeping only, then prints the release command w
 ./build.sh prep vX.Y.Z "release message"
 ```
 
-Commits, tags, releases, and publication remain Director-controlled. See [`govna/build-release.md`](govna/build-release.md) for the complete build and release contract.
+Commits, tags, releases, and publication remain Director-controlled. After a clean Package report, the Director can send `release` or `rel`; the agent then runs the printed release command with `--yes`, which skips the approval prompt. See [`govna/build-release.md`](govna/build-release.md) for the complete build and release contract.
 
 ## Self-Hosting
 

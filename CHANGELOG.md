@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.42.0 | AC63 Agents release on rel; canon ACs list fixture rotation; canon v0.78.0 |
 | 0.41.0 | AC62 Govna states each rule once; agents stop restating context; canon v0.77.0 |
 | 0.40.0 | AC61 Go practices canon states the toolchain rule as one command; canon v0.76.0 |
 | 0.39.0 | AC60 Go build pins staticcheck v0.8.2, names toolchain mismatch; canon v0.75.0 |

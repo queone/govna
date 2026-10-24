@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.77.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.78.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -437,7 +437,7 @@ func TestPackageCompletionContract(t *testing.T) {
 		"- State the semver reason under `Verified:`.\n" +
 		"- State what changed after the Package evidence under `Red-teamed:`.\n" +
 		"- State the remaining manual check, or that none remains, under `Not checked:`.\n\n### Completed Release\n\n" +
-		"- Treat the Director's `shipped` or `released` as a completed release.\n" +
+		"- Treat the Director's `shipped` as a completed release.\n" +
 		"- Run no git or gh command to confirm a completed release.\n" +
 		"- Acknowledge a completed release in one line.\n" +
 		"- Name the next one to three `plan.md` items after that line.\n" +
@@ -518,6 +518,69 @@ func TestPackageCompletionContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertContract(t, profile.name, fileText(t, files, "AGENTS.md"), fileText(t, files, profile.releasePath))
+		})
+	}
+}
+
+func TestAgentReleaseContract(t *testing.T) {
+	const block = "\n### Agent Release\n\n" +
+		"- Apply these rules at each Package completion and when the Director sends standalone `release` or `rel`.\n" +
+		"- Treat standalone `release` or `rel` as authorization for one agent-run release.\n" +
+		"- Accept the keyword only after a clean Package completion in the active session.\n" +
+		"- Record the `git status --porcelain` output at each Package completion.\n" +
+		"- Keep that record in the active session.\n" +
+		"- Reject the keyword when the current `git status --porcelain` output differs from that record.\n" +
+		"- Run the exact release command from that Package report with `--yes` appended.\n" +
+		"- Run no other git or GitHub write under the keyword.\n" +
+		"- Retry nothing after a release failure.\n" +
+		"- Report the failure output and the printed recovery command to the Director.\n" +
+		"- Treat a successful agent-run release as a completed release under `### Completed Release`.\n\n###"
+	retired := []string{
+		"No EXCEPTION.",
+		"Never execute release commands.",
+		"The agent never runs the release command.",
+		"`shipped` or `released`",
+	}
+	assertContract := func(t *testing.T, name, agents string, governance map[string]string) {
+		t.Helper()
+		_, rest, ok := strings.Cut(agents, "\n## Approval Boundaries\n")
+		boundaries, _, _ := strings.Cut(rest, "\n## File-Change Discipline\n")
+		if !ok || strings.Count(boundaries, block) != 1 || strings.Count(agents, "### Agent Release\n") != 1 {
+			t.Errorf("%s AGENTS lacks one complete `### Agent Release` grouping under `## Approval Boundaries`", name)
+		}
+		for path, content := range governance {
+			for _, phrase := range retired {
+				if strings.Contains(content, phrase) {
+					t.Errorf("%s %s retains retired release wording: %s", name, path, phrase)
+				}
+			}
+		}
+	}
+
+	root := filepath.Join("..", "..")
+	rootFiles := map[string]string{}
+	for _, path := range []string{"AGENTS.md", "govna/roles.md", "govna/build-release.md", "govna/code-stacks.md"} {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rootFiles[path] = string(data)
+	}
+	assertContract(t, "repository", rootFiles["AGENTS.md"], rootFiles)
+
+	for _, p := range dedupProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			governance := map[string]string{}
+			for _, file := range files {
+				if file.Path == "AGENTS.md" || strings.HasPrefix(file.Path, "govna/") {
+					governance[file.Path] = string(file.Content)
+				}
+			}
+			assertContract(t, p.name, fileText(t, files, "AGENTS.md"), governance)
 		})
 	}
 }

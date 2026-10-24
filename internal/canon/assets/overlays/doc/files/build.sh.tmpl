@@ -7,11 +7,12 @@
 # Dispatch:
 #   ./build.sh                                show usage
 #   ./build.sh prep [flags] vX.Y.Z "message" stage a release
-#   ./build.sh vX.Y.Z "message"              run the release
+#   ./build.sh vX.Y.Z "message" [--yes|-y]   run the release
 set -euo pipefail
 
 _git_err=''
 _rel_tag_for_recovery=''
+_rel_assume_yes=0
 _prep_cl_err=''
 _prep_ie_err=''
 _prep_ctargets=''
@@ -102,14 +103,15 @@ _go_quote() {
 build_usage() {
   printf '%s\n' "$(bold "$(whi5 'Usage:')")"
   printf '  %s\n' 'build prep [flags] vX.Y.Z "release message"'
-  printf '  %s\n' 'build vX.Y.Z "release message"'
+  printf '  %s\n' 'build vX.Y.Z "release message" [--yes|-y]'
   _emit_usage_line '-h, -?, --help' 'show this help'
 }
 
 # ── release ────────────────────────────────────────────────────────────────
 
 rel_usage() {
-  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message"'
+  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message" [--yes|-y]'
+  _emit_usage_line '-y, --yes' 'skip the approval prompt for an agent-run release'
   _emit_usage_line '-h, -?, --help' 'show this help'
   printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
@@ -250,7 +252,12 @@ rel_run() {
   printf '%s' "$(yel7 'Review the file list above. Proceed with release? (y/N): ')"
 
   local answer=''
-  IFS= read -r answer || true
+  if [ "$_rel_assume_yes" -eq 1 ]; then
+    answer=y
+    printf '%s\n' 'y (--yes)'
+  else
+    IFS= read -r answer || true
+  fi
   case "$answer" in y | Y) ;; *) printf 'release aborted\n' >&2; return 1 ;; esac
 
   _rel_step 'git add' "$completed" add . || return 1
@@ -488,7 +495,10 @@ build_main() {
 }
 
 rel_main() {
-  if [ "$#" -ne 2 ]; then printf 'usage: rel vX.Y.Z "release message"\n' >&2; return 2; fi
+  if [ "$#" -eq 3 ]; then
+    case "$3" in -y | --yes) _rel_assume_yes=1; set -- "$1" "$2" ;; esac
+  fi
+  if [ "$#" -ne 2 ]; then printf 'usage: rel vX.Y.Z "release message" [--yes|-y]\n' >&2; return 2; fi
   local tag message
   tag=$(_trim "$1")
   message=$(_trim "$2")

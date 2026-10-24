@@ -3,6 +3,7 @@
 # Targets Bash 3.2+ and delegates language work to Swift 6.
 set -euo pipefail
 
+_rel_assume_yes=0
 _swift_scratch=''
 _repo_root=''
 _install_root=''
@@ -856,7 +857,7 @@ _prep_emit_release_command() { # $1=version $2=message
 }
 
 release_usage() {
-  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'build vX.Y.Z "release message"'
+  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'build vX.Y.Z "release message" [--yes|-y]'
   printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
@@ -914,6 +915,9 @@ _release_validate_prepared() { # $1=tag $2=message
 }
 
 release_main() {
+  if [ "$#" -eq 3 ]; then
+    case "$3" in -y | --yes) _rel_assume_yes=1; set -- "$1" "$2" ;; esac
+  fi
   [ "$#" -eq 2 ] || { release_usage >&2; return 2; }
   local version="$1" message="$2" answer quoted_message quoted_version line
   _validate_release_inputs release "$version" "$message" || return 1
@@ -932,7 +936,12 @@ release_main() {
     printf '  %s\n' "$(yel5 "$line")"
   done
   printf '%s ' "$(bold "$(whi5 'Proceed? [y/N]')")"
-  IFS= read -r answer || true
+  if [ "$_rel_assume_yes" -eq 1 ]; then
+    answer=y
+    printf '%s\n' 'y (--yes)'
+  else
+    IFS= read -r answer || true
+  fi
   case "$answer" in
   y | Y | yes | YES) ;;
   *) _fail 'release aborted'; return 1 ;;

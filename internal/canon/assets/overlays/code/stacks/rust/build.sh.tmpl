@@ -3,6 +3,8 @@
 # Targets Bash 3.2+ and delegates language work to Cargo.
 set -euo pipefail
 
+_rel_assume_yes=0
+
 _trim() {
   local s="$1"
   s="${s#"${s%%[![:space:]]*}"}"
@@ -1407,7 +1409,7 @@ prep_main() {
 }
 
 rel_usage() {
-  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message"'
+  printf '%s %s\n' "$(bold "$(whi5 'Usage:')")" 'rel vX.Y.Z "release message" [--yes|-y]'
   printf '\n%s\n' 'Release message must be 80 bytes or fewer.'
 }
 
@@ -1528,7 +1530,12 @@ rel_run() {
   printf '%s\n' "- git push origin $version"
   printf '%s\n' '- git push origin'
   printf '%s' "$(yel7 'Review the file list above. Proceed with release? (y/N): ')"
-  IFS= read -r answer || true
+  if [ "$_rel_assume_yes" -eq 1 ]; then
+    answer=y
+    printf '%s\n' 'y (--yes)'
+  else
+    IFS= read -r answer || true
+  fi
   case "$answer" in
   y | Y) ;;
   *) _failure 'release aborted'; return 1 ;;
@@ -1549,8 +1556,11 @@ rel_main() {
   if [ "$#" -eq 1 ]; then
     case "$1" in -h | -\? | --help) rel_usage; return 0 ;; esac
   fi
+  if [ "$#" -eq 3 ]; then
+    case "$3" in -y | --yes) _rel_assume_yes=1; set -- "$1" "$2" ;; esac
+  fi
   if [ "$#" -ne 2 ]; then
-    _failure 'usage: rel vX.Y.Z "release message"'
+    _failure 'usage: rel vX.Y.Z "release message" [--yes|-y]'
     return 2
   fi
   rel_run "$(_trim "$1")" "$(_trim "$2")"

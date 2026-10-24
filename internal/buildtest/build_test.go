@@ -50,6 +50,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			bindings: []binding{
 				{claim: "`build.sh` is self-contained Bash 3.2+ tooling.", implementation: "_prep_parse_ac_refs()", regression: "TestRenderedPrepCompositeACReferences"},
 				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
+				{claim: "Append `--yes` or `-y` to skip that prompt only for an agent-run release under `AGENTS.md` `### Agent Release`.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 			},
 		},
 		{
@@ -61,12 +62,16 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 				{claim: "Validate every selected compiled utility's help output against `## CLI Usage Formatting` before installing any selected utility.", implementation: "_validate_utility_help_output \"$compiled_path\"", regression: "TestRenderedGoHelpProbeRejectsEachDefect"},
 				{claim: "Validate every compiled utility's help output before installation during release compilation.", implementation: "_validate_utility_help_output \"$compiled\" \"$target\" \"$version\"", regression: "TestGoReleaseCompilesEachUtilityOnceBeforeInstall"},
 				{claim: "Recheck every installed utility's help output before tagging.", implementation: "_validate_utility_help_output \"$output\" \"$target\" \"$version\"", regression: "TestGoReleaseCompilesEachUtilityOnceBeforeInstall"},
+				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestGoReleaseYesSkipsOnlyThePrompt"},
+				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestGoReleaseYesSkipsOnlyThePrompt"},
 			},
 		},
 		{
 			name: "Rust", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
 			bindings: []binding{
+				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
+				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Require one literal `PROGRAM_VERSION: &str` strict stable SemVer declaration in each declared binary path.", implementation: "_validate_utility_declarations", regression: "test_utility_declaration_validation", shellRegression: true},
 				{claim: "Validate each compiled utility result before installing that utility.", implementation: "_validate_compiled_utility \"$target\" \"$version\"", regression: "test_compiled_version_output", shellRegression: true, claimsPath: "govna/build-release.md"},
@@ -76,6 +81,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Swift", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
 			bindings: []binding{
+				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
+				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Keep SwiftPM artifacts in one invocation-owned external scratch directory and clean it on success, failure, and handled signals.", implementation: "govna-swift-build.XXXXXX", regression: "TestSupportedProfileCommandParity"},
 				{claim: "Run strict toolchain formatting, debug compilation, tests, and release compilation with compiler warnings as errors.", implementation: "-Xswiftc -warnings-as-errors", regression: "TestSupportedProfileCommandParity"},
@@ -85,6 +92,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Terraform", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
 			bindings: []binding{
+				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
+				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform fmt -check -recursive", regression: "TestSupportedProfileCommandParity"},
 				{claim: "Run recursive formatting checks and module validation.", implementation: "terraform validate", regression: "TestSupportedProfileCommandParity"},
@@ -3399,4 +3408,124 @@ func TestRenderedGoPinsToolchainFromGoMod(t *testing.T) {
 			t.Fatalf("GOTOOLCHAIN after main -h=%q err=%v, want go1.27.0", out, err)
 		}
 	})
+}
+
+// addReleaseRemote gives a release fixture a bare origin and one uncommitted
+// change for the release commit, and returns the origin path.
+func addReleaseRemote(t *testing.T, dir string) string {
+	t.Helper()
+	remote := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(remote, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitFixture(t, remote, "init", "--bare", "-q")
+	gitFixture(t, dir, "remote", "add", "origin", remote)
+	gitFixture(t, dir, "push", "-qu", "origin", "HEAD")
+	writeBuildFixture(t, filepath.Join(dir, "notes.txt"), []byte("release notes\n"), 0o644)
+	return remote
+}
+
+// approvalView returns the release output shown before the approval answer.
+func approvalView(out string) string {
+	view, _, _ := strings.Cut(out, "Proceed")
+	return view
+}
+
+// assertYesRelease checks that a --yes release showed the interactive approval
+// view, skipped only the prompt, and pushed the release commit and tag.
+func assertYesRelease(t *testing.T, dir, remote, tag, message, interactive, out string) {
+	t.Helper()
+	if !strings.Contains(out, "y (--yes)") {
+		t.Fatalf("--yes release did not report the skipped prompt: %s", out)
+	}
+	if got, want := approvalView(out), approvalView(interactive); got != want {
+		t.Fatalf("--yes changed the approval view:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "show", "-s", "--format=%B", "HEAD"))); got != message {
+		t.Fatalf("release commit message=%q want %q", got, message)
+	}
+	head := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/tags/"+tag+"^{commit}"))); got != head {
+		t.Fatalf("remote tag commit=%s want %s", got, head)
+	}
+}
+
+func TestNonGoReleaseYesSkipsOnlyThePrompt(t *testing.T) {
+	for _, profile := range nonGoReleaseProfiles {
+		for _, flag := range []string{"--yes", "-y"} {
+			t.Run(profile.name+"/"+flag, func(t *testing.T) {
+				dir := t.TempDir()
+				prepareProfileReleaseFixture(t, profile.config, dir, "1.0.0", "AC29 release", "1.0.0")
+				remote := addReleaseRemote(t, dir)
+				interactive, err := run(t, dir, "n\n", "./build.sh", "v1.0.0", "AC29 release")
+				if err == nil || !strings.Contains(interactive, "release aborted") {
+					t.Fatalf("interactive release did not cancel: %v: %s", err, interactive)
+				}
+				out, err := run(t, dir, "", "./build.sh", "v1.0.0", "AC29 release", flag)
+				if err != nil {
+					t.Fatalf("%s release: %v: %s", flag, err, out)
+				}
+				assertYesRelease(t, dir, remote, "v1.0.0", "AC29 release", interactive, out)
+			})
+		}
+	}
+}
+
+func TestGoReleaseYesSkipsOnlyThePrompt(t *testing.T) {
+	root := repoRoot(t)
+	for _, flag := range []string{"--yes", "-y"} {
+		t.Run(flag, func(t *testing.T) {
+			dir := t.TempDir()
+			remote := filepath.Join(t.TempDir(), "origin.git")
+			prepareReleaseFixture(t, root, dir, "1.2.3", "AC29 release", remote)
+			release := func(input, args string) (string, error) {
+				command := "source ./build.sh\n_color_init\n_release_compile_validate_install() { return 0; }\nrel_main v1.2.3 'AC29 release'" + args + "\n"
+				return run(t, dir, input, "-c", command)
+			}
+			interactive, err := release("n\n", "")
+			if err == nil || !strings.Contains(interactive, "release aborted") {
+				t.Fatalf("interactive release did not cancel: %v: %s", err, interactive)
+			}
+			out, err := release("", " "+flag)
+			if err != nil {
+				t.Fatalf("%s release: %v: %s", flag, err, out)
+			}
+			assertYesRelease(t, dir, remote, "v1.2.3", "AC29 release", interactive, out)
+		})
+	}
+}
+
+func TestReleaseYesKeepsRefusalsAndPromptDefault(t *testing.T) {
+	type profile struct {
+		name    string
+		prepare func(t *testing.T, dir string)
+	}
+	root := repoRoot(t)
+	profiles := []profile{{name: "Go", prepare: func(t *testing.T, dir string) {
+		prepareReleaseFixture(t, root, dir, "1.0.0", "AC29 release", "")
+	}}}
+	for _, p := range nonGoReleaseProfiles {
+		config := p.config
+		profiles = append(profiles, profile{name: p.name, prepare: func(t *testing.T, dir string) {
+			prepareProfileReleaseFixture(t, config, dir, "1.0.0", "AC29 release", "1.0.0")
+		}})
+	}
+	for _, p := range profiles {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			p.prepare(t, dir)
+			before := gitState(t, dir)
+			out, err := run(t, dir, "", "./build.sh", "v2.0.0", "AC106 other", "--yes")
+			assertRefusedBeforePrompt(t, dir, out, err, "2.0.0")
+			out, err = run(t, dir, "", "./build.sh", "v1.0.0", "AC29 release", "--force")
+			assertRefusedBeforePrompt(t, dir, out, err)
+			out, err = run(t, dir, "", "./build.sh", "v1.0.0", "AC29 release")
+			if err == nil || !strings.Contains(out, "release aborted") || !strings.Contains(out, "Proceed") || strings.Contains(out, "(--yes)") {
+				t.Fatalf("release without --yes did not stop at the prompt: %v: %s", err, out)
+			}
+			if gitState(t, dir) != before {
+				t.Fatal("refused or cancelled release changed Git state")
+			}
+		})
+	}
 }
