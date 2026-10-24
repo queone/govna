@@ -357,7 +357,7 @@ Note: this rule does not prohibit batching independent commands.
 - Ask the Director for the AC number and last completed lifecycle action when phase eligibility cannot be established.
 - Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.
 - Treat only a Director-named complete pending release batch as an established multi-AC release batch.
-- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.
+- Accept only Package, `release`, or `rel` followed by a plus-joined list of uppercase AC<number> references as the named-batch form.
 - Apply standalone Package, package, pack, or prep to the established Ratified release batch.
 - Apply standalone Package, package, pack, or prep to an established direct batch when no AC can enter Package.
 - Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.
@@ -377,20 +377,21 @@ Note: this rule does not prohibit batching independent commands.
 - Do not interpret `run ./build.sh prep ...`, `pack the binary`, `prepare the build`, or non-standalone `prep` as workflow advancement.
 - Treat ordinary coding language such as `build`, `package the binary`, or a package-manager command as unrelated to phase advancement.
 - Require explicit operational wording such as `run ./build.sh` before executing a repository command.
-- Interpret standalone `release` or `rel` only as an agent-run release under `### Agent Release`.
+- Interpret `release` or `rel`, standalone or with a named batch, only as Package plus an agent-run release under `### Agent Release`.
 
 ### Agent Release
 
-- Apply these rules at each Package completion and when the Director sends standalone `release` or `rel`.
-- Treat standalone `release` or `rel` as authorization for one agent-run release.
-- Accept the keyword only after a clean Package completion in the active session.
-- Record the `git status --porcelain` output at each Package completion.
-- Keep that record in the active session.
-- Reject the keyword when the current `git status --porcelain` output differs from that record.
-- Run the exact release command from that Package report with `--yes` appended.
+- Apply these rules when the Director sends `release` or `rel`, standalone or with a named batch.
+- Treat standalone `release` or `rel` as authorization for Package plus one agent-run release.
+- Apply standalone `release` or `rel` to the same release batch as standalone Package.
+- Treat `release` or `rel` followed by a named batch as Package of that batch plus one agent-run release.
+- Stop before the release when Package fails or needs a Director decision.
+- Run the printed release command with `--yes` appended.
 - Run no other git or GitHub write under the keyword.
 - Retry nothing after a release failure.
 - Report the failure output and the printed recovery command to the Director.
+- Report Package and the release result in one completion report.
+- Replace `No commit or release command executed.` and `Run below to release:` with the release result in that report.
 - Treat a successful agent-run release as a completed release under `### Completed Release`.
 
 ### Primary And Ancillary Scope

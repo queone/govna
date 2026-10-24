@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.79.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.80.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -524,22 +524,29 @@ func TestPackageCompletionContract(t *testing.T) {
 
 func TestAgentReleaseContract(t *testing.T) {
 	const block = "\n### Agent Release\n\n" +
-		"- Apply these rules at each Package completion and when the Director sends standalone `release` or `rel`.\n" +
-		"- Treat standalone `release` or `rel` as authorization for one agent-run release.\n" +
-		"- Accept the keyword only after a clean Package completion in the active session.\n" +
-		"- Record the `git status --porcelain` output at each Package completion.\n" +
-		"- Keep that record in the active session.\n" +
-		"- Reject the keyword when the current `git status --porcelain` output differs from that record.\n" +
-		"- Run the exact release command from that Package report with `--yes` appended.\n" +
+		"- Apply these rules when the Director sends `release` or `rel`, standalone or with a named batch.\n" +
+		"- Treat standalone `release` or `rel` as authorization for Package plus one agent-run release.\n" +
+		"- Apply standalone `release` or `rel` to the same release batch as standalone Package.\n" +
+		"- Treat `release` or `rel` followed by a named batch as Package of that batch plus one agent-run release.\n" +
+		"- Stop before the release when Package fails or needs a Director decision.\n" +
+		"- Run the printed release command with `--yes` appended.\n" +
 		"- Run no other git or GitHub write under the keyword.\n" +
 		"- Retry nothing after a release failure.\n" +
 		"- Report the failure output and the printed recovery command to the Director.\n" +
+		"- Report Package and the release result in one completion report.\n" +
+		"- Replace `No commit or release command executed.` and `Run below to release:` with the release result in that report.\n" +
 		"- Treat a successful agent-run release as a completed release under `### Completed Release`.\n\n###"
 	retired := []string{
 		"No EXCEPTION.",
 		"Never execute release commands.",
 		"The agent never runs the release command.",
 		"`shipped` or `released`",
+		"Accept the keyword only after a clean Package completion in the active session.",
+		"Record the `git status --porcelain` output at each Package completion.",
+		"Reject the keyword when the current `git status --porcelain` output differs from that record.",
+		"Run the exact release command from that Package report with `--yes` appended.",
+		"Interpret standalone `release` or `rel` only as an agent-run release under `### Agent Release`.",
+		"as the named-batch Package form.",
 	}
 	assertContract := func(t *testing.T, name, agents string, governance map[string]string) {
 		t.Helper()
@@ -867,7 +874,7 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 			"- Apply standalone Package, package, pack, or prep to an established direct batch when no AC can enter Package.",
 			"- Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.",
 			"- Treat only a Director-named complete pending release batch as an established multi-AC release batch.",
-			"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
+			"- Accept only Package, `release`, or `rel` followed by a plus-joined list of uppercase AC<number> references as the named-batch form.",
 			"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
 			"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
 			"- Measure the projected complete pending release batch with one private provisional prefix-plus-summary string before another AC enters Implement.",
@@ -1316,7 +1323,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 		"- Require Package for the current fitting batch before another Implement when the projection cannot fit.",
 		"- Treat one active Ratified AC as an established one-AC release batch only when it is the complete pending release batch.",
 		"- Treat only a Director-named complete pending release batch as an established multi-AC release batch.",
-		"- Accept only Package followed by a plus-joined list of uppercase AC<number> references as the named-batch Package form.",
+		"- Accept only Package, release, or rel followed by a plus-joined list of uppercase AC<number> references as the named-batch form.",
 		"- Apply standalone Package, package, pack, or prep to the established Ratified release batch.",
 		"- Ask the Director to name the release batch when multiple ungrouped Ratified ACs can enter Package.",
 		"- Recheck the complete pending release batch and exact release message before Package runs prep.",
