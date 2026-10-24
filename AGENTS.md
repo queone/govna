@@ -370,7 +370,7 @@ Note: this rule does not prohibit batching independent commands.
 - Interpret standalone `Package`, `package`, `pack`, or `prep` as Package only after an explicit request for a Ratified release batch or direct batch.
 - Do not interpret `run ./build.sh prep ...`, `pack the binary`, `prepare the build`, or non-standalone `prep` as workflow advancement.
 - Treat ordinary coding language such as `build`, `package the binary`, or a package-manager command as unrelated to phase advancement.
-- Require explicit operational wording such as `run ./build.sh` before executing a repository command.
+- Require explicit operational wording such as `run ./build.sh` before executing a repository command outside an authorized phase action or `### Agent Release`.
 - Interpret `release` or `rel`, standalone or with a named batch, only as Package plus an agent-run release under `### Agent Release`.
 
 ### Agent Release

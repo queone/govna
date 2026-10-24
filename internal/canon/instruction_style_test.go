@@ -1703,6 +1703,7 @@ var agentReleaseRules = map[string][]string{
 		"Leave every GitHub write for the Director to execute, except the release push under `### Agent Release`.",
 		"Present the exact GitHub write command in chat for the Director to run, except under `### Agent Release`.",
 		"Interpret `release` or `rel`, standalone or with a named batch, only as Package plus an agent-run release under `### Agent Release`.",
+		"Require explicit operational wording such as `run ./build.sh` before executing a repository command outside an authorized phase action or `### Agent Release`.",
 		"Accept only Package, `release`, or `rel` followed by a plus-joined list of uppercase AC<number> references as the named-batch form.",
 		"Apply these rules when the Director sends `release` or `rel`, standalone or with a named batch.",
 		"Treat standalone `release` or `rel` as authorization for Package plus one agent-run release.",
@@ -1720,6 +1721,12 @@ var agentReleaseRules = map[string][]string{
 	"govna/roles.md": {
 		"Execute a release command only under `AGENTS.md` `### Agent Release`.",
 	},
+}
+
+// agentReleaseRetired lists wording that the phase-action and agent-release
+// exception deletes from every rendered AGENTS.md.
+var agentReleaseRetired = []string{
+	"before executing a repository command.\n",
 }
 
 func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
@@ -1753,6 +1760,12 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 					if secondAction.MatchString(rule) {
 						t.Errorf("%s rule contains a second action: %s", path, rule)
 					}
+				}
+			}
+			agents := fileText(t, files, "AGENTS.md")
+			for _, retired := range agentReleaseRetired {
+				if strings.Contains(agents, retired) {
+					t.Errorf("AGENTS.md retains deleted wording: %s", retired)
 				}
 			}
 		})

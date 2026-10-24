@@ -12,8 +12,8 @@ import (
 	"github.com/queone/govna/internal/render"
 )
 
-const programVersion = "0.45.0"
-const canonVersion = "0.81.0"
+const programVersion = "0.45.1"
+const canonVersion = "0.81.1"
 
 type environment struct {
 	stdoutTerminal bool
