@@ -51,6 +51,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 				{claim: "`build.sh` is self-contained Bash 3.2+ tooling.", implementation: "_prep_parse_ac_refs()", regression: "TestRenderedPrepCompositeACReferences"},
 				{claim: "Reject a release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
 				{claim: "Append `--yes` or `-y` to skip that prompt only for an agent-run release under `AGENTS.md` `### Agent Release`.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
+				{claim: "Refuse a release from a detached `HEAD` before the approval prompt.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
+				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 			},
 		},
 		{
@@ -64,12 +66,17 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 				{claim: "Recheck every installed utility's help output before tagging.", implementation: "_validate_utility_help_output \"$output\" \"$target\" \"$version\"", regression: "TestGoReleaseCompilesEachUtilityOnceBeforeInstall"},
 				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestGoReleaseYesSkipsOnlyThePrompt"},
+				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
+				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 			},
 		},
 		{
 			name: "Rust", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
 			bindings: []binding{
+				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
+				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
+				{claim: "Use `unborn` in place of the `HEAD` hash in the validation token before the first commit.", implementation: "printf 'unborn\\n'", regression: "test_validation_token_without_commits", shellRegression: true, claimsPath: "govna/development-guidelines.md"},
 				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
@@ -81,6 +88,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Swift", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
 			bindings: []binding{
+				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
+				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
@@ -92,6 +101,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Terraform", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
 			bindings: []binding{
+				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
+				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Skip only the approval prompt under `--yes`.", implementation: "printf '%s\\n' 'y (--yes)'", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
 				{claim: "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.", implementation: "_release_validate_prepared", regression: "TestNonGoReleaseRefusesUnpreparedTagAndMessage"},
@@ -278,6 +289,8 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_readme_usage_line",
 		"_readme_usage_version",
 		"_recovery_error",
+		"_rel_choose_branch_push",
+		"_rel_refuse_detached_head",
 		"_rel_run_inner",
 		"_rel_step",
 		"_release_compile_validate_install",
@@ -3525,6 +3538,253 @@ func TestReleaseYesKeepsRefusalsAndPromptDefault(t *testing.T) {
 			}
 			if gitState(t, dir) != before {
 				t.Fatal("refused or cancelled release changed Git state")
+			}
+		})
+	}
+}
+
+// releaseProfile names one stack whose rendered build.sh a release test runs.
+type releaseProfile struct {
+	name   string
+	config canon.Config
+}
+
+// allReleaseProfiles lists every supported profile, Go first.
+func allReleaseProfiles() []releaseProfile {
+	profiles := []releaseProfile{{name: "Go", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"}}}
+	for _, p := range nonGoReleaseProfiles {
+		profiles = append(profiles, releaseProfile{name: p.name, config: p.config})
+	}
+	return profiles
+}
+
+// useDefaultGitConfig hides global and system Git config, so a release sees
+// default settings such as an unset push.autoSetupRemote.
+func useDefaultGitConfig(t *testing.T) {
+	t.Helper()
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
+// prepareUnbornReleaseFixture writes one profile's rendered build.sh and its
+// release inputs into a Git repository with no commits and an origin remote
+// that no branch tracks, and returns the origin path. A non-empty version
+// adds the prepared CHANGELOG row and declarations; an empty one leaves the
+// fixture ready for prep at 1.0.0.
+func prepareUnbornReleaseFixture(t *testing.T, config canon.Config, dir, version, message string) string {
+	t.Helper()
+	files, err := canon.Render(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var script []byte
+	for _, file := range files {
+		if file.Path == "build.sh" {
+			script = file.Content
+		}
+	}
+	if len(script) == 0 {
+		t.Fatal("render omits build.sh")
+	}
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+	changelog := "# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"
+	declared := "0.9.0"
+	if version != "" {
+		changelog += fmt.Sprintf("| %s | %s |\n", version, message)
+		declared = version
+	}
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte(changelog), 0o644)
+	switch config.Stack {
+	case "Go":
+		writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+		writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte(fmt.Sprintf("package main\nconst programVersion = %q\nfunc main() {}\n", declared)), 0o644)
+	case "Rust":
+		writeBuildFixture(t, filepath.Join(dir, "Cargo.toml"), []byte(fmt.Sprintf("[package]\nname = \"widget\"\nversion = \"%s\"\nedition = \"2021\"\n", declared)), 0o644)
+	case "Swift":
+		writeBuildFixture(t, filepath.Join(dir, "Package.swift"), []byte("// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: \"widget\", targets: [.executableTarget(name: \"widget\")])\n"), 0o644)
+		writeBuildFixture(t, filepath.Join(dir, "Sources/widget/main.swift"), []byte(fmt.Sprintf("let programVersion = %q\nprint(programVersion)\n", declared)), 0o644)
+	}
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	remote := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(remote, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitFixture(t, remote, "init", "--bare", "-q")
+	gitFixture(t, dir, "remote", "add", "origin", remote)
+	return remote
+}
+
+// prepareUpstreamReleaseFixture writes a prepared release fixture whose branch
+// already tracks origin, and returns the origin path.
+func prepareUpstreamReleaseFixture(t *testing.T, p releaseProfile, dir, version, message string) string {
+	t.Helper()
+	if p.config.Stack == "Go" {
+		remote := filepath.Join(t.TempDir(), "origin.git")
+		prepareReleaseFixture(t, repoRoot(t), dir, version, message, remote)
+		return remote
+	}
+	prepareProfileReleaseFixture(t, p.config, dir, version, message, version)
+	return addReleaseRemote(t, dir)
+}
+
+// runRelease runs build.sh in dir with a stand-in Go toolchain on PATH, so a
+// Go release can compile, validate, and install its utility at version.
+func runRelease(t *testing.T, dir, version string, args ...string) (string, error) {
+	t.Helper()
+	external := t.TempDir()
+	fakeBin := filepath.Join(external, "fakebin")
+	tmpRoot := filepath.Join(external, "tmp")
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeReleaseGo), 0o755)
+	cmd := exec.Command("/bin/bash", append([]string{"./build.sh"}, args...)...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"NO_COLOR=1",
+		"TERM=dumb",
+		"FAKE_GOPATH="+filepath.Join(external, "gopath"),
+		"FAKE_VERSION="+version,
+		"TMPDIR="+tmpRoot,
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+	)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// remoteRefs lists every ref and object in a bare remote.
+func remoteRefs(t *testing.T, remote string) string {
+	t.Helper()
+	return string(gitFixtureOutput(t, remote, "for-each-ref", "--format=%(refname) %(objectname)"))
+}
+
+func TestFirstReleaseWithoutCommitsSetsUpstream(t *testing.T) {
+	useDefaultGitConfig(t)
+	for _, p := range allReleaseProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			remote := prepareUnbornReleaseFixture(t, p.config, dir, "1.0.0", "first release")
+			out, err := runRelease(t, dir, "1.0.0", "v1.0.0", "first release", "--yes")
+			if err != nil {
+				t.Fatalf("first release: %v:\n%s", err, out)
+			}
+			if !strings.Contains(approvalView(out), "git push -u origin HEAD") {
+				t.Fatalf("release plan omits the upstream push:\n%s", out)
+			}
+			if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-list", "--count", "HEAD"))); got != "1" {
+				t.Fatalf("local commit count=%s, want 1", got)
+			}
+			head := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
+			branch := strings.TrimSpace(string(gitFixtureOutput(t, dir, "symbolic-ref", "--short", "HEAD")))
+			if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/tags/v1.0.0^{commit}"))); got != head {
+				t.Fatalf("remote tag commit=%s want %s", got, head)
+			}
+			if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/heads/"+branch))); got != head {
+				t.Fatalf("remote branch %s=%s want %s", branch, got, head)
+			}
+			if got := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "--abbrev-ref", "@{u}"))); got != "origin/"+branch {
+				t.Fatalf("upstream=%q want origin/%s", got, branch)
+			}
+		})
+	}
+}
+
+func TestReleaseKeepsBranchPushWithUpstream(t *testing.T) {
+	useDefaultGitConfig(t)
+	for _, p := range allReleaseProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			remote := prepareUpstreamReleaseFixture(t, p, dir, "1.2.3", "AC29 release")
+			out, err := runRelease(t, dir, "1.2.3", "v1.2.3", "AC29 release", "--yes")
+			if err != nil {
+				t.Fatalf("release with upstream: %v:\n%s", err, out)
+			}
+			want := "- git push origin\n"
+			if p.config.Stack == "Swift" {
+				want = "  git push origin HEAD\n"
+			}
+			if view := approvalView(out); !strings.Contains(view, want) || strings.Contains(out, "push -u") {
+				t.Fatalf("release with upstream changed the branch push, want %q:\n%s", want, out)
+			}
+			head := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
+			branch := strings.TrimSpace(string(gitFixtureOutput(t, dir, "symbolic-ref", "--short", "HEAD")))
+			if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/heads/"+branch))); got != head {
+				t.Fatalf("remote branch %s=%s want %s", branch, got, head)
+			}
+		})
+	}
+}
+
+var branchRetryPattern = regexp.MustCompile(`retry(:| with) git push -u origin HEAD`)
+
+func TestBranchPushRecoveryNamesChosenPush(t *testing.T) {
+	useDefaultGitConfig(t)
+	const hook = "#!/bin/sh\nwhile read -r old new ref; do\n  case \"$ref\" in refs/heads/*) echo 'branch pushes refused' >&2; exit 1 ;; esac\ndone\nexit 0\n"
+	for _, p := range allReleaseProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			remote := prepareUnbornReleaseFixture(t, p.config, dir, "1.0.0", "first release")
+			writeBuildFixture(t, filepath.Join(remote, "hooks", "pre-receive"), []byte(hook), 0o755)
+			out, err := runRelease(t, dir, "1.0.0", "v1.0.0", "first release", "--yes")
+			if err == nil {
+				t.Fatalf("release succeeded although the remote refused the branch:\n%s", out)
+			}
+			if !branchRetryPattern.MatchString(out) {
+				t.Fatalf("branch-push recovery omits the chosen push:\n%s", out)
+			}
+			if !strings.Contains(remoteRefs(t, remote), "refs/tags/v1.0.0 ") {
+				t.Fatalf("fixture did not reach the branch push:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestPrepWithoutCommits(t *testing.T) {
+	useDefaultGitConfig(t)
+	for _, p := range allReleaseProfiles() {
+		args := []string{"prep", "v1.0.0", "first release"}
+		switch p.config.Stack {
+		case "Rust":
+			continue
+		case "Swift", "Terraform":
+			args = []string{"prep", "-B", "v1.0.0", "first release"}
+		}
+		t.Run(p.name, func(t *testing.T) {
+			if p.config.Stack == "Swift" {
+				if _, err := exec.LookPath("swift"); err != nil {
+					t.Skip("Swift prep needs the swift toolchain")
+				}
+			}
+			dir := t.TempDir()
+			prepareUnbornReleaseFixture(t, p.config, dir, "", "")
+			out, err := run(t, dir, "", append([]string{"./build.sh"}, args...)...)
+			if err != nil || !strings.Contains(out, "release command:") {
+				t.Fatalf("prep without commits: %v:\n%s", err, out)
+			}
+			if got := string(mustRead(t, filepath.Join(dir, "CHANGELOG.md"))); !strings.Contains(got, "| Unreleased | |\n| 1.0.0 | first release |\n") {
+				t.Fatalf("prepared changelog=%s", got)
+			}
+			if out, err := exec.Command("git", "-C", dir, "rev-parse", "-q", "--verify", "HEAD").CombinedOutput(); err == nil {
+				t.Fatalf("prep created a commit: %s", out)
+			}
+		})
+	}
+}
+
+func TestDetachedHeadReleaseIsRefused(t *testing.T) {
+	useDefaultGitConfig(t)
+	for _, p := range allReleaseProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			remote := prepareUpstreamReleaseFixture(t, p, dir, "1.2.3", "AC29 release")
+			gitFixture(t, dir, "checkout", "-q", "--detach")
+			before, beforeRemote := gitState(t, dir), remoteRefs(t, remote)
+			out, err := runRelease(t, dir, "1.2.3", "v1.2.3", "AC29 release", "--yes")
+			assertRefusedBeforePrompt(t, dir, out, err, "HEAD is detached", "check out the release branch")
+			if gitState(t, dir) != before || remoteRefs(t, remote) != beforeRemote {
+				t.Fatal("detached-HEAD refusal changed local or remote Git state")
 			}
 		})
 	}

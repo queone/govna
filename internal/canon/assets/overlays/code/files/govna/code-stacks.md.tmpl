@@ -20,6 +20,9 @@
 - Print the same candidate files and release sequence under `--yes` as the interactive release.
 - Skip only the approval prompt under `--yes`.
 - Keep `--yes` out of the printed release command.
+- Refuse a release from a detached `HEAD` before the approval prompt in every stack.
+- Push the branch with `git push -u origin HEAD` when it has no upstream.
+- Keep each stack's branch push when the branch has an upstream.
 
 ## Go
 

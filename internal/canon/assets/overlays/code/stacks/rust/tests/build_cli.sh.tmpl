@@ -316,6 +316,32 @@ test_baseline_validation_token_refresh() {
   pass
 }
 
+test_validation_token_without_commits() {
+  local fixture scratch first refreshed tree commit
+  fixture=$(new_fixture) || fail 'create unborn token fixture'
+  git -C "$fixture" init -q || fail 'initialize unborn token fixture'
+  printf 'tracked\n' >"$fixture/tracked"
+  first=$(cd "$fixture" && _validation_token) || fail 'create unborn token'
+  case "$first" in v2:unborn:*:*) ;; *) fail "unborn token lacks the unborn marker: $first" ;; esac
+  scratch=$(mktemp "${TMPDIR:-/tmp}/canon-baseline.XXXXXX") || fail 'create scratch baseline'
+  printf 'govna-canon-baseline-v1\ncanon_version = v1.0.0\n' >"$scratch"
+  mkdir -p "$fixture/govna"
+  cp "$scratch" "$fixture/govna/canon-baseline.txt"
+  refreshed=$(cd "$fixture" && refresh_validation_token_run "$scratch" "$first") ||
+    fail 'refresh unborn token'
+  case "$refreshed" in v2:unborn:*:*) ;; *) fail "refreshed unborn token lost the marker: $refreshed" ;; esac
+  git -C "$fixture" add . || fail 'stage unborn token fixture'
+  tree=$(git -C "$fixture" write-tree) || fail 'write unborn token tree'
+  commit=$(printf 'first\n' | git -C "$fixture" \
+    -c user.name=fixture -c user.email=fixture@example.invalid \
+    commit-tree "$tree") || fail 'create first commit'
+  git -C "$fixture" update-ref HEAD "$commit" || fail 'record first commit'
+  first=$(cd "$fixture" && _validation_token) || fail 'create token after the first commit'
+  case "$first" in "v2:$commit:"*) ;; *) fail "token after the first commit lacks HEAD: $first" ;; esac
+  rm -rf -- "$fixture" "$scratch"
+  pass
+}
+
 test_refresh_validation_token_cli_contract() {
   local output rc
   refresh_validation_token_run() { printf '%s|%s\n' "$1" "$2"; }
@@ -633,6 +659,7 @@ test_install_reporting
 test_prep_no_build_rejection
 test_validation_token_tracks_git_visible_state
 test_baseline_validation_token_refresh
+test_validation_token_without_commits
 test_refresh_validation_token_cli_contract
 test_shared_cargo_target_ownership
 test_prep_evidence_routing

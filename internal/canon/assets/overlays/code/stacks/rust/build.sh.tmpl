@@ -4,6 +4,7 @@
 set -euo pipefail
 
 _rel_assume_yes=0
+_rel_push_branch_args=(push origin)
 
 _trim() {
   local s="$1"
@@ -891,9 +892,15 @@ _validation_fingerprints() {
   rm -f "$records" "$paths" "$reduced"
 }
 
+# _validation_head — print the HEAD commit, or unborn before the first commit.
+_validation_head() {
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  git rev-parse -q --verify HEAD 2>/dev/null || printf 'unborn\n'
+}
+
 _validation_token() {
   local head
-  head=$(git rev-parse HEAD 2>/dev/null) || {
+  head=$(_validation_head) || {
     _failure 'build: create validation token: resolve HEAD failed; run inside a git work tree'
     return 1
   }
@@ -915,7 +922,7 @@ EOF
 
 refresh_validation_token_run() {
   local scratch="$1" prior="$2" repo scratch_dir scratch_abs head full reduced current_head
-  printf '%s\n' "$prior" | grep -Eq '^v2:[0-9a-f]{40}:[0-9a-f]{64}:[0-9a-f]{64}$' || {
+  printf '%s\n' "$prior" | grep -Eq '^v2:([0-9a-f]{40}|unborn):[0-9a-f]{64}:[0-9a-f]{64}$' || {
     _failure 'refresh validation token: prior token is malformed or unsupported; run a full build and retry'
     return 1
   }
@@ -944,7 +951,7 @@ refresh_validation_token_run() {
   IFS=: read -r _ head full reduced <<EOF
 $prior
 EOF
-  current_head=$(git rev-parse HEAD 2>/dev/null) || {
+  current_head=$(_validation_head) || {
     _failure 'refresh validation token: resolve HEAD failed; run inside a git work tree'
     return 1
   }
@@ -1439,7 +1446,7 @@ _release_step() {
     _failure "release: completed before failure: $completed"
     case ",$completed," in
     *", git push tag,"*)
-      _failure "release: tag $_release_version was pushed but the branch push failed; retry with git push origin"
+      _failure "release: tag $_release_version was pushed but the branch push failed; retry with git ${_rel_push_branch_args[*]}"
       ;;
     *", git tag,"*)
       _failure "release: tag exists locally but was not pushed; retry with git push origin or remove it with git tag -d"
@@ -1509,11 +1516,32 @@ _release_validate_prepared() { # $1=tag $2=message
     { _release_refuse "prepared Cargo.toml [package].version is $cargo_version; require $version" "$tag" "$message"; return 1; }
 }
 
+# _rel_refuse_detached_head — fail before the approval prompt when HEAD is
+# detached, because the branch push cannot succeed after the tag push.
+_rel_refuse_detached_head() {
+  git symbolic-ref -q HEAD >/dev/null 2>&1 && return 0
+  _failure 'release: HEAD is detached; check out the release branch and rerun the release command'
+  return 1
+}
+
+# _rel_choose_branch_push — set _rel_push_branch_args to the branch push: the
+# stack's push when the branch tracks an upstream, or a push that sets origin
+# as the upstream when it has none.
+_rel_choose_branch_push() {
+  if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    _rel_push_branch_args=(push origin)
+  else
+    _rel_push_branch_args=(push -u origin HEAD)
+  fi
+}
+
 rel_run() {
   local version="$1" message="$2" answer completed=''
   _release_version="$version"
   _validate_release_inputs release "$version" "$message" || return 1
   _validate_git_state release "$version" || return 1
+  _rel_refuse_detached_head || return 1
+  _rel_choose_branch_push
   _release_validate_prepared "$version" "$message" || return 1
   printf '%s %s\n' "$(yel7 'release tag:')" "$(grn3 "$version")"
   printf '%s %s\n' "$(yel7 'release message:')" "$(grn3 "$(_quote "$message")")"
@@ -1528,7 +1556,7 @@ rel_run() {
   printf -- '- git commit -m %s\n' "$(_quote "$message")"
   printf '%s\n' "- git tag $version"
   printf '%s\n' "- git push origin $version"
-  printf '%s\n' '- git push origin'
+  printf '%s\n' "- git ${_rel_push_branch_args[*]}"
   printf '%s' "$(yel7 'Review the file list above. Proceed with release? (y/N): ')"
   if [ "$_rel_assume_yes" -eq 1 ]; then
     answer=y
@@ -1548,7 +1576,7 @@ rel_run() {
   completed='git add, git commit, git tag'
   _release_step 'git push tag' "$completed" push origin "$version" || return 1
   completed='git add, git commit, git tag, git push tag'
-  _release_step 'git push branch' "$completed" push origin || return 1
+  _release_step 'git push branch' "$completed" "${_rel_push_branch_args[@]}" || return 1
 }
 
 rel_main() {

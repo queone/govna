@@ -19,6 +19,7 @@
 - Skip binary installation during fallback pre-change validation.
 - Reject `--no-build` release prep when independent utility validation is required.
 - Emit a Git-visible-state validation token after each successful full build.
+- Use `unborn` in place of the `HEAD` hash in the validation token before the first commit.
 - Pass current validation evidence to release prep through `-t, --validation-token`.
 - Retain `GOVNA_PREP_VALIDATION_TOKEN` only as a compatibility fallback.
 - Refresh validation evidence only after an exact baseline-only audit-adoption transition.

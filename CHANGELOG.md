@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.43.0 | AC64 Every stack makes the first release without commits; canon v0.79.0 |
 | 0.42.0 | AC63 Agents release on rel; canon ACs list fixture rotation; canon v0.78.0 |
 | 0.41.0 | AC62 Govna states each rule once; agents stop restating context; canon v0.77.0 |
 | 0.40.0 | AC61 Go practices canon states the toolchain rule as one command; canon v0.76.0 |

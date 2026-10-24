@@ -4,6 +4,7 @@
 set -euo pipefail
 
 _rel_assume_yes=0
+_rel_push_branch_args=(push origin HEAD)
 _swift_scratch=''
 _repo_root=''
 _install_root=''
@@ -914,6 +915,25 @@ _release_validate_prepared() { # $1=tag $2=message
     { _release_refuse "CHANGELOG.md must contain the exact row | $version | $message | immediately after Unreleased" "$tag" "$message"; return 1; }
 }
 
+# _rel_refuse_detached_head — fail before the approval prompt when HEAD is
+# detached, because the branch push cannot succeed after the tag push.
+_rel_refuse_detached_head() {
+  git symbolic-ref -q HEAD >/dev/null 2>&1 && return 0
+  _fail 'release: HEAD is detached; check out the release branch and rerun the release command'
+  return 1
+}
+
+# _rel_choose_branch_push — set _rel_push_branch_args to the branch push: the
+# stack's push when the branch tracks an upstream, or a push that sets origin
+# as the upstream when it has none.
+_rel_choose_branch_push() {
+  if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    _rel_push_branch_args=(push origin HEAD)
+  else
+    _rel_push_branch_args=(push -u origin HEAD)
+  fi
+}
+
 release_main() {
   if [ "$#" -eq 3 ]; then
     case "$3" in -y | --yes) _rel_assume_yes=1; set -- "$1" "$2" ;; esac
@@ -922,6 +942,8 @@ release_main() {
   local version="$1" message="$2" answer quoted_message quoted_version line
   _validate_release_inputs release "$version" "$message" || return 1
   _validate_git_state release "$version" || return 1
+  _rel_refuse_detached_head || return 1
+  _rel_choose_branch_push
   _release_validate_prepared "$version" "$message" || return 1
   git status --short
   printf '%s\n' "$(yel7 'release plan:')"
@@ -932,7 +954,7 @@ release_main() {
     "git commit -m $quoted_message" \
     "git tag $quoted_version" \
     "git push origin $quoted_version" \
-    'git push origin HEAD'; do
+    "git ${_rel_push_branch_args[*]}"; do
     printf '  %s\n' "$(yel5 "$line")"
   done
   printf '%s ' "$(bold "$(whi5 'Proceed? [y/N]')")"
@@ -950,7 +972,7 @@ release_main() {
   git commit -m "$message" || { _fail 'release: commit failed; fix Git state and retry'; return 1; }
   git tag "$version" || { _fail 'release: tag failed; remove any partial tag and retry'; return 1; }
   git push origin "$version" || { _fail 'release: tag push failed; inspect the remote before retrying'; return 1; }
-  git push origin HEAD || { _fail 'release: branch push failed; the tag may already be remote'; return 1; }
+  git "${_rel_push_branch_args[@]}" || { _fail "release: branch push failed; the tag may already be remote; retry with git ${_rel_push_branch_args[*]}"; return 1; }
 }
 
 main() {
