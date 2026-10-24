@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.45.0 | AC66 Shorter completion reports and a looser chat style; canon v0.81.0 |
 | 0.44.1 | Fix and run Rust shell suite; rotate fixture on any canon bump; canon v0.80.1 |
 | 0.44.0 | AC65 rel runs prep and the release in one step; canon v0.80.0 |
 | 0.43.0 | AC64 Every stack makes the first release without commits; canon v0.79.0 |

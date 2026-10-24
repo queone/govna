@@ -73,17 +73,9 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 ### STE Replies
 
 - Apply these limits to chat replies only.
-- Keep each sentence that tells the reader to act to 20 words or fewer.
-- Keep every other sentence to 25 words or fewer.
-- Keep each paragraph to six sentences or fewer.
-- Give one instruction per sentence.
-- Start each warning with the command or the condition.
 - Use one term for each concept.
-- Keep each noun cluster to three words or fewer.
 - Use the active voice.
 - Use the passive voice only when the actor is unknown or unimportant.
-- Write complete sentences without dropping articles or verbs.
-- Exempt chat bullets from the complete-sentence limit.
 - Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.
 
 Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement `### Plain Language` and `## Review Style` instead of replacing them.
@@ -204,8 +196,8 @@ Note: these limits borrow from Simplified Technical English (ASD-STE100), and th
 - Return to Refine when an adjustment changes or interprets a Director-owned decision.
 - Return to Refine when an adjustment expands production scope, changes expected results, or adds a requirement.
 - Return to Refine when more than one materially distinct valid outcome exists.
-- Record each effective-scope path, triggering in-scope change, and eligibility rule in the applicable Implement or Ratify completion report.
-- Record the same evidence in the closure-audit record when applicable.
+- Record each effective-scope path, triggering in-scope change, and eligibility rule in the closure-audit working record.
+- Name each effective-scope path in one line of the applicable Implement or Ratify completion report.
 - Require no second Director authorization for an eligible effective-scope adjustment.
 
 ### Delegation and sub-agent use
@@ -318,6 +310,8 @@ Note: this rule does not prohibit batching independent commands.
 - Rerun applicable validation when Ratify evidence is missing or stale.
 - Perform the final review during the same Ratify turn.
 - Complete Ratify in that turn when the review finds no issue.
+- Report a clean Ratify as its outcome sentence and the `Awaiting` line.
+- Add only new findings, corrections, and residual risks to that report.
 - Apply the Approval Boundaries > General Gates and roles.md `What the Operator Must Defer` boundaries to classify any other Director-owned Ratify finding.
 - Return Ratify feedback to Refine, without completing Ratify, for a contract, scope, product, security, destructive, publication, or release finding.
 - Auto-correct an implementation-only finding inline during Ratify.
@@ -485,7 +479,9 @@ Note: this rule does not prohibit batching independent commands.
 - Report "no issues" directly when none are found.
 - Note every residual risk or verification gap.
 - Open every substantive phase completion with one short outcome sentence.
-- Keep completions terse with changed items, flat bullets, and a final `Awaiting <specific Director-initiated next>.` line.
+- Keep completions terse with flat bullets and a final `Awaiting <specific Director-initiated next>.` line.
+- Summarize the settled AC scope in at most one line of an Implement completion report.
+- Report every change that differs from or adds to the settled AC.
 - Focus completion summaries on changed behavior, material verification, findings, corrections, residual risks, and Director decisions.
 - Suppress routine repository labels, phase labels, phase mechanics, expected skips, duplicated status, and expected no-action confirmations.
 - Report suppressed workflow details only when exceptional or actionable.
@@ -503,7 +499,7 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Report successful routine gates only when they materially affect confidence.
 - Always report failures and skipped required gates.
 - Present editorial decisions to the director as: a recommendation when one viable option exists; two bounded options plus a recommendation when two exist; the best two plus a one-line note on the rest when more than two exist.
-- Include the three-part self-review structure (Verified / Red-teamed / Not checked) defined in `govna/roles.md` in every substantial completion report, even when the default is terse.
+- Include the three-part self-review structure (Verified / Red-teamed / Not checked) defined in `govna/roles.md` in every substantial completion report except a clean Ratify report.
 - Color `Verified:`, `Red-teamed:`, and `Not checked:` cyan only when the response channel explicitly supports native color or ANSI color and color is enabled.
 - Start every Package completion report with the plain, unbulleted, unindented line `Package complete.`.
 - Insert exactly one blank line after `Package complete.` before `Verified:`.

@@ -554,17 +554,9 @@ func TestPartAndIdeaIdentifiersAllowedInActiveACDocuments(t *testing.T) {
 func TestReplyLimitsFollowPlainLanguage(t *testing.T) {
 	limits := []string{
 		"Apply these limits to chat replies only.",
-		"Keep each sentence that tells the reader to act to 20 words or fewer.",
-		"Keep every other sentence to 25 words or fewer.",
-		"Keep each paragraph to six sentences or fewer.",
-		"Give one instruction per sentence.",
-		"Start each warning with the command or the condition.",
 		"Use one term for each concept.",
-		"Keep each noun cluster to three words or fewer.",
 		"Use the active voice.",
 		"Use the passive voice only when the actor is unknown or unimportant.",
-		"Write complete sentences without dropping articles or verbs.",
-		"Exempt chat bullets from the complete-sentence limit.",
 		"Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.",
 	}
 	placement := "- Pair each necessary Govna label with its plain-language meaning at first use in a document.\n\n" +
@@ -1558,7 +1550,6 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Record added, removed, and net AGENTS.md line and rule-shaped-bullet counts in the closure-audit working record.",
 		"Report a clean checklist in one line.",
 		"Pair each necessary Govna label with its plain-language meaning at first use in a document.",
-		"Exempt chat bullets from the complete-sentence limit.",
 		"Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits outside `### Agent Release`.",
 		"Paste the literal output in a code block when the Director asks to see a file or command output.",
 		"Add no attribution trailer to a drafted or agent-run commit or release message.",
@@ -1574,7 +1565,7 @@ var stateEachRuleOnceRules = map[string][]string{
 	"govna/roles.md": {
 		"Verify changed scope, behavior, content, claims, references, structure, terminology, and tests against governing contracts.",
 		"State why an unexercised acceptance test was only reasoned about when its labels do not explain it.",
-		"Write `None` on the heading line of a self-review section with no findings.",
+		"Omit a self-review section that has no items.",
 		"Check that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",
 		"Do not set product vision.",
 		"Do not set backlog priority.",
@@ -1761,6 +1752,77 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 					}
 					if secondAction.MatchString(rule) {
 						t.Errorf("%s rule contains a second action: %s", path, rule)
+					}
+				}
+			}
+		})
+	}
+}
+
+// shorterReportRules lists every rule that the shorter-report change adds or
+// rewrites, keyed by the rendered file that owns it.
+var shorterReportRules = map[string][]string{
+	"AGENTS.md": {
+		"Report a clean Ratify as its outcome sentence and the `Awaiting` line.",
+		"Add only new findings, corrections, and residual risks to that report.",
+		"Keep completions terse with flat bullets and a final `Awaiting <specific Director-initiated next>.` line.",
+		"Summarize the settled AC scope in at most one line of an Implement completion report.",
+		"Report every change that differs from or adds to the settled AC.",
+		"Include the three-part self-review structure (Verified / Red-teamed / Not checked) defined in `govna/roles.md` in every substantial completion report except a clean Ratify report.",
+		"Record each effective-scope path, triggering in-scope change, and eligibility rule in the closure-audit working record.",
+		"Name each effective-scope path in one line of the applicable Implement or Ratify completion report.",
+	},
+	"govna/roles.md": {
+		"Report each of `Verified`, `Red-teamed`, and `Not checked` that has items as a distinct completion section.",
+		"Omit a self-review section that has no items.",
+	},
+}
+
+// shorterReportRetired lists wording the shorter-report change deletes from
+// every rendered governance file.
+var shorterReportRetired = []string{
+	"Keep each sentence that tells the reader to act to 20 words or fewer.",
+	"Keep every other sentence to 25 words or fewer.",
+	"Keep each paragraph to six sentences or fewer.",
+	"Give one instruction per sentence.",
+	"Start each warning with the command or the condition.",
+	"Keep each noun cluster to three words or fewer.",
+	"Write complete sentences without dropping articles or verbs.",
+	"Exempt chat bullets from the complete-sentence limit.",
+	"Write `None` on the heading line of a self-review section with no findings.",
+	"Keep completions terse with changed items,",
+	"in the applicable Implement or Ratify completion report.\n- Record the same evidence in the closure-audit record when applicable.",
+	"in every substantial completion report, even when the default is terse.",
+}
+
+func TestShorterReportRulesFollowInstructionStyle(t *testing.T) {
+	for _, p := range dedupProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for path, list := range shorterReportRules {
+				content := fileText(t, files, path)
+				for _, rule := range list {
+					if count := countRuleInstruction(content, rule); count != 1 {
+						t.Errorf("%s rule count=%d, want 1: %s", path, count, rule)
+					}
+					if !focusedImperativeStarter(rule) {
+						t.Errorf("%s rule lacks an imperative starter: %s", path, rule)
+					}
+					if secondAction.MatchString(rule) {
+						t.Errorf("%s rule contains a second action: %s", path, rule)
+					}
+				}
+			}
+			for _, file := range files {
+				if file.Path != "AGENTS.md" && !strings.HasPrefix(file.Path, "govna/") {
+					continue
+				}
+				for _, retired := range shorterReportRetired {
+					if strings.Contains(string(file.Content), retired) {
+						t.Errorf("%s retains deleted wording: %s", file.Path, retired)
 					}
 				}
 			}

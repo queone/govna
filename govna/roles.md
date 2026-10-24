@@ -33,11 +33,11 @@ This file defines Operator and Director ownership. `AGENTS.md` is authoritative.
 - Run each acceptance test in the active AC when its current disposition is unavailable.
 - State why an unexercised acceptance test was only reasoned about when its labels do not explain it.
 
-- Report `Verified`, `Red-teamed`, and `Not checked` as distinct completion sections.
+- Report each of `Verified`, `Red-teamed`, and `Not checked` that has items as a distinct completion section.
 - Keep each independently useful self-review item distinct.
 - Place a sole self-review item on its heading line.
 - Use terse flat bullets for multiple self-review items.
-- Write `None` on the heading line of a self-review section with no findings.
+- Omit a self-review section that has no items.
 - Treat implementation without self-review evidence as incomplete.
 
 ### Acceptance criteria (AC) handling
