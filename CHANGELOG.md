@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.45.5 | Plan IE12 adds a daily version check to govna |
 | 0.45.4 | Plan IE11 adopts mud's history.md as a canon feature |
 | 0.45.3 | Go build lists files go fix rewrote; canon v0.81.2 |
 | 0.45.2 | Prior-canon upgrade audit test covers Rust, Swift, and Terraform too |
