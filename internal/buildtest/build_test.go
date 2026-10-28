@@ -444,7 +444,13 @@ env)
 mod)
   [ "$2" = tidy ]
   ;;
-fmt|fix|vet)
+fmt|vet)
+  ;;
+fix)
+  if [ "$2" = -diff ] && [ -n "${FAKE_FIX_FILE:-}" ]; then
+    printf -- '--- %s (old)\n+++ %s (new)\n@@ -1 +1 @@\n-old\n+new\n' "$PWD/$FAKE_FIX_FILE" "$PWD/$FAKE_FIX_FILE"
+    exit 1
+  fi
   ;;
 test)
   cover=''
@@ -598,6 +604,12 @@ esac
 		if !strings.Contains(traceBody, validation) {
 			t.Fatalf("full build trace omits repository-wide validation %q:\n%s", validation, traceBody)
 		}
+	}
+	if previewAt, fixAt := strings.Index(traceBody, "fix -diff ./...\n"), strings.Index(traceBody, "fix ./...\n"); previewAt < 0 || previewAt > fixAt {
+		t.Fatalf("full build did not preview go fix changes before applying them:\n%s", traceBody)
+	}
+	if !strings.Contains(output, "==> Automatically fix code for API/language changes\n    No fixes applied.\n") {
+		t.Fatalf("rendered build without go fix changes omits the no-fix report:\n%s", output)
 	}
 	if got := utilityBuildTargets(traceBody); strings.Join(got, ",") != "./cmd/alpha,./cmd/widget,./cmd/zeta" {
 		t.Fatalf("full-build utility order=%v trace:\n%s", got, traceBody)
@@ -801,6 +813,17 @@ esac
 	}
 	assertInstalledUtilitiesUnchanged(t, gopath, installedBeforeFailures)
 	assertNoGoBuildArtifacts(t, tmpRoot, gopath)
+
+	fixed := exec.Command("/bin/bash", "./build.sh")
+	fixed.Dir = dir
+	fixed.Env = append(append([]string{}, cmd.Env...), "FAKE_FIX_FILE=internal/domain/domain.go")
+	fixedOut, fixedErr := fixed.CombinedOutput()
+	if fixedErr != nil {
+		t.Fatalf("rendered build with go fix changes: %v:\n%s", fixedErr, fixedOut)
+	}
+	if !strings.Contains(string(fixedOut), "==> Automatically fix code for API/language changes\n    Fixed files:\n    internal/domain/domain.go\n") || strings.Contains(string(fixedOut), "No fixes applied.") {
+		t.Fatalf("rendered build did not list the files go fix changed:\n%s", fixedOut)
+	}
 }
 
 func assertInstalledUtilitiesUnchanged(t *testing.T, gopath string, expected map[string]string) {

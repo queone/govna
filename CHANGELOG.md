@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.45.3 | Go build lists files go fix rewrote; canon v0.81.2 |
 | 0.45.2 | Prior-canon upgrade audit test covers Rust, Swift, and Terraform too |
 | 0.45.1 | AC67 Phase actions and rel skip the explicit-wording rule; canon v0.81.1 |
 | 0.45.0 | AC66 Shorter completion reports and a looser chat style; canon v0.81.0 |
