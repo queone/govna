@@ -679,7 +679,7 @@ func TestScopedPlainLanguageReplacements(t *testing.T) {
 		{"cmd/govna/main.go", "drift scan an adopted repo against govna canon", "check a repository with Govna for updates and local changes"},
 		{"cmd/govna/main.go", "emit cleanup AC for removing govna canon", "write a reviewable AC for removing Govna files"},
 		{"cmd/govna/main.go", "render flavor-specific canon files into a target directory", "write the selected built-in Govna files to a directory"},
-		{"cmd/govna/main.go", "print binary and embedded canon versions", "print executable and embedded governance-file versions"},
+		{"cmd/govna/main.go", "print binary and embedded canon versions", "print versions and whether a newer release exists"},
 		{"internal/help/help.go", "print binary version", "print executable version"},
 		{"cmd/govna/main.go", "govna binary:", "govna v%s\\nEmbedded governance-file version"},
 		{"cmd/govna/main.go", "embedded canon:", "Embedded governance-file version (canon version):"},
@@ -1855,7 +1855,7 @@ var sessionEntryAuditRules = []string{
 
 // sessionEntryAuditRationale is the checkpoint paragraph that explains the
 // session-entry audit suggestion.
-const sessionEntryAuditRationale = "Right after the checkpoint, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt` and suggests `govna audit` when the installed canon is newer. Session entry is when a stale repository matters most, because every later rule comes from the adopted canon. The check reads two local values, so it stays fast and works offline. The question waits until the end of the response, so it never blocks the requested work. `govna version` runs the installed govna, not a repository command, so the explicit-wording rule for repository commands does not apply to it."
+const sessionEntryAuditRationale = "Right after the checkpoint, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt` and suggests `govna audit` when the installed canon is newer. Session entry is when a stale repository matters most, because every later rule comes from the adopted canon. The comparison reads two local values, and the release check behind `govna version` runs at most once a day with a two-second limit, so session entry stays fast. The question waits until the end of the response, so it never blocks the requested work. `govna version` runs the installed govna, not a repository command, so the explicit-wording rule for repository commands does not apply to it."
 
 func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
 	placement := "- State \"Govna contract loaded.\" before the first substantive govna-governed action of a session, and only after internalizing AGENTS.md.\n- " +
@@ -1888,6 +1888,9 @@ func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
 		checkpoint, _, _ = strings.Cut(checkpoint, "\n## ")
 		if !strings.Contains(checkpoint, "\n"+sessionEntryAuditRationale+"\n") {
 			t.Error("checkpoint section omits the session-entry audit rationale")
+		}
+		if strings.Contains(rationale, "works offline") {
+			t.Error("rationale still says the session-entry check works offline")
 		}
 	}
 	for _, p := range dedupProfiles() {

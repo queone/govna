@@ -2,14 +2,17 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/queone/govna/internal/repository"
+	"github.com/queone/govna/internal/update"
 )
 
 // Stub the Claude Code version probe so no test runs the real program.
@@ -17,21 +20,40 @@ func init() {
 	repository.AgentVersionHook = func() ([]byte, error) { return []byte("2.1.277 (Claude Code)"), nil }
 }
 
+// stubUpdate stands in for the update check so no test asks the module proxy.
+func stubUpdate() (update.Result, error) {
+	return update.Result{Current: "v" + programVersion, Skipped: "test stub"}, nil
+}
+
 func plainEnvironment() environment {
-	return environment{lookupEnv: func(string) (string, bool) { return "", false }}
+	return environment{lookupEnv: func(string) (string, bool) { return "", false }, checkUpdate: stubUpdate}
 }
 
 func mapEnvironment(stdoutTerminal, stderrTerminal bool, values map[string]string) environment {
 	return environment{stdoutTerminal: stdoutTerminal, stderrTerminal: stderrTerminal, lookupEnv: func(key string) (string, bool) {
 		value, ok := values[key]
 		return value, ok
-	}}
+	}, checkUpdate: stubUpdate}
 }
 
 func execute(args ...string) (string, string, int) {
+	return executeIn(plainEnvironment(), args...)
+}
+
+func executeIn(env environment, args ...string) (string, string, int) {
 	var stdout, stderr bytes.Buffer
-	code := run(args, &stdout, &stderr, plainEnvironment())
+	code := run(args, &stdout, &stderr, env)
 	return stdout.String(), stderr.String(), code
+}
+
+// noUpdateEnvironment fails the test when a command runs the update check.
+func noUpdateEnvironment(t *testing.T) environment {
+	env := plainEnvironment()
+	env.checkUpdate = func() (update.Result, error) {
+		t.Error("command ran the update check")
+		return update.Result{}, nil
+	}
+	return env
 }
 
 func pageHeader() string {
@@ -48,7 +70,7 @@ func topLevelPage() string {
 		"  audit    check a repository with Govna for updates and local changes\n" +
 		"  rm       write a reviewable AC for removing Govna files\n" +
 		"  render   write the selected built-in Govna files to a directory\n" +
-		"  version  print executable and embedded governance-file versions\n" +
+		"  version  print versions and whether a newer release exists\n" +
 		"  help     show this help\n" +
 		"\n" +
 		"  Run 'govna COMMAND -h' for command-specific options.\n" +
@@ -61,7 +83,7 @@ func topLevelPage() string {
 func TestVersionAliases(t *testing.T) {
 	for _, alias := range []string{"-v", "--version", "ver", "v"} {
 		t.Run(alias, func(t *testing.T) {
-			stdout, stderr, code := execute(alias)
+			stdout, stderr, code := executeIn(noUpdateEnvironment(t), alias)
 			assertResult(t, stdout, stderr, code, fmt.Sprintf("govna v%s\n", programVersion), "", 0)
 		})
 	}
@@ -71,7 +93,7 @@ func TestCommandVersionFlags(t *testing.T) {
 	for _, command := range []string{"apply", "audit", "rm", "render"} {
 		for _, flag := range []string{"-v", "--version"} {
 			t.Run(command+" "+flag, func(t *testing.T) {
-				stdout, stderr, code := execute(command, flag)
+				stdout, stderr, code := executeIn(noUpdateEnvironment(t), command, flag)
 				assertResult(t, stdout, stderr, code, fmt.Sprintf("govna v%s\n", programVersion), "", 0)
 			})
 		}
@@ -80,7 +102,7 @@ func TestCommandVersionFlags(t *testing.T) {
 
 func TestDetailedVersion(t *testing.T) {
 	stdout, stderr, code := execute("version")
-	assertResult(t, stdout, stderr, code, fmt.Sprintf("govna v%s\nEmbedded governance-file version (canon version): v%s\n", programVersion, canonVersion), "", 0)
+	assertResult(t, stdout, stderr, code, fmt.Sprintf("govna v%s\nEmbedded governance-file version (canon version): v%s\nupdate: skipped (test stub)\n", programVersion, canonVersion), "", 0)
 
 	stdout, stderr, code = execute("version", "extra", "ignored")
 	assertResult(t, stdout, stderr, code, "", "unexpected argument for version: extra\nUsage: govna version\n", 2)
@@ -235,7 +257,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.82.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.83.0.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -245,7 +267,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.82.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.83.0.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}
@@ -333,5 +355,38 @@ func assertResult(t *testing.T, stdout, stderr string, code int, wantStdout, wan
 	t.Helper()
 	if stdout != wantStdout || stderr != wantStderr || code != wantCode {
 		t.Fatalf("result mismatch\nstdout: %q\nwant:   %q\nstderr: %q\nwant:   %q\ncode: %d, want %d", stdout, wantStdout, stderr, wantStderr, code, wantCode)
+	}
+}
+
+func TestDetailedVersionUpdateLine(t *testing.T) {
+	checked := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	stamp := checked.Local().Format(time.DateTime)
+	current := "v" + programVersion
+	install := "run go install github.com/queone/govna/cmd/govna@v99.0.0"
+	cases := []struct {
+		name   string
+		result update.Result
+		err    error
+		color  bool
+		want   string
+	}{
+		{"available", update.Result{Current: current, Latest: "v99.0.0", Available: true, CheckedAt: checked}, nil, false, "v99.0.0 available; " + install},
+		{"available in color", update.Result{Current: current, Latest: "v99.0.0", Available: true, CheckedAt: checked}, nil, true, "\x1b[38;5;220mv99.0.0 available; " + install + "\x1b[0m"},
+		{"current", update.Result{Current: current, Latest: current, CheckedAt: checked}, nil, true, "none (" + current + " is the latest, checked " + stamp + ")"},
+		{"latest is not a release", update.Result{Current: current, CheckedAt: checked}, nil, false, "none (checked " + stamp + ")"},
+		{"skipped", update.Result{Current: current, Skipped: "NO_UPDATE_CHECK is set"}, nil, false, "skipped (NO_UPDATE_CHECK is set)"},
+		{"failed", update.Result{Current: current}, errors.New("check for update of github.com/queone/govna: proxy answered 500"), false, "unknown (check for update of github.com/queone/govna: proxy answered 500)"},
+		{"joined errors", update.Result{Current: current}, errors.Join(errors.New("check for update: offline"), errors.New("write update cache: read-only")), false, "unknown (check for update: offline; write update cache: read-only)"},
+		{"recent failure with nothing cached", update.Result{Current: current, FromCache: true, Skipped: update.SkippedRecentFailure}, nil, false, "unknown (recent check failed)"},
+		{"recent failure with a cached release", update.Result{Current: current, Latest: "v99.0.0", Available: true, CheckedAt: checked, FromCache: true, Skipped: update.SkippedRecentFailure}, nil, false, "v99.0.0 available; " + install},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := mapEnvironment(tc.color, false, map[string]string{"TERM": "xterm-256color"})
+			env.checkUpdate = func() (update.Result, error) { return tc.result, tc.err }
+			stdout, stderr, code := executeIn(env, "version")
+			want := fmt.Sprintf("govna v%s\nEmbedded governance-file version (canon version): v%s\nupdate: %s\n", programVersion, canonVersion, tc.want)
+			assertResult(t, stdout, stderr, code, want, "", 0)
+		})
 	}
 }

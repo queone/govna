@@ -4,25 +4,39 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/queone/govna/internal/apply"
 	"github.com/queone/govna/internal/audit"
 	"github.com/queone/govna/internal/help"
 	"github.com/queone/govna/internal/remove"
 	"github.com/queone/govna/internal/render"
+	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.46.0"
-const canonVersion = "0.82.0"
+const programVersion = "0.47.0"
+const canonVersion = "0.83.0"
+
+// modulePath is the module the update check asks the proxy about, and
+// installPath is the package its upgrade command installs.
+const (
+	modulePath  = "github.com/queone/govna"
+	installPath = modulePath + "/cmd/govna"
+)
+
+// availableSequence highlights an available update on a color terminal.
+const availableSequence = "\x1b[38;5;220m"
 
 type environment struct {
 	stdoutTerminal bool
 	stderrTerminal bool
 	lookupEnv      func(string) (string, bool)
+	checkUpdate    func() (update.Result, error)
 }
 
 func main() {
-	env := environment{stdoutTerminal: isTerminal(os.Stdout), stderrTerminal: isTerminal(os.Stderr), lookupEnv: os.LookupEnv}
+	env := environment{stdoutTerminal: isTerminal(os.Stdout), stderrTerminal: isTerminal(os.Stderr), lookupEnv: os.LookupEnv, checkUpdate: checkUpdate}
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, env))
 }
 
@@ -47,6 +61,8 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 			return 2
 		}
 		fmt.Fprintf(stdout, "govna v%s\nEmbedded governance-file version (canon version): v%s\n", programVersion, canonVersion)
+		result, err := env.checkUpdate()
+		fmt.Fprintf(stdout, "update: %s\n", updateStatus(result, err, env.stdoutColor()))
 		return 0
 	case "-h", "--help", "-?", "help", "h":
 		fmt.Fprint(stdout, topPage().Render(env.stdoutColor()))
@@ -98,6 +114,42 @@ func run(args []string, stdout, stderr io.Writer, env environment) int {
 	}
 }
 
+// checkUpdate asks the module proxy, at most once a day, whether a newer govna
+// release exists.
+func checkUpdate() (update.Result, error) {
+	current := "v" + programVersion
+	cacheFile, err := update.CacheFile("govna")
+	if err != nil {
+		return update.Result{Current: current}, err
+	}
+	return update.Check(update.Options{Module: modulePath, Current: current, CacheFile: cacheFile})
+}
+
+// updateStatus renders the value of the version command's update line. An
+// available release is highlighted when color is enabled, and an error stays
+// on one line.
+func updateStatus(r update.Result, err error, color bool) string {
+	checked := r.CheckedAt.Local().Format(time.DateTime)
+	switch {
+	case err != nil:
+		return "unknown (" + strings.ReplaceAll(err.Error(), "\n", "; ") + ")"
+	case r.Skipped == update.SkippedRecentFailure && r.Latest == "":
+		return "unknown (" + r.Skipped + ")"
+	case r.Skipped != "" && r.Skipped != update.SkippedRecentFailure:
+		return "skipped (" + r.Skipped + ")"
+	case r.Available:
+		notice := fmt.Sprintf("%s available; run go install %s@%s", r.Latest, installPath, r.Latest)
+		if color {
+			return availableSequence + notice + "\x1b[0m"
+		}
+		return notice
+	case r.Latest == "":
+		return "none (checked " + checked + ")"
+	default:
+		return fmt.Sprintf("none (%s is the latest, checked %s)", r.Latest, checked)
+	}
+}
+
 func isHelp(arg string) bool {
 	return arg == "-h" || arg == "--help" || arg == "-?"
 }
@@ -135,7 +187,7 @@ func topPage() help.Page {
 			{Form: "audit", Meaning: "check a repository with Govna for updates and local changes"},
 			{Form: "rm", Meaning: "write a reviewable AC for removing Govna files"},
 			{Form: "render", Meaning: "write the selected built-in Govna files to a directory"},
-			{Form: "version", Meaning: "print executable and embedded governance-file versions"},
+			{Form: "version", Meaning: "print versions and whether a newer release exists"},
 			{Form: "help", Meaning: "show this help"},
 		}, Note: "Run 'govna COMMAND -h' for command-specific options."},
 	)

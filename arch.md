@@ -17,7 +17,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 
 ## Major Components
 
-- `cmd/govna`: accepts commands and prints help, versions, colored terminal text, and command results.
+- `cmd/govna`: accepts commands and prints help, versions, the `govna version` update line, colored terminal text, and command results.
 - `internal/help`: renders every help page in the shared layout: three header lines, capitalized headings, rows aligned per section, the appended version and help rows, and single-sequence color only when the written stream supports it.
 - `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, and creates deterministic baselines.
 - `internal/render`: writes a selected file set to a directory after resolving and validating command options.
@@ -27,6 +27,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 - `internal/remove`: determines which files can be deleted, must be kept, or need a Director choice without following symlinks or deleting content.
 - `internal/buildtest`: checks product tooling in isolated repositories with stable expected output.
 - `internal/emission`: chooses the next AC number, reuses an unedited AC for the same canon version, and rejects edited generated bodies.
+- `internal/update`: asks the Go module proxy at most once a day whether a newer govna release exists, keeps the answer in a private cache file, and never installs anything.
 - Governance and release scaffolding.
 
 ## Core Files

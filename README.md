@@ -169,7 +169,7 @@ Commands
   audit    check a repository with Govna for updates and local changes
   rm       write a reviewable AC for removing Govna files
   render   write the selected built-in Govna files to a directory
-  version  print executable and embedded governance-file versions
+  version  print versions and whether a newer release exists
   help     show this help
 
   Run 'govna COMMAND -h' for command-specific options.
@@ -255,13 +255,16 @@ Render writes embedded Govna files only and creates no adoption record. The targ
 
 ### `version`
 
-Inspect both version axes. The executable version identifies the installed program; the canon version identifies its embedded governance files:
+Inspect both version axes and check for a newer release. The executable version identifies the installed program; the canon version identifies its embedded governance files:
 
 ```text
 $ govna version
 govna v<executable-version>
 Embedded governance-file version (canon version): v<canon-version>
+update: v<newer-version> available; run go install github.com/queone/govna/cmd/govna@v<newer-version>
 ```
+
+The `update:` line asks the Go module proxy for the latest govna release at most once every 24 hours, from the first `GOPROXY` entry or `https://proxy.golang.org`, and waits two seconds at most. It keeps the answer in `govna/update-check` under the user cache directory (`~/Library/Caches` on macOS, `~/.cache` on Linux) and retries a failed check no sooner than one hour later. It reads `none (...)` when the installed govna is current, `skipped (...)` when the check did not run, and `unknown (...)` when the check failed. Set `NO_UPDATE_CHECK` to any non-empty value to skip the check. The check never changes the exit code and never installs anything, and no other command, including `govna -v`, makes a network request.
 
 ## Canon Model
 
