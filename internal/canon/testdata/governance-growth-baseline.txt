@@ -6,7 +6,7 @@ overlays/code/files/README.md.tmpl	23	0
 overlays/code/files/arch.md.tmpl	49	15
 overlays/code/files/govna/README.md.tmpl	16	4
 overlays/code/files/govna/ac-template.md.tmpl	69	10
-overlays/code/files/govna/audit.md.tmpl	289	116
+overlays/code/files/govna/audit.md.tmpl	290	116
 overlays/code/files/govna/build-release.md.tmpl	130	37
 overlays/code/files/govna/canon-cycle.md.tmpl	116	60
 overlays/code/files/govna/code-stacks.md.tmpl	122	102
@@ -29,7 +29,7 @@ overlays/doc/files/README.md.tmpl	23	0
 overlays/doc/files/build.sh.tmpl	567	0
 overlays/doc/files/govna/README.md.tmpl	15	5
 overlays/doc/files/govna/ac-template.md.tmpl	69	10
-overlays/doc/files/govna/audit.md.tmpl	289	116
+overlays/doc/files/govna/audit.md.tmpl	290	116
 overlays/doc/files/govna/canon-cycle.md.tmpl	116	60
 overlays/doc/files/govna/editing-cycle.md.tmpl	53	31
 overlays/doc/files/govna/editing-guidelines.md.tmpl	48	26

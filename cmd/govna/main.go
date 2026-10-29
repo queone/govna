@@ -15,8 +15,8 @@ import (
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.47.0"
-const canonVersion = "0.83.0"
+const programVersion = "0.47.1"
+const canonVersion = "0.83.1"
 
 // modulePath is the module the update check asks the proxy about, and
 // installPath is the package its upgrade command installs.
@@ -126,8 +126,9 @@ func checkUpdate() (update.Result, error) {
 }
 
 // updateStatus renders the value of the version command's update line. An
-// available release is highlighted when color is enabled, and an error stays
-// on one line.
+// available release is highlighted when color is enabled, an error stays on
+// one line, and only a release equal to the running version is named as the
+// latest.
 func updateStatus(r update.Result, err error, color bool) string {
 	checked := r.CheckedAt.Local().Format(time.DateTime)
 	switch {
@@ -143,7 +144,7 @@ func updateStatus(r update.Result, err error, color bool) string {
 			return availableSequence + notice + "\x1b[0m"
 		}
 		return notice
-	case r.Latest == "":
+	case r.Latest != r.Current:
 		return "none (checked " + checked + ")"
 	default:
 		return fmt.Sprintf("none (%s is the latest, checked %s)", r.Latest, checked)

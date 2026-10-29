@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.47.1 | AC70 audit.md explains force-sync; fix stale update line; canon v0.83.1 |
 | 0.47.0 | AC69 govna version reports when a newer govna release exists; canon v0.83.0 |
 | 0.46.0 | AC68 Agent suggests govna audit when installed canon is newer; canon v0.82.0 |
 | 0.45.5 | Plan IE12 adds a daily version check to govna |

@@ -257,7 +257,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.83.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.83.1.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -267,7 +267,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.83.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.83.1.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}
@@ -374,6 +374,7 @@ func TestDetailedVersionUpdateLine(t *testing.T) {
 		{"available in color", update.Result{Current: current, Latest: "v99.0.0", Available: true, CheckedAt: checked}, nil, true, "\x1b[38;5;220mv99.0.0 available; " + install + "\x1b[0m"},
 		{"current", update.Result{Current: current, Latest: current, CheckedAt: checked}, nil, true, "none (" + current + " is the latest, checked " + stamp + ")"},
 		{"latest is not a release", update.Result{Current: current, CheckedAt: checked}, nil, false, "none (checked " + stamp + ")"},
+		{"proxy lags the running version", update.Result{Current: current, Latest: "v0.0.1", CheckedAt: checked}, nil, false, "none (checked " + stamp + ")"},
 		{"skipped", update.Result{Current: current, Skipped: "NO_UPDATE_CHECK is set"}, nil, false, "skipped (NO_UPDATE_CHECK is set)"},
 		{"failed", update.Result{Current: current}, errors.New("check for update of github.com/queone/govna: proxy answered 500"), false, "unknown (check for update of github.com/queone/govna: proxy answered 500)"},
 		{"joined errors", update.Result{Current: current}, errors.Join(errors.New("check for update: offline"), errors.New("write update cache: read-only")), false, "unknown (check for update: offline; write update cache: read-only)"},

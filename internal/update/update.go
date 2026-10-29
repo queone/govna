@@ -61,6 +61,7 @@ type Result struct {
 
 type cache struct {
 	Module    string    `json:"module"`
+	Current   string    `json:"current"`
 	Latest    string    `json:"latest"`
 	CheckedAt time.Time `json:"checked_at"`
 	FailedAt  time.Time `json:"failed_at"`
@@ -227,7 +228,9 @@ func fetch(o Options, base string) (string, error) {
 // Check reports whether a newer release of o.Module than o.Current exists.
 // Within o.Interval of the last successful check it answers from the cache
 // with no network request. Within one hour of a failed check it skips the
-// request and returns the last good result from the cache.
+// request and returns the last good result from the cache. A cache written
+// by another running version is ignored, so the first check after an upgrade
+// asks the proxy again.
 func Check(o Options) (Result, error) {
 	if o.LookupEnv == nil {
 		o.LookupEnv = os.LookupEnv
@@ -264,6 +267,11 @@ func Check(o Options) (Result, error) {
 	now := o.Now()
 
 	c := readCache(o.CacheFile, o.Module, now)
+	if c.Current != o.Current {
+		// A cache written by another running version, such as the one before
+		// an upgrade, answers nothing for this one.
+		c = cache{}
+	}
 	cached := Result{
 		Current:   o.Current,
 		Latest:    c.Latest,
@@ -282,6 +290,7 @@ func Check(o Options) (Result, error) {
 	v, err := fetch(o, base)
 	if err != nil {
 		c.Module = o.Module
+		c.Current = o.Current
 		c.FailedAt = now
 		err = fmt.Errorf("check for update of %s: %w", o.Module, err)
 		if werr := writeCache(o.CacheFile, c); werr != nil {
@@ -295,7 +304,7 @@ func Check(o Options) (Result, error) {
 	r.Latest = v
 	r.Available = Newer(v, o.Current)
 	r.CheckedAt = now
-	if err := writeCache(o.CacheFile, cache{Module: o.Module, Latest: v, CheckedAt: now}); err != nil {
+	if err := writeCache(o.CacheFile, cache{Module: o.Module, Current: o.Current, Latest: v, CheckedAt: now}); err != nil {
 		return r, fmt.Errorf("write update cache: %w", err)
 	}
 	return r, nil

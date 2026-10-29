@@ -264,7 +264,7 @@ Embedded governance-file version (canon version): v<canon-version>
 update: v<newer-version> available; run go install github.com/queone/govna/cmd/govna@v<newer-version>
 ```
 
-The `update:` line asks the Go module proxy for the latest govna release at most once every 24 hours, from the first `GOPROXY` entry or `https://proxy.golang.org`, and waits two seconds at most. It keeps the answer in `govna/update-check` under the user cache directory (`~/Library/Caches` on macOS, `~/.cache` on Linux) and retries a failed check no sooner than one hour later. It reads `none (...)` when the installed govna is current, `skipped (...)` when the check did not run, and `unknown (...)` when the check failed. Set `NO_UPDATE_CHECK` to any non-empty value to skip the check. The check never changes the exit code and never installs anything, and no other command, including `govna -v`, makes a network request.
+The `update:` line asks the Go module proxy for the latest govna release at most once every 24 hours, from the first `GOPROXY` entry or `https://proxy.golang.org`, and waits two seconds at most. It keeps the answer in `govna/update-check` under the user cache directory (`~/Library/Caches` on macOS, `~/.cache` on Linux) and retries a failed check no sooner than one hour later. The first run after an upgrade asks the proxy again. It reads `none (...)` when no newer release exists, naming the latest release only when it equals the installed version, `skipped (...)` when the check did not run, and `unknown (...)` when the check failed. Set `NO_UPDATE_CHECK` to any non-empty value to skip the check. The check never changes the exit code and never installs anything, and no other command, including `govna -v`, makes a network request.
 
 ## Canon Model
 

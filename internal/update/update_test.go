@@ -278,3 +278,52 @@ func TestCheckUsesFirstGOPROXYEntry(t *testing.T) {
 		t.Fatalf("requests=%d result=%+v, want the first GOPROXY entry", p.requests.Load(), r)
 	}
 }
+
+func TestCheckRefreshesAfterVersionChange(t *testing.T) {
+	reply := atomic.Value{}
+	reply.Store("v0.46.0")
+	p := newProxy(t, func(w http.ResponseWriter) { latest(reply.Load().(string))(w) })
+	now := start
+	o := options(t, p, &now)
+	if _, err := Check(o); err != nil {
+		t.Fatal(err)
+	}
+	reply.Store("v0.47.0")
+	now = start.Add(time.Hour)
+	o.Current = "v0.47.0"
+	r, err := Check(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.requests.Load() != 2 || r.FromCache || r.Latest != "v0.47.0" {
+		t.Fatalf("requests=%d result=%+v, want a fresh request after the version change", p.requests.Load(), r)
+	}
+	now = start.Add(2 * time.Hour)
+	if r, err = Check(o); err != nil || p.requests.Load() != 2 || !r.FromCache {
+		t.Fatalf("requests=%d result=%+v err=%v, want the refreshed cache reused", p.requests.Load(), r, err)
+	}
+}
+
+func TestCheckIgnoresFailureFromAnotherVersion(t *testing.T) {
+	fail := atomic.Bool{}
+	fail.Store(true)
+	p := newProxy(t, func(w http.ResponseWriter) {
+		if fail.Load() {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		latest("v0.47.0")(w)
+	})
+	now := start
+	o := options(t, p, &now)
+	if _, err := Check(o); err == nil {
+		t.Fatal("proxy failure was not reported")
+	}
+	fail.Store(false)
+	now = start.Add(time.Minute)
+	o.Current = "v0.47.0"
+	r, err := Check(o)
+	if err != nil || p.requests.Load() != 2 || r.Skipped != "" || r.Latest != "v0.47.0" {
+		t.Fatalf("requests=%d result=%+v err=%v, want a fresh request for the new version", p.requests.Load(), r, err)
+	}
+}
