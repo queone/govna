@@ -1842,3 +1842,64 @@ func TestShorterReportRulesFollowInstructionStyle(t *testing.T) {
 		})
 	}
 }
+
+// sessionEntryAuditRules lists, in order, the Session Entry rules that suggest
+// govna audit when the installed govna ships newer canon.
+var sessionEntryAuditRules = []string{
+	"Run `govna version` once per session, right after the \"Govna contract loaded.\" line.",
+	"Compare the canon version it prints with `canon_version` in `govna/metadata.txt`.",
+	"Recommend `govna audit` to the Director when the installed canon version is newer.",
+	"Place that question at the end of the same response, before any final `Awaiting` line.",
+	"Skip the question when `govna` is absent, `govna version` fails, either version is unreadable, or the installed canon version is not newer.",
+}
+
+// sessionEntryAuditRationale is the checkpoint paragraph that explains the
+// session-entry audit suggestion.
+const sessionEntryAuditRationale = "Right after the checkpoint, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt` and suggests `govna audit` when the installed canon is newer. Session entry is when a stale repository matters most, because every later rule comes from the adopted canon. The check reads two local values, so it stays fast and works offline. The question waits until the end of the response, so it never blocks the requested work. `govna version` runs the installed govna, not a repository command, so the explicit-wording rule for repository commands does not apply to it."
+
+func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
+	placement := "- State \"Govna contract loaded.\" before the first substantive govna-governed action of a session, and only after internalizing AGENTS.md.\n- " +
+		strings.Join(sessionEntryAuditRules, "\n- ") + "\n"
+	check := func(t *testing.T, agents, rationale string) {
+		t.Helper()
+		for _, rule := range sessionEntryAuditRules {
+			if count := countRuleInstruction(agents, rule); count != 1 {
+				t.Errorf("AGENTS.md rule count=%d, want 1: %s", count, rule)
+			}
+			if !focusedImperativeStarter(rule) {
+				t.Errorf("AGENTS.md rule lacks an imperative starter: %s", rule)
+			}
+			if secondAction.MatchString(rule) {
+				t.Errorf("AGENTS.md rule contains a second action: %s", rule)
+			}
+		}
+		_, session, ok := strings.Cut(agents, "\n### Session Entry\n")
+		if !ok {
+			t.Fatal("AGENTS.md omits Session Entry")
+		}
+		session, _, _ = strings.Cut(session, "\n### ")
+		if !strings.Contains(session, placement) {
+			t.Error("Session Entry does not list the audit-suggestion rules in order after the Govna contract loaded. rule")
+		}
+		_, checkpoint, ok := strings.Cut(rationale, "\n## The `Govna contract loaded.` Checkpoint\n")
+		if !ok {
+			t.Fatal("rationale omits the Govna contract loaded. checkpoint")
+		}
+		checkpoint, _, _ = strings.Cut(checkpoint, "\n## ")
+		if !strings.Contains(checkpoint, "\n"+sessionEntryAuditRationale+"\n") {
+			t.Error("checkpoint section omits the session-entry audit rationale")
+		}
+	}
+	for _, p := range dedupProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, fileText(t, files, "AGENTS.md"), fileText(t, files, "govna/operator-contract-rationale.md"))
+		})
+	}
+	t.Run("root", func(t *testing.T) {
+		check(t, readSourceForLanguageTest(t, "AGENTS.md"), readSourceForLanguageTest(t, "govna/operator-contract-rationale.md"))
+	})
+}

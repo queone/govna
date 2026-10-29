@@ -50,6 +50,8 @@ Run one of these from `govna-trial`:
 
 The contract makes the agent begin its first substantive reply with the line `Govna contract loaded.` If that line never appears, the rules did not load. `apply` and `audit` print a hint for the two common causes. A Claude Code older than v2.1.277 cannot read `AGENTS.md`; upgrade it with `claude update`. A repository's own `CLAUDE.md` makes Claude Code skip `AGENTS.md`; it can now be deleted once anything you still need has moved into `AGENTS.md`. Anthropic's [`AGENTS.md` documentation](https://code.claude.com/docs/en/memory#agents-md) covers the remaining cases.
 
+After that line, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt` and suggests `govna audit` when the installed canon is newer. Allow `govna version` in the agent's permissions to avoid a permission prompt at the start of each session.
+
 ### 4. Review the adoption, then try one change
 
 Type this into the agent chat, replacing the placeholder with the path `apply` printed:

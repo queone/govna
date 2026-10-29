@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.46.0 | AC68 Agent suggests govna audit when installed canon is newer; canon v0.82.0 |
 | 0.45.5 | Plan IE12 adds a daily version check to govna |
 | 0.45.4 | Plan IE11 adopts mud's history.md as a canon feature |
 | 0.45.3 | Go build lists files go fix rewrote; canon v0.81.2 |
