@@ -1938,7 +1938,7 @@ var releaseHistoryFormatRules = []string{
 }
 
 // releaseHistoryHeader is the paragraph that opens a new history.md.
-const releaseHistoryHeader = "> One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`."
+const releaseHistoryHeader = "> One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product."
 
 // govnaHistoryRule is the govna-only Project Rules line that counts canon
 // changes as product facts.
@@ -1950,7 +1950,7 @@ func TestReleaseHistoryRulesFollowInstructionStyle(t *testing.T) {
 		"- Batch PATCH-level changes.\n" +
 		"- Pin dependencies to explicit versions.\n" +
 		"- Document every reason to stay on an older dependency version.\n\n" +
-		"### Release History\n\n- " + strings.Join(releaseHistoryRules, "\n- ") + "\n\n### Errors\n"
+		"### Release History\n\n- " + strings.Join(releaseHistoryRules, "\n- ") + "\n\n### History Lookup\n"
 	format := "## Release History Format\n\n- " + strings.Join(releaseHistoryFormatRules, "\n- ") + "\n\n" +
 		releaseHistoryHeader + "\n\n## Project Practices\n"
 	checkRules := func(t *testing.T, path, content string, rules []string) {
@@ -2014,6 +2014,73 @@ func TestReleaseHistoryRulesFollowInstructionStyle(t *testing.T) {
 		}
 		if count := countRuleInstruction(projectRules, govnaHistoryRule); count != 1 {
 			t.Errorf("Project Rules govna-only history rule count=%d, want 1", count)
+		}
+	})
+}
+
+// historyLookupRules lists, in order, the CODE rules that search history.md
+// before AC work.
+var historyLookupRules = []string{
+	"Apply these rules before drafting, auditing, or refining an AC.",
+	"Skip these rules when `history.md` is absent.",
+	"Search `history.md` for the paths, commands, and terms the AC touches.",
+	"Read only the matching sections.",
+}
+
+// settledHistoryRule is the CODE Session Entry rule that keeps recorded
+// history.md decisions settled.
+const settledHistoryRule = "Treat each recorded `history.md` decision as settled until the Director reopens it."
+
+func TestHistoryLookupRulesFollowInstructionStyle(t *testing.T) {
+	group := "- Follow the section format in `govna/build-release.md` `## Release History Format`.\n\n" +
+		"### History Lookup\n\n- " + strings.Join(historyLookupRules, "\n- ") + "\n\n### Errors\n"
+	session := "- Follow an explicit Director workflow override without requiring contract-amendment language.\n- " + settledHistoryRule + "\n"
+	check := func(t *testing.T, agents string) {
+		t.Helper()
+		for _, rule := range append(append([]string{}, historyLookupRules...), settledHistoryRule) {
+			if count := countRuleInstruction(agents, rule); count != 1 {
+				t.Errorf("AGENTS.md rule count=%d, want 1: %s", count, rule)
+			}
+			if !focusedImperativeStarter(rule) {
+				t.Errorf("AGENTS.md rule lacks an imperative starter: %s", rule)
+			}
+			if secondAction.MatchString(rule) {
+				t.Errorf("AGENTS.md rule contains a second action: %s", rule)
+			}
+		}
+		if !strings.Contains(agents, group) {
+			t.Error("AGENTS.md does not carry History Lookup directly after Release History")
+		}
+		_, entry, ok := strings.Cut(agents, "\n### Session Entry\n")
+		if !ok {
+			t.Fatal("AGENTS.md omits Session Entry")
+		}
+		entry, _, _ = strings.Cut(entry, "\n### ")
+		if !strings.Contains(entry, session) {
+			t.Error("Session Entry does not carry the settled-decision rule after the workflow-override rule")
+		}
+	}
+	for _, p := range dedupProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			agents := fileText(t, files, "AGENTS.md")
+			if p.config.Flavor == Doc {
+				if strings.Contains(agents, "### History Lookup") || strings.Contains(agents, settledHistoryRule) {
+					t.Error("DOC AGENTS.md carries the CODE history lookup rules")
+				}
+				return
+			}
+			check(t, agents)
+		})
+	}
+	t.Run("root", func(t *testing.T) {
+		check(t, readSourceForLanguageTest(t, "AGENTS.md"))
+		history := readSourceForLanguageTest(t, "history.md")
+		if !strings.Contains(history, "\n"+strings.TrimPrefix(releaseHistoryHeader, "> ")+"\n") {
+			t.Error("history.md header paragraph does not match the canon header")
 		}
 	})
 }

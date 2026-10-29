@@ -1,4 +1,4 @@
-base/AGENTS.md	607	497
+base/AGENTS.md	615	502
 overlays/code/README.md	28	16
 overlays/code/files/.gitignore.tmpl	18	0
 overlays/code/files/CHANGELOG.md.tmpl	5	0

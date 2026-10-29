@@ -95,6 +95,7 @@ Note: these limits borrow from Simplified Technical English (ASD-STE100), and th
 - Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.
 - Resolve instruction conflicts in this order: user instruction within authorized scope, then AGENTS.md, then referenced govna docs, then model defaults.
 - Follow an explicit Director workflow override without requiring contract-amendment language.
+- Treat each recorded `history.md` decision as settled until the Director reopens it.
 - Stop when a request lacks authorization, scope, or required context.
 - Ask for the missing authorization, scope, or context.
 
@@ -571,6 +572,13 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Record each Director decision and residual risk of the release.
 - Record only the product, its design, and its code in `history.md`.
 - Follow the section format in `govna/build-release.md` `## Release History Format`.
+
+### History Lookup
+
+- Apply these rules before drafting, auditing, or refining an AC.
+- Skip these rules when `history.md` is absent.
+- Search `history.md` for the paths, commands, and terms the AC touches.
+- Read only the matching sections.
 
 ### Errors
 

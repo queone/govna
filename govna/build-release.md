@@ -141,7 +141,7 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Start at the first release after adoption.
 - Skip back-filling earlier releases.
 
-> One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`.
+> One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
 ## Project Practices
 

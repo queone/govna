@@ -560,6 +560,18 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Pin dependencies to explicit versions.
 - Document every reason to stay on an older dependency version.
 
+### Release History
+
+- Apply these rules during Package.
+- Treat a Package request as authorization to write `history.md`.
+- Write one `history.md` section for the release before prep runs.
+- Skip the section when the release has no product, design, or code fact.
+- Create `history.md` from `govna/build-release.md` `## Release History Format` when it is absent.
+- Record what the release added, changed, removed, and deferred, with the reason for each.
+- Record each Director decision and residual risk of the release.
+- Record only the product, its design, and its code in `history.md`.
+- Follow the section format in `govna/build-release.md` `## Release History Format`.
+
 ### Errors
 
 - Wrap user-facing errors with operation context and recovery guidance.
