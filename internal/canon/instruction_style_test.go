@@ -1906,3 +1906,114 @@ func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
 		check(t, readSourceForLanguageTest(t, "AGENTS.md"), readSourceForLanguageTest(t, "govna/operator-contract-rationale.md"))
 	})
 }
+
+// releaseHistoryRules lists, in order, the CODE Package rules that write a
+// history.md section for each release.
+var releaseHistoryRules = []string{
+	"Apply these rules during Package.",
+	"Treat a Package request as authorization to write `history.md`.",
+	"Write one `history.md` section for the release before prep runs.",
+	"Skip the section when the release has no product, design, or code fact.",
+	"Create `history.md` from `govna/build-release.md` `## Release History Format` when it is absent.",
+	"Record what the release added, changed, removed, and deferred, with the reason for each.",
+	"Record each Director decision and residual risk of the release.",
+	"Record only the product, its design, and its code in `history.md`.",
+	"Follow the section format in `govna/build-release.md` `## Release History Format`.",
+}
+
+// releaseHistoryFormatRules lists, in order, the history.md format rules in the
+// CODE build-release document.
+var releaseHistoryFormatRules = []string{
+	"Apply this format to every `history.md` section that Package writes.",
+	"Start a new `history.md` with the heading `# <repository name> History` and the paragraph below.",
+	"Head each release section `## vMAJOR.MINOR.PATCH`, newest release first.",
+	"Order the labels `Added:`, `Changed:`, `Removed:`, `Deferred:`, `Decisions:`, `Risks:`.",
+	"Write each label on its own line, followed by its bullets.",
+	"Omit an empty label.",
+	"Write condensed Simplified Technical English.",
+	"Keep one fact per bullet.",
+	"Keep each bullet to at most 25 words.",
+	"Start at the first release after adoption.",
+	"Skip back-filling earlier releases.",
+}
+
+// releaseHistoryHeader is the paragraph that opens a new history.md.
+const releaseHistoryHeader = "> One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`."
+
+// govnaHistoryRule is the govna-only Project Rules line that counts canon
+// changes as product facts.
+const govnaHistoryRule = "Treat canon changes as product facts in `history.md`."
+
+func TestReleaseHistoryRulesFollowInstructionStyle(t *testing.T) {
+	group := "### Versioning and Dependencies\n\n" +
+		"- Follow semver with PATCH for invisible changes and MINOR for user-visible changes.\n" +
+		"- Batch PATCH-level changes.\n" +
+		"- Pin dependencies to explicit versions.\n" +
+		"- Document every reason to stay on an older dependency version.\n\n" +
+		"### Release History\n\n- " + strings.Join(releaseHistoryRules, "\n- ") + "\n\n### Errors\n"
+	format := "## Release History Format\n\n- " + strings.Join(releaseHistoryFormatRules, "\n- ") + "\n\n" +
+		releaseHistoryHeader + "\n\n## Project Practices\n"
+	checkRules := func(t *testing.T, path, content string, rules []string) {
+		t.Helper()
+		for _, rule := range rules {
+			if count := countRuleInstruction(content, rule); count != 1 {
+				t.Errorf("%s rule count=%d, want 1: %s", path, count, rule)
+			}
+			if !focusedImperativeStarter(rule) {
+				t.Errorf("%s rule lacks an imperative starter: %s", path, rule)
+			}
+			if secondAction.MatchString(rule) {
+				t.Errorf("%s rule contains a second action: %s", path, rule)
+			}
+		}
+	}
+	check := func(t *testing.T, agents, release string) {
+		t.Helper()
+		checkRules(t, "AGENTS.md", agents, releaseHistoryRules)
+		checkRules(t, "govna/build-release.md", release, releaseHistoryFormatRules)
+		if !strings.Contains(agents, group) {
+			t.Error("AGENTS.md does not carry Release History after Versioning and Dependencies")
+		}
+		if !strings.Contains(release, format) {
+			t.Error("govna/build-release.md does not carry the Release History Format section before Project Practices")
+		}
+	}
+	for _, p := range dedupProfiles() {
+		t.Run(p.name, func(t *testing.T) {
+			files, err := Render(p.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			agents := fileText(t, files, "AGENTS.md")
+			if strings.Contains(agents, govnaHistoryRule) {
+				t.Error("rendered AGENTS.md carries the govna-only history rule")
+			}
+			if p.config.Flavor == Doc {
+				for _, file := range files {
+					if file.Path != "AGENTS.md" && file.Path != "govna/release.md" {
+						continue
+					}
+					if strings.Contains(string(file.Content), "history.md") || strings.Contains(string(file.Content), "Release History") {
+						t.Errorf("DOC %s mentions the CODE release history", file.Path)
+					}
+				}
+				return
+			}
+			check(t, agents, fileText(t, files, "govna/build-release.md"))
+			if !strings.Contains(fileText(t, files, "arch.md"), "\n- `history.md`: per-release record of product changes, decisions, and risks, written during Package\n") {
+				t.Error("arch.md does not list history.md under Core Files")
+			}
+		})
+	}
+	t.Run("root", func(t *testing.T) {
+		agents := readSourceForLanguageTest(t, "AGENTS.md")
+		check(t, agents, readSourceForLanguageTest(t, "govna/build-release.md"))
+		_, projectRules, ok := strings.Cut(agents, "\n## Project Rules\n")
+		if !ok {
+			t.Fatal("AGENTS.md omits the Project Rules boundary")
+		}
+		if count := countRuleInstruction(projectRules, govnaHistoryRule); count != 1 {
+			t.Errorf("Project Rules govna-only history rule count=%d, want 1", count)
+		}
+	})
+}
