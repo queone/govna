@@ -2,6 +2,23 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.53.0
+
+Added:
+- `govna apply --child` prints a note that the parent's full build fails until the child's own `./build.sh` passes.
+- The apply-child review AC states that build fact and adds a `### Follow-up` list.
+- The follow-up list says to run the child's build first and to plan follow-up child work as a second AC in the same batch.
+- CODE `AGENTS.md` records a child's own rules in the parent's `## Project Rules` under a `###` heading named for the child.
+
+Changed:
+- When `apply --child` replaces a child `AGENTS.md` that held its own rules, the warning names the `### <name>` heading.
+- In that case the review AC adds a rules-move instruction and a manual check that each rule moved or was dropped on purpose.
+
+Decisions:
+- `apply --child` does not run the child's build, because that is slow and has side effects.
+- A child's rules live under a `###` heading named for the child, so they stay findable and a later drop knows what to review.
+- The rules move stays manual; Govna does not move the replaced rules itself.
+
 ## v0.52.0
 
 Added:

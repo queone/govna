@@ -1,4 +1,4 @@
-base/AGENTS.md	633	517
+base/AGENTS.md	634	518
 child/orphan-AGENTS.md.tmpl	5	1
 child/pointer-AGENTS.md.tmpl	8	4
 overlays/code/README.md	28	16
@@ -12,7 +12,7 @@ overlays/code/files/govna/audit.md.tmpl	317	130
 overlays/code/files/govna/build-release.md.tmpl	167	66
 overlays/code/files/govna/canon-cycle.md.tmpl	116	60
 overlays/code/files/govna/code-stacks.md.tmpl	156	133
-overlays/code/files/govna/development-cycle.md.tmpl	67	42
+overlays/code/files/govna/development-cycle.md.tmpl	69	44
 overlays/code/files/govna/development-guidelines.md.tmpl	113	76
 overlays/code/files/govna/metadata.txt	4	0
 overlays/code/files/govna/operator-contract-rationale.md.tmpl	61	0

@@ -279,6 +279,10 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I84", "Copy <orphan-scratch>/AGENTS.md over each child AGENTS.md under ## In Scope."},
 	{"I85", "Confirm each parent file selected for update exists in the selected CODE render."},
 	{"I86", "Confirm each child file selected for update exists in the child render."},
+	{"I87", "Run ./build.sh in <child> before the parent's next full build."},
+	{"I88", "Plan follow-up child work as a second AC in the same release batch as this AC."},
+	{"I89", "Move the replaced child AGENTS.md rules into this parent's AGENTS.md ## Project Rules under ### <name>."},
+	{"I90", "Verify each rule from the replaced <child>/AGENTS.md is in this parent's ## Project Rules under ### <name> or was dropped on purpose."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -338,10 +342,13 @@ var generatedDynamicInstructions = []struct {
 	{regexp.MustCompile("^Remove the `[^`]+` line from `govna/children\\.txt`\\.$"), "Remove the <child> line from govna/children.txt."},
 	{regexp.MustCompile("^Verify `[^`]+` matches `govna render --orphan`\\.$"), "Verify <path> matches govna render --orphan."},
 	{regexp.MustCompile("^Verify `govna/children\\.txt` no longer lists `[^`]+`\\.$"), "Verify govna/children.txt no longer lists <child>."},
+	{regexp.MustCompile("^Run `\\./build\\.sh` in `[^`]+` before the parent's next full build\\.$"), "Run ./build.sh in <child> before the parent's next full build."},
+	{regexp.MustCompile("^Move the replaced child `AGENTS\\.md` rules into this parent's `AGENTS\\.md` `## Project Rules` under `### [^`]+`\\.$"), "Move the replaced child AGENTS.md rules into this parent's AGENTS.md ## Project Rules under ### <name>."},
+	{regexp.MustCompile("^Verify each rule from the replaced `[^`]+/AGENTS\\.md` is in this parent's `## Project Rules` under `### [^`]+` or was dropped on purpose\\.$"), "Verify each rule from the replaced <child>/AGENTS.md is in this parent's ## Project Rules under ### <name> or was dropped on purpose."},
 }
 
 var generatedProseStarters = func() map[string]bool {
-	words := strings.Fields("Add Adopt Allow Apply Ask Avoid Begin Capture Change Check Choose Classify Compare Complete Confirm Continue Create Define Delete Detect Do Draft Edit Emit End Ensure Extricate Fail Follow Format Infer Install Keep Leave Limit Make Mark Move Omit Pass Place Prefer Preserve Prevent Prohibit Record Refresh Reject Remove Render Replace Require Reserve Resolve Restore Return Reuse Review Route Run Satisfy Scan Set Skip Split Start State Stop Synchronize Treat Update Use Validate Verify Wait Write Implement")
+	words := strings.Fields("Add Adopt Allow Apply Ask Avoid Begin Capture Change Check Choose Classify Compare Complete Confirm Continue Create Define Delete Detect Do Draft Edit Emit End Ensure Extricate Fail Follow Format Infer Install Keep Leave Limit Make Mark Move Omit Pass Place Plan Prefer Preserve Prevent Prohibit Record Refresh Reject Remove Render Replace Require Reserve Resolve Restore Return Reuse Review Route Run Satisfy Scan Set Skip Split Start State Stop Synchronize Treat Update Use Validate Verify Wait Write Implement")
 	starters := make(map[string]bool, len(words))
 	for _, word := range words {
 		starters[word] = true
@@ -350,8 +357,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 86 {
-		t.Fatalf("generated instruction manifest has %d entries, want 86", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 90 {
+		t.Fatalf("generated instruction manifest has %d entries, want 90", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -377,8 +384,8 @@ func TestGeneratedInstructionManifest(t *testing.T) {
 }
 
 func TestGeneratedDynamicInstructionManifestCoverage(t *testing.T) {
-	if len(generatedDynamicInstructions) != 39 {
-		t.Fatalf("dynamic generated instruction normalizers=%d, want 39", len(generatedDynamicInstructions))
+	if len(generatedDynamicInstructions) != 42 {
+		t.Fatalf("dynamic generated instruction normalizers=%d, want 42", len(generatedDynamicInstructions))
 	}
 	manifest := generatedManifestByText(t)
 	seen := map[string]bool{}
@@ -466,7 +473,7 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
 		},
-		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1},
+		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1, "I87": 1, "I88": 1},
 		"internal/remove/testdata/child-removal-golden.md": {"I79": 1, "I80": 1, "I81": 1, "I82": 1, "I83": 1},
 		"internal/audit/testdata/child-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
@@ -998,7 +1005,7 @@ func extractGeneratedInstructions(content string) []string {
 			if instruction == "None." {
 				continue
 			}
-			if section == "### Audit Review" || section == "### Adoption Instructions" || section == "### Removal Instructions" || section == "## Migration findings" || section == "### Routing Decisions" && strings.HasPrefix(line, "   - ") {
+			if section == "### Audit Review" || section == "### Adoption Instructions" || section == "### Removal Instructions" || section == "### Follow-up" || section == "## Migration findings" || section == "### Routing Decisions" && strings.HasPrefix(line, "   - ") {
 				instructions = append(instructions, instruction)
 			}
 			continue
@@ -1818,6 +1825,18 @@ var childReleaseRules = map[string][]string{
 	},
 }
 
+// childAdoptionRules lists every rule that guiding a new child's adoption adds,
+// keyed by the rendered CODE file that owns it.
+var childAdoptionRules = map[string][]string{
+	"AGENTS.md": {
+		"Record a child's own rules in the parent's `## Project Rules` under a `###` heading named for the child.",
+	},
+	"govna/development-cycle.md": {
+		"Make a new child pass its own `./build.sh` before the parent's next full build.",
+		"Plan follow-up child work after `govna apply --child` as a second AC in the same release batch as the apply-child AC.",
+	},
+}
+
 // childReleaseRetired lists wording that the child release chain deletes from
 // every rendered CODE governance file.
 var childReleaseRetired = []string{
@@ -1845,6 +1864,9 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 			}
 			if p.config.Flavor == Code {
 				for path, list := range childReleaseRules {
+					rules[path] = append(rules[path], list...)
+				}
+				for path, list := range childAdoptionRules {
 					rules[path] = append(rules[path], list...)
 				}
 				for path, content := range map[string]string{

@@ -35,8 +35,8 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, repository.AgentFileAbsent)
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.88.0) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.88.0). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.89.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.89.0). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
 		hashCheck,
@@ -46,7 +46,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.88.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
+	for _, invalid := range []string{"Applied govna v0.89.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
@@ -888,6 +888,57 @@ func TestApplyChildWritesChildFilesAndRegistry(t *testing.T) {
 			if stack == "Go" {
 				assertGolden(t, filepath.Join(parent, "govna", "ac1-govna-apply-child.md"), "child-golden.md")
 			}
+			lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+			if note := "note: the parent's full ./build.sh builds ../engine first and fails until ../engine/build.sh passes; run ./build.sh in ../engine before the parent's next full build"; lines[len(lines)-1] != note || !strings.HasPrefix(lines[len(lines)-2], "wrote govna/ac1-govna-apply-child.md") {
+				t.Fatalf("apply --child does not end with the build note after its wrote lines:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestApplyChildRoutesReplacedChildRules(t *testing.T) {
+	children, err := canon.RenderChild("Go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan, err := canon.RenderOrphan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const move = "- Move the replaced child `AGENTS.md` rules into this parent's `AGENTS.md` `## Project Rules` under `### engine`.\n"
+	const manual = "**AT3** [Manual] [Pre-release gate] — Verify each rule from the replaced `../engine/AGENTS.md` is in this parent's `## Project Rules` under `### engine` or was dropped on purpose.\n"
+	const warning = "warning: replaced the existing ../engine/AGENTS.md with the child pointer; move its rules into this parent's AGENTS.md ## Project Rules under ### engine, recovering the old content from Git\n"
+	for _, tc := range []struct {
+		name   string
+		agents []byte
+		routed bool
+	}{
+		{"own rules", []byte("# AGENTS.md\n\n- Keep the engine deterministic.\n"), true},
+		{"pointer", agentsOf(children), false},
+		{"orphan note", orphan[0].Content, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, child := childParentFixture(t, "Go")
+			writeFixture(t, filepath.Join(child, "AGENTS.md"), tc.agents)
+			_, errOut, code := runAt(t, parent, "--child", "../engine")
+			if code != 0 {
+				t.Fatalf("code=%d stderr=%s", code, errOut)
+			}
+			ac, err := os.ReadFile(filepath.Join(parent, "govna", "ac1-govna-apply-child.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := errOut == warning; got != tc.routed {
+				t.Fatalf("warning routed=%v want %v: %q", got, tc.routed, errOut)
+			}
+			if !tc.routed && errOut != "" {
+				t.Fatalf("unexpected stderr: %q", errOut)
+			}
+			for _, want := range []string{move, manual} {
+				if got := strings.Count(string(ac), want); got != map[bool]int{true: 1, false: 0}[tc.routed] {
+					t.Fatalf("review AC count=%d for %q, routed=%v:\n%s", got, want, tc.routed, ac)
+				}
+			}
 		})
 	}
 }
@@ -898,7 +949,7 @@ func TestApplyChildRejectsBeforeWriting(t *testing.T) {
 		setup           func(t *testing.T, parent, child string)
 	}{
 		{"DOC parent", "../engine", "applies only to a CODE parent", func(t *testing.T, parent, child string) {
-			writeFixture(t, filepath.Join(parent, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.88.0\nrepo_type = DOC\n"))
+			writeFixture(t, filepath.Join(parent, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.89.0\nrepo_type = DOC\n"))
 		}},
 		{"unadopted parent", "../engine", "has no govna/metadata.txt; run govna apply here first", func(t *testing.T, parent, child string) {
 			os.Remove(filepath.Join(parent, "govna", "metadata.txt"))

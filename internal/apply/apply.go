@@ -434,6 +434,7 @@ func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) 
 	fmt.Fprintf(stdout, "parent: %s\n", cwd)
 	fmt.Fprintf(stdout, "child: %s\n", entry)
 	outcomes := []Outcome{}
+	replacedRules := false
 	for _, file := range files {
 		rel := entry + "/" + file.Path
 		label := labelWritten
@@ -446,7 +447,8 @@ func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) 
 			label = "replaced existing file"
 			if file.Path == "AGENTS.md" {
 				if old, e := child.ReadFile(file.Path); e == nil && !canon.IsChildAgentFile(old) {
-					fmt.Fprintf(stderr, "warning: replaced the existing %s with the child pointer; recover its old content from Git if you still need it\n", rel)
+					replacedRules = true
+					fmt.Fprintf(stderr, "warning: replaced the existing %s with the child pointer; move its rules into this parent's AGENTS.md ## Project Rules under ### %s, recovering the old content from Git\n", rel, path.Base(entry))
 				}
 			}
 		}
@@ -471,11 +473,12 @@ func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) 
 		return fail(stderr, err)
 	}
 	rel := fmt.Sprintf("govna/ac%d-govna-apply-child.md", n)
-	if err := parent.WriteFile(rel, []byte(childAdoption(n, entry, stack, programVersion, outcomes)), 0o644); err != nil {
+	if err := parent.WriteFile(rel, []byte(childAdoption(n, entry, stack, programVersion, outcomes, replacedRules)), 0o644); err != nil {
 		fmt.Fprintf(stderr, "apply: write %s: %v\n", rel, err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "wrote %s (review AC)\n", rel)
+	fmt.Fprintf(stdout, "note: the parent's full ./build.sh builds %s first and fails until %s/build.sh passes; run ./build.sh in %s before the parent's next full build\n", entry, entry, entry)
 	return 0
 }
 
@@ -489,16 +492,26 @@ func metadataValues(data []byte) map[string]string {
 	return values
 }
 
-func childAdoption(n int, entry, stack, programVersion string, out []Outcome) string {
+// childAdoption renders the review AC for govna apply --child. replacedRules
+// reports that apply replaced a child AGENTS.md that held the child's own rules.
+func childAdoption(n int, entry, stack, programVersion string, out []Outcome, replacedRules bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%d Review Child Repository %s\n\n## Summary\n\nGovna executable v%s added its embedded child files (canon v%s) for the %s child repository `%s` and listed it in `%s`. The list below records whether each file was written, replaced, or kept.\n\n## In Scope\n\nFiles Govna processed:\n\n", n, entry, programVersion, canon.Version, stack, entry, repository.ChildRegistryPath)
+	name := path.Base(entry)
+	fmt.Fprintf(&b, "# AC%d Review Child Repository %s\n\n## Summary\n\nGovna executable v%s added its embedded child files (canon v%s) for the %s child repository `%s` and listed it in `%s`. The list below records whether each file was written, replaced, or kept. The parent's full `./build.sh` builds `%s` first and fails until the child's own `./build.sh` passes.\n\n## In Scope\n\nFiles Govna processed:\n\n", n, entry, programVersion, canon.Version, stack, entry, repository.ChildRegistryPath, entry)
 	for _, o := range out {
 		fmt.Fprintf(&b, "- `%s` (%s)\n", o.Path, o.Label)
 	}
 	fmt.Fprintf(&b, "- `%s` (lists `%s`)\n", repository.ChildRegistryPath, entry)
+	fmt.Fprintf(&b, "\n### Follow-up\n\n- Run `./build.sh` in `%s` before the parent's next full build.\n- Plan follow-up child work as a second AC in the same release batch as this AC.\n", entry)
+	if replacedRules {
+		fmt.Fprintf(&b, "- Move the replaced child `AGENTS.md` rules into this parent's `AGENTS.md` `## Project Rules` under `### %s`.\n", name)
+	}
 	b.WriteString("\n## Out Of Scope\n\n- Files not listed above.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n")
 	fmt.Fprintf(&b, "**AT1** [Automated] [Pre-release gate] — Verify every written child file matches `govna render --child` for the %s stack.\n\n", stack)
 	fmt.Fprintf(&b, "**AT2** [Automated] [Pre-release gate] — Verify `./build.sh` runs the build of `%s` before its own steps.\n\n", entry)
+	if replacedRules {
+		fmt.Fprintf(&b, "**AT3** [Manual] [Pre-release gate] — Verify each rule from the replaced `%s/AGENTS.md` is in this parent's `## Project Rules` under `### %s` or was dropped on purpose.\n\n", entry, name)
+	}
 	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
 	return b.String()
 }
