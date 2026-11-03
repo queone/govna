@@ -2,6 +2,23 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.51.0
+
+Added:
+- CODE and DOC `govna/roles.md` tell the Operator to run a check itself when current authorization allows it, instead of listing it under `Not checked`.
+- `Not checked` lists only checks that need a Director action or a new Director authorization, and names that action or authorization.
+
+Changed:
+- The Package `Not checked:` line states the remaining check that needs the Director, instead of the remaining manual check.
+
+Decisions:
+- The examples are a read-only command, a file inspection, or a render check, each only within current authorization.
+- Scratch reviews are not an example, because they create files, and creating files needs authorization.
+- `AGENTS.md` gets no new rule, because the self-review detail belongs in `govna/roles.md`.
+
+Risks:
+- The Operator judges what current authorization allows, so an agent can still skip a check that it should run.
+
 ## v0.50.0
 
 Added:

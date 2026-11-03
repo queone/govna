@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.86.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.87.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -466,14 +466,14 @@ func TestPackageCompletionContract(t *testing.T) {
 		"Limit each self-review heading to one sentence.",
 		"State the semver reason under `Verified:`.",
 		"State what changed after the Package evidence under `Red-teamed:`.",
-		"State the remaining manual check, or that none remains, under `Not checked:`.",
+		"State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.",
 	}
 	const reportGroupings = "- Present the exact drafted release command.\n\n### Package Self-review\n\n" +
 		"- Apply these rules to the Package completion report's self-review in place of roles.md's self-review reporting rules.\n" +
 		"- Limit each self-review heading to one sentence.\n" +
 		"- State the semver reason under `Verified:`.\n" +
 		"- State what changed after the Package evidence under `Red-teamed:`.\n" +
-		"- State the remaining manual check, or that none remains, under `Not checked:`.\n\n### Completed Release\n\n" +
+		"- State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.\n\n### Completed Release\n\n" +
 		"- Treat the Director's `shipped` as a completed release.\n" +
 		"- Run no git or gh command to confirm a completed release.\n" +
 		"- Acknowledge a completed release in one line.\n" +
@@ -2410,4 +2410,51 @@ func TestChildRepositoryRulesRenderForCodeOnly(t *testing.T) {
 			t.Errorf("DOC %s mentions child repositories", file.Path)
 		}
 	}
+}
+
+func TestNotCheckedListsOnlyDirectorChecks(t *testing.T) {
+	roleRules := []string{
+		"- Run a check before reporting instead of listing it under `Not checked` when current authorization allows it.\n",
+		"- List under `Not checked` only a check that needs a Director action or a new Director authorization.\n",
+		"- Name that Director action or authorization in each `Not checked` item.\n",
+		"\nNote: checks the Operator runs itself include a read-only command, a file inspection, or a render check that current authorization covers.\n",
+	}
+	const packageRule = "- State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.\n"
+	configs := map[string]Config{"DOC": {Flavor: Doc, RepoName: "handbook"}}
+	for _, stack := range Stacks() {
+		configs["CODE/"+stack] = Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget"}
+	}
+	for name, config := range configs {
+		files, err := Render(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		selfReview := sectionText(t, fileText(t, files, "govna/roles.md"), "### Required Self-review\n")
+		for _, rule := range roleRules {
+			if count := strings.Count(selfReview, rule); count != 1 {
+				t.Errorf("%s roles.md Required Self-review rule count=%d, want 1 for %q", name, count, rule)
+			}
+		}
+		agents := fileText(t, files, "AGENTS.md")
+		if count := strings.Count(sectionText(t, agents, "### Package Self-review\n"), packageRule); count != 1 {
+			t.Errorf("%s AGENTS.md Package Self-review Not checked rule count=%d, want 1", name, count)
+		}
+		if strings.Contains(agents, "State the remaining manual check") {
+			t.Errorf("%s AGENTS.md keeps the manual-check Not checked rule", name)
+		}
+	}
+}
+
+// sectionText returns text from heading up to the next ### or ## heading.
+func sectionText(t *testing.T, text, heading string) string {
+	t.Helper()
+	start := strings.Index(text, heading)
+	if start < 0 {
+		t.Fatalf("missing heading %q", heading)
+	}
+	body := text[start+len(heading):]
+	if end := strings.Index(body, "\n#"); end >= 0 {
+		body = body[:end+1]
+	}
+	return body
 }

@@ -1566,7 +1566,7 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Limit each self-review heading to one sentence.",
 		"State the semver reason under `Verified:`.",
 		"State what changed after the Package evidence under `Red-teamed:`.",
-		"State the remaining manual check, or that none remains, under `Not checked:`.",
+		"State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.",
 		"Treat the Director's `shipped` as a completed release.",
 		"Run no git or gh command to confirm a completed release.",
 		"Acknowledge a completed release in one line.",
@@ -1593,6 +1593,9 @@ var stateEachRuleOnceRules = map[string][]string{
 	},
 	"govna/roles.md": {
 		"Verify changed scope, behavior, content, claims, references, structure, terminology, and tests against governing contracts.",
+		"Run a check before reporting instead of listing it under `Not checked` when current authorization allows it.",
+		"List under `Not checked` only a check that needs a Director action or a new Director authorization.",
+		"Name that Director action or authorization in each `Not checked` item.",
 		"State why an unexercised acceptance test was only reasoned about when its labels do not explain it.",
 		"Omit a self-review section that has no items.",
 		"Check that current evidence shows `./build.sh` passed when the change touches code or build-relevant files.",

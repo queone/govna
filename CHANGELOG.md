@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.51.0 | AC74 Not checked lists only checks that need the Director; canon v0.87.0 |
 | 0.50.0 | AC73 CODE parents govern child repos; plan IE1, IE17-IE19; canon v0.86.0 |
 | 0.49.1 | Plan IE14 dated CODE tags and IE15 version-only govna updates |
 | 0.49.0 | AC72 agents search history.md before AC work; canon v0.85.0 |

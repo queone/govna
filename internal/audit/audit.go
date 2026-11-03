@@ -127,7 +127,7 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Limit each self-review heading to one sentence.",
 		"State the semver reason under `Verified:`.",
 		"State what changed after the Package evidence under `Red-teamed:`.",
-		"State the remaining manual check, or that none remains, under `Not checked:`.",
+		"State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.",
 		"Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction.",
 		"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
 		"Resume Refine after the Director resolves every blocking finding and decision.",

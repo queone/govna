@@ -530,7 +530,7 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Limit each self-review heading to one sentence.
 - State the semver reason under `Verified:`.
 - State what changed after the Package evidence under `Red-teamed:`.
-- State the remaining manual check, or that none remains, under `Not checked:`.
+- State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.
 
 ### Completed Release
 
