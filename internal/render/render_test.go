@@ -410,7 +410,7 @@ func TestRenderChildFilesAndOrphanNote(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(docCwd, "govna"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(docCwd, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.89.0\nrepo_type = DOC\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(docCwd, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.90.0\nrepo_type = DOC\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stderr.Reset()

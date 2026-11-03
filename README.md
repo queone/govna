@@ -232,7 +232,7 @@ An explicit agent-mediated request to run `govna audit` also authorizes immediat
 
 In a parent with `govna/children.txt`, audit also checks each child's files and names them by parent-relative path, such as `../engine/build.sh`. It always updates a differing pointer or build tooling file, gives a differing child `.gitignore` the ordinary choices, and checks only the shape of the child's `CHANGELOG.md`. `govna/preserve.txt` can keep a declared child's `.gitignore` only.
 
-Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--check` (`-c`) to report the result without writing anything; it exits `3` when updates or Director choices are needed and `0` when none are. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
+Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--check` (`-c`) to report the result without writing anything; it exits `3` when updates or Director choices are needed and `0` when none are. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model. When a new govna release changes nothing in the repository's own profile, audit and `--check` print that only the canon version changed, write nothing, and exit `0`; the version stamps keep the last canon version that changed the repository.
 
 ### `rm`
 

@@ -2,6 +2,22 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.54.0
+
+Added:
+- `govna audit` detects a version-only update: nothing to update except the two version stamps, which both record the same older version.
+- A version-only update prints that only the canon version changed, writes no AC and no file, and exits `0` in both modes.
+- The JSON audit report gains a `version_only` field.
+- Session Entry runs `govna audit --check` once when the installed canon is newer and recommends an audit only on exit `3`.
+
+Decisions:
+- A version-only update stays quiet, so a release that changes nothing in a repository leaves nothing to commit or release.
+- The version stamps keep the last canon version that changed the repository, until a real update moves them.
+- Each session in a repository with lagging stamps therefore runs one quick read-only check, which stays silent.
+- The recorded baseline serves as the per-profile fingerprint, so no new file is needed.
+- Preserved files still count as version-only, while child drift, a retired link, or a forced update rules it out.
+- Stamps that record different versions still get an AC, which repairs them.
+
 ## v0.53.0
 
 Added:

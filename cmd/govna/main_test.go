@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -261,7 +262,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.89.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.90.0.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -271,7 +272,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.89.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.90.0.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}
@@ -393,5 +394,67 @@ func TestDetailedVersionUpdateLine(t *testing.T) {
 			want := fmt.Sprintf("govna v%s\nEmbedded governance-file version (canon version): v%s\nupdate: %s\n", programVersion, canonVersion, tc.want)
 			assertResult(t, stdout, stderr, code, want, "", 0)
 		})
+	}
+}
+
+func TestVersionOnlyRepositoryStillRemovesAndAddsChildren(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "widget")
+	child := filepath.Join(base, "engine")
+	for dir, module := range map[string]string{root: "example.com/widget", child: "example.com/engine"} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module "+module+"\n\ngo 1.27.0\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(root)
+	if stdout, stderr, code := execute("apply", "--flavor", "code", "--stack", "go"); code != 0 {
+		t.Fatalf("apply code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	metaPath := filepath.Join(root, "govna", "metadata.txt")
+	meta, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aged := strings.Replace(string(meta), "canon_version = v"+canonVersion, "canon_version = v0.1.0", 1)
+	basePath := filepath.Join(root, "govna", "canon-baseline.txt")
+	baseline, err := os.ReadFile(basePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(baseline), "\n")
+	lines[1] = "canon_version = v0.1.0"
+	for i, line := range lines {
+		if fields := strings.Split(line, "\t"); len(fields) == 3 && fields[0] == "govna/metadata.txt" {
+			lines[i] = fmt.Sprintf("%s\t%s\t%x", fields[0], fields[1], sha256.Sum256([]byte(aged)))
+		}
+	}
+	if err := os.WriteFile(metaPath, []byte(aged), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(basePath, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, "govna", "ac1-govna-apply.md")); err != nil {
+		t.Fatal(err)
+	}
+	gitMainTest(t, root, "init", "-q")
+	gitMainTest(t, root, "config", "user.email", "fixture@example.invalid")
+	gitMainTest(t, root, "config", "user.name", "Fixture")
+	gitMainTest(t, root, "add", ".")
+	gitMainTest(t, root, "commit", "-qm", "older canon stamps")
+	if stdout, stderr, code := execute("audit", "--check"); code != 0 || !strings.HasPrefix(stdout, "Only the canon version changed: ") {
+		t.Fatalf("audit --check code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if stdout, stderr, code := execute("apply", "--child", "../engine"); code != 0 {
+		t.Fatalf("apply --child in a version-only repository code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if stdout, stderr, code := execute("rm"); code != 0 {
+		t.Fatalf("rm in a version-only repository code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if matches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v*.md")); err != nil || len(matches) != 1 {
+		t.Fatalf("rm wrote %v err=%v, want one removal AC", matches, err)
 	}
 }

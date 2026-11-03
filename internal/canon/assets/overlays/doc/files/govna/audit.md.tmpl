@@ -214,6 +214,8 @@ An audit with no updates or Director choices exits successfully and prints `No G
 
 A check-mode audit (`-c` or `--check`) runs the same comparison and writes nothing. It performs no AC-number allocation, stub inspection, directory creation, or file write. A clean result prints the clean-result line above and exits `0`. An actionable result prints `Govna updates or Director choices found`, followed by a plain result tally and `Run govna audit without --check to write the review AC.`, and exits `3`. With `--json`, the complete report is printed with `emitted` set to `null` and no additional prose. Because check mode emits no AC, it starts no agent-mediated adoption review.
 
+A version-only update writes nothing either. When the only actionable results are `govna/metadata.txt` and `govna/canon-baseline.txt`, `govna/metadata.txt` differs only in `canon_version`, and the recorded baseline differs from the rendered one only in its version line and the `govna/metadata.txt` hash, both audit and check-mode audit print `Only the canon version changed: canon v<new> changes no Govna file in this <profile> repository (recorded v<old>). No AC was written.` and exit `0`. The profile is the CODE stack or `DOC`. Preserved files still count; child drift, a retired link, or a forced update rules a version-only result out. The two stamps keep the last canon version that changed the repository until a real update moves them. With `--json`, `version_only` is `true` and `emitted` is `null`.
+
 ### Agent-mediated review
 
 - Follow `AGENTS.md` `### Audit Adoption` for every phase entry, pause, and exit of this review.

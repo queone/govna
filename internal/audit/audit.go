@@ -76,6 +76,7 @@ type Report struct {
 	Header        Header       `json:"header"`
 	Files         []FileResult `json:"files"`
 	Emitted       *Emitted     `json:"emitted"`
+	VersionOnly   bool         `json:"version_only"`
 	selectedStack string
 	repoCheck     string
 }
@@ -199,7 +200,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		hints.WriteAgentHints(stderr)
 		hints.Close()
 	}
-	if !clean && !cfg.Check {
+	if !clean && !cfg.Check && !report.VersionOnly {
 		path, reused, err := emission.AuditPath(cwd, "v"+canon.Version, nil)
 		if err != nil {
 			fmt.Fprintf(stderr, "audit: %v\n", err)
@@ -233,6 +234,8 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 			fmt.Fprintf(stderr, "audit: encode JSON report: %v\n", err)
 			return 1
 		}
+	} else if report.VersionOnly {
+		fmt.Fprintf(stdout, "Only the canon version changed: canon v%s changes no Govna file in this %s repository (recorded %s). No AC was written.\n", canon.Version, versionOnlyProfile(report), report.Header.CanonVersion)
 	} else if clean {
 		fmt.Fprintf(stdout, "No Govna updates or Director choices found (%s). No AC was written.\n", plainTally(report.Files))
 	} else if cfg.Check {
@@ -240,10 +243,62 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 	} else {
 		fmt.Fprintf(stdout, "Wrote %s for review (%s).\n", report.Emitted.ACStub, plainTally(report.Files))
 	}
-	if cfg.Check && !clean {
+	if cfg.Check && !clean && !report.VersionOnly {
 		return 3
 	}
 	return 0
+}
+
+// versionOnlyProfile names the repository's profile in the version-only line:
+// its CODE stack, or DOC.
+func versionOnlyProfile(report Report) string {
+	if report.Header.Flavor == "doc" {
+		return "DOC"
+	}
+	if report.selectedStack != "" {
+		return report.selectedStack
+	}
+	return "CODE"
+}
+
+// versionOnly reports whether the only actionable results are the two version
+// stamps: both record the same older canon version, govna/metadata.txt differs
+// only in canon_version, and the recorded baseline differs from the rendered one
+// only in its version line and the govna/metadata.txt hash.
+func versionOnly(files []FileResult, recordedVersion string, recorded, rendered []byte, recordedPresent bool) bool {
+	if !recordedPresent || recordedVersion == "v"+canon.Version {
+		return false
+	}
+	if lines := strings.SplitN(string(recorded), "\n", 3); len(lines) < 2 || lines[1] != "canon_version = "+recordedVersion {
+		return false
+	}
+	stamps := 0
+	for _, file := range files {
+		if !actionable(file.Classification) && !file.forceSync {
+			continue
+		}
+		if file.forceSync || file.Classification != "clear-sync" || file.childEntry != "" || (file.Path != "govna/metadata.txt" && file.Path != baselinePath) {
+			return false
+		}
+		stamps++
+	}
+	if stamps == 0 {
+		return false
+	}
+	return baselineWithoutStamps(recorded) == baselineWithoutStamps(rendered)
+}
+
+// baselineWithoutStamps drops a baseline's canon_version line and its
+// govna/metadata.txt entry, the two parts that change with every canon version.
+func baselineWithoutStamps(data []byte) string {
+	var kept []string
+	for i, line := range strings.Split(string(data), "\n") {
+		if i == 1 || strings.HasPrefix(line, "govna/metadata.txt\t") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
 }
 
 func parse(args []string) (Config, error) {
@@ -523,6 +578,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 			clean = false
 		}
 	}
+	report.VersionOnly = !clean && versionOnly(report.Files, metadata["canon_version"], baseBytes, canonMap[baselinePath], basePresent)
 	return report, clean, nil
 }
 

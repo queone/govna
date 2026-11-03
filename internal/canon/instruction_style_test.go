@@ -1992,14 +1992,15 @@ func TestShorterReportRulesFollowInstructionStyle(t *testing.T) {
 var sessionEntryAuditRules = []string{
 	"Run `govna version` once per session, right after the \"Govna contract loaded.\" line.",
 	"Compare the canon version it prints with `canon_version` in `govna/metadata.txt`.",
-	"Recommend `govna audit` to the Director when the installed canon version is newer.",
+	"Run `govna audit --check` once when the installed canon version is newer.",
+	"Recommend `govna audit` to the Director only when that check exits `3`.",
 	"Place that question at the end of the same response, before any final `Awaiting` line.",
-	"Skip the question when `govna` is absent, `govna version` fails, either version is unreadable, or the installed canon version is not newer.",
+	"Skip the question when `govna` is absent, `govna version` or `govna audit --check` fails, either version is unreadable, the installed canon version is not newer, or the check exits `0`.",
 }
 
 // sessionEntryAuditRationale is the checkpoint paragraph that explains the
 // session-entry audit suggestion.
-const sessionEntryAuditRationale = "Right after the checkpoint, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt` and suggests `govna audit` when the installed canon is newer. Session entry is when a stale repository matters most, because every later rule comes from the adopted canon. The comparison reads two local values, and the release check behind `govna version` runs at most once a day with a two-second limit, so session entry stays fast. The question waits until the end of the response, so it never blocks the requested work. `govna version` runs the installed govna, not a repository command, so the explicit-wording rule for repository commands does not apply to it."
+const sessionEntryAuditRationale = "Right after the checkpoint, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt`. When the installed canon is newer, the agent runs `govna audit --check` once and suggests `govna audit` only when that check finds real updates, so a release that changes nothing in the repository's own profile stays quiet. Session entry is when a stale repository matters most, because every later rule comes from the adopted canon. The comparison reads two local values, the check writes nothing, and the release check behind `govna version` runs at most once a day with a two-second limit, so session entry stays fast. The question waits until the end of the response, so it never blocks the requested work. `govna version` and `govna audit --check` run the installed govna, not a repository command, so the explicit-wording rule for repository commands does not apply to them."
 
 func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
 	placement := "- State \"Govna contract loaded.\" before the first substantive govna-governed action of a session, and only after internalizing AGENTS.md.\n- " +
