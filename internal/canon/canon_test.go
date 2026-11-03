@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.90.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.90.1\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -2463,4 +2463,16 @@ func sectionText(t *testing.T, text, heading string) string {
 		body = body[:end+1]
 	}
 	return body
+}
+
+func TestGoWorkspaceRecipeSetsTheGoModGoLine(t *testing.T) {
+	const recipe = "- Use `go work init . <child>` for a child override.\n" +
+		"- Set the `go.work` `go` line to the `go.mod` `go` line with `go work edit -go=<version>`.\n"
+	files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(fileText(t, files, "govna/code-stacks.md"), recipe); count != 1 {
+		t.Fatalf("code-stacks.md Go workspace recipe count=%d, want 1", count)
+	}
 }

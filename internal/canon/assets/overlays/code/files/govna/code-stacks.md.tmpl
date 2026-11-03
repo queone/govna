@@ -95,6 +95,7 @@
 - Remove invocation-owned release outputs on every handled exit.
 - Release a repository with no `cmd/<target>/main.go` from its tag alone, without compiling or installing a utility.
 - Use `go work init . <child>` for a child override.
+- Set the `go.work` `go` line to the `go.mod` `go` line with `go work edit -go=<version>`.
 - Detect a child override in a `go.mod` `replace` directive and in the workspace that `go env GOWORK` names.
 - Skip `go mod tidy` in a full build only while that workspace names a declared child.
 - Print one line that names the child when the build skips `go mod tidy`.

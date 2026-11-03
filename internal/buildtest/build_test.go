@@ -3750,7 +3750,11 @@ printf '%s\n' "$*" >>"$FAKE_TRACE"
 printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
 case "$1" in
 list)
+  # Like go list -m, list every workspace module while go.work is active.
   printf '%s\n' 'example.com/widget'
+  if [ "${GOWORK:-}" != off ] && [ -f go.work ]; then
+    printf '%s\n' 'example.com/child'
+  fi
   ;;
 env)
   case "$2" in
@@ -4273,5 +4277,18 @@ func TestGoLibraryReleasesFromItsTagAlone(t *testing.T) {
 	}
 	if data, err := os.ReadFile(trace); err == nil && strings.Contains(string(data), "build") {
 		t.Fatalf("library release ran go build:\n%s", data)
+	}
+}
+
+func TestGoBuildReadsOneModulePathInAWorkspace(t *testing.T) {
+	root := repoRoot(t)
+	for _, path := range []string{"build.sh", "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"} {
+		script := string(mustRead(t, filepath.Join(root, path)))
+		if count := strings.Count(script, "GOWORK=off go list -m -f '{{.Path}}'"); count != 1 {
+			t.Errorf("%s reads the module path with the workspace off %d times, want once", path, count)
+		}
+		if count := strings.Count(script, "go list -m"); count != 1 {
+			t.Errorf("%s runs go list -m %d times, want only the workspace-off read", path, count)
+		}
 	}
 }

@@ -35,8 +35,8 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, repository.AgentFileAbsent)
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.90.0) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.90.0). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.90.1) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.90.1). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
 		hashCheck,
@@ -46,7 +46,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.90.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
+	for _, invalid := range []string{"Applied govna v0.90.1", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
@@ -949,7 +949,7 @@ func TestApplyChildRejectsBeforeWriting(t *testing.T) {
 		setup           func(t *testing.T, parent, child string)
 	}{
 		{"DOC parent", "../engine", "applies only to a CODE parent", func(t *testing.T, parent, child string) {
-			writeFixture(t, filepath.Join(parent, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.90.0\nrepo_type = DOC\n"))
+			writeFixture(t, filepath.Join(parent, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.90.1\nrepo_type = DOC\n"))
 		}},
 		{"unadopted parent", "../engine", "has no govna/metadata.txt; run govna apply here first", func(t *testing.T, parent, child string) {
 			os.Remove(filepath.Join(parent, "govna", "metadata.txt"))

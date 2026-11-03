@@ -2,6 +2,19 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.54.2
+
+Changed:
+- The Go build reads the module path with `GOWORK=off`, so a full build passes while `go.work` names a declared child.
+- The Go child recipe sets the `go.work` `go` line to the `go.mod` `go` line with `go work edit -go=<version>`.
+
+Decisions:
+- The toolchain stays pinned from `go.mod`, so the parent validates with the same toolchain it releases with.
+- `GOWORK=off go list -m` replaces the old read because it keeps a major-version suffix that the coverage step needs.
+
+Risks:
+- The `go.work` version step is manual; an agent that skips it gets the toolchain error, which names the cause.
+
 ## v0.54.0
 
 Added:
