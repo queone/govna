@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.54.1 | Record the parked distribution-children analysis in brainstorm.md |
 | 0.54.0 | AC77 version-only govna updates stay quiet; canon v0.90.0 |
 | 0.53.0 | AC76 apply --child says what the child needs next; canon v0.89.0 |
 | 0.52.0 | AC75 rel releases changed children before the parent; plan IE20; canon v0.88.0 |

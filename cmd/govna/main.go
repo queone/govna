@@ -15,7 +15,7 @@ import (
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.54.0"
+const programVersion = "0.54.1"
 const canonVersion = "0.90.0"
 
 // modulePath is the module the update check asks the proxy about, and

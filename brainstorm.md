@@ -197,6 +197,31 @@ pins nothing: a Homebrew tap formula needs the checksum of the parent's release 
 wraps a released version. Taps and Action repositories also have no govna stack, so they cannot get a canonical
 `build.sh`.
 
+Explored 2026-11-03 and parked until a real distribution repository needs support. How it differs from a dependency
+child:
+
+- Release order: it releases after the parent and consumes the parent's release.
+- Pin direction: it records the parent's version, and for a Homebrew formula a checksum; the parent pins nothing.
+- Stack: usually none of the CODE stacks, so it cannot be listed in `govna/children.txt`; the parent's full build would
+  stop because the child's `build.sh` differs from the parent's copy.
+- Checks: each kind has its own checker, such as `brew audit` and `brew test`, `actionlint`, or a site build, and most
+  can run only after the parent's release exists, which breaks the validate-before-release model.
+- Tags: a tap usually has none, and a GitHub Action moves a major tag such as `v1` on each release, which conflicts
+  with the rule that keeps every published child tag unchanged.
+
+Three possible shapes, lightest first:
+
+- Docs only: treat the repository as ancillary work after the parent's release, with a short canon pattern for the
+  update step, and no registry or govna files in it.
+- Pointer-only kind: a second registry such as `govna/distributions.txt`, a pointer `AGENTS.md` in each repository,
+  audit of the pointer only, and a final `rel` stage after the parent's push. It needs another Agent Release exception
+  and its own post-release failure rules.
+- Release CI: the parent's release workflow publishes the tap or Action, for example through GoReleaser's `brews:`
+  section, and govna only stays out of the way.
+
+Choose between docs only and release CI when a concrete repository appears; the pointer-only kind adds release-chain
+rules and a registry that nothing needs yet.
+
 ### Against shape 4
 
 Shape 4 keeps the child as a directory of the parent and publishes it. For a private parent it fits worse:
