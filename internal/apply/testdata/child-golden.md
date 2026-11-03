@@ -2,7 +2,7 @@
 
 ## Summary
 
-Govna executable v9.8.7 added its embedded child files (canon v0.87.0) for the Go child repository `../engine` and listed it in `govna/children.txt`. The list below records whether each file was written, replaced, or kept.
+Govna executable v9.8.7 added its embedded child files (canon v0.88.0) for the Go child repository `../engine` and listed it in `govna/children.txt`. The list below records whether each file was written, replaced, or kept.
 
 ## In Scope
 

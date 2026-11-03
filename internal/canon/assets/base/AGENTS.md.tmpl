@@ -387,7 +387,7 @@ Note: this rule does not prohibit batching independent commands.
 - Treat `release` or `rel` followed by a named batch as Package of that batch plus one agent-run release.
 - Stop before the release when Package fails or needs a Director decision.
 - Run the printed release command with `--yes` appended.
-- Run no other git or GitHub write under the keyword.
+- Run no other git or GitHub write under the keyword except each child release under `### Child Repositories`.
 - Retry nothing after a release failure.
 - Report the failure output and the printed recovery command to the Director.
 - Report Package and the release result in one completion report.
@@ -412,6 +412,15 @@ Note: this rule does not prohibit batching independent commands.
 - Add each declared child as a writable session directory before editing it.
 - Follow `govna/development-cycle.md` `## Child Repositories` for the session procedure.
 - Change child membership only through `govna apply --child` and `govna rm --child`.
+- Build the parent against each child that the active AC changes through the stack's local override during Implement and Ratify validation.
+- Treat a Package request as authorization for each child prep, local-override removal, and parent pin update.
+- Release each changed child before the parent's pin update.
+- Run each child's printed release command with `--yes` appended under `release` or `rel`.
+- Stop before the parent's pin update when a child release fails.
+- Fix a failure after a published child tag forward with a child patch release.
+- Keep every published child tag unchanged.
+- Record each child version change in the parent's `history.md` section.
+- Follow `govna/build-release.md` `## Child Releases` for the two Package stages.
 
 ### Pre-Implementation Verification
 

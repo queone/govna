@@ -2,6 +2,39 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.52.0
+
+Added:
+- In a CODE parent, `rel` releases each changed child first, moves the parent's pin, rebuilds, and then releases the parent.
+- Plain Package runs in two stages when a child changed: child preps and release commands first, then the parent.
+- Each stack's prep and release refuse a local override that points at a declared child.
+- The parent's Implement and Ratify validation builds against each changed child through the stack's local override.
+- The Go build skips `go mod tidy` only while `go.work` names a declared child.
+- The Go build releases a library with no `cmd/<target>/main.go` from its tag alone.
+- A missing child stops the parent build with a clone, scoped-build, and `govna rm --child` hint.
+
+Changed:
+- CODE `### Agent Release` allows each child release under `### Child Repositories` as its only other git write.
+- Prep and release stop on a malformed `govna/children.txt`, because they now read it for the override check.
+
+Decisions:
+- The child release rules sit in CODE `### Child Repositories`, so DOC `AGENTS.md` stays unchanged.
+- The Operator moves each pin with the stack's own command, because shell edits of each stack's manifest are fragile.
+- Plain Package pauses after the child preps, `rel` runs both stages, and the report lists child releases first.
+- A failure after a published child tag is fixed forward with a child patch release, and published tags never change.
+- Parent validation needs a local override, because without it the parent tests the old pinned child until the tag is public.
+- Stage 2's full build runs only after every override is removed and every pin is moved, so it builds exactly what ships.
+- Tidy is skipped only for a workspace that names a declared child, so a stray `go.work` cannot turn tidy off.
+- A Go parent's Package report lists every `go.mod` change beyond the pin, because Ratify never saw those changes.
+- A missing child keeps failing the build, with a hint, and the docs say every clone needs its children.
+- Go workspace detection follows the `go env GOWORK` lookup in shell, so prep runs no `go` command.
+
+Risks:
+- Swift edit-mode detection reads SwiftPM's internal `.build/workspace-state.json`.
+- A Rust `[patch]` in the user-level `~/.cargo/config.toml` is not detected.
+- No real toolchain has run the override flows end to end yet; mud's next engine change checks them.
+- mud's real build ran its child build first, which closes the v0.50.0 risk about real child builds.
+
 ## v0.51.0
 
 Added:

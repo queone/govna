@@ -244,7 +244,12 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_build_children",
 		"_byte_len",
 		"_capture_worktree_tree",
+		"_child_override_candidates",
+		"_child_override_recovery",
+		"_children_check_overrides",
+		"_children_dirs",
 		"_children_fail",
+		"_children_owner",
 		"_children_run_build",
 		"_children_validate",
 		"_cleanup_build_owned",
@@ -261,6 +266,9 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_extract_template_version",
 		"_failure",
 		"_go_quote",
+		"_go_workspace_child",
+		"_go_workspace_file",
+		"_go_workspace_uses",
 		"_head_is_unborn",
 		"_help_probe_fail",
 		"_install_validated_utility",
@@ -307,6 +315,7 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		"_rel_run_inner",
 		"_rel_step",
 		"_release_compile_validate_install",
+		"_release_has_utilities",
 		"_release_validate_prepared",
 		"_run_git",
 		"_scan_nested_fences",
@@ -4010,8 +4019,13 @@ func TestChildBuildHelperRunsMatchingChildren(t *testing.T) {
 				t.Fatalf("child inside the parent: err=%v ran=%q out=%s", err, ran, out)
 			}
 			writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../missing\n"), 0o644)
-			if out, ran, err = runProbe("0"); err == nil || ran != "" || !strings.Contains(out, "build: child ../missing is not a directory") {
+			if out, ran, err = runProbe("0"); err == nil || ran != "" || !strings.Contains(out, "build: child ../missing is missing; clone the child repository at ../missing, run a scoped build, which skips children, or remove it with govna rm --child") {
 				t.Fatalf("missing child: err=%v ran=%q out=%s", err, ran, out)
+			}
+			writeBuildFixture(t, filepath.Join(base, "file-child"), []byte("not a directory\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../file-child\n"), 0o644)
+			if out, ran, err = runProbe("0"); err == nil || ran != "" || !strings.Contains(out, "build: child ../file-child is not a directory; restore the child repository or remove it with govna rm --child") {
+				t.Fatalf("file at the child path: err=%v ran=%q out=%s", err, ran, out)
 			}
 		})
 	}
@@ -4058,5 +4072,206 @@ func TestRenderedGoBuildRunsChildFirst(t *testing.T) {
 	}
 	if got := strings.Count(string(mustRead(t, trace)), "mod tidy\n"); got != 2 {
 		t.Fatalf("go mod tidy ran %d times, want once for the child and once for the parent", got)
+	}
+}
+
+// childOverrideCase is one local-override fixture for a stack's prep and
+// release guard: files written into the parent and the expected refusal.
+type childOverrideCase struct {
+	name  string
+	files map[string]string
+	env   []string
+	want  string
+}
+
+func childOverrideCases(stack string) []childOverrideCase {
+	switch stack {
+	case "Go":
+		replace := "remove the override, then move the pin with go mod edit -dropreplace=example.com/child when a replace exists and go get example.com/child@<tag>"
+		return []childOverrideCase{
+			{name: "replace", files: map[string]string{"go.mod": "module example.com/widget\n\ngo 1.27.0\n\nreplace example.com/child => ../child\n"},
+				want: "go.mod replace ../child builds against declared child ../child; " + replace},
+			{name: "replace block", files: map[string]string{"go.mod": "module example.com/widget\n\ngo 1.27.0\n\nreplace (\n\texample.com/child v0.1.0 => ../child\n)\n"},
+				want: "go.mod replace ../child builds against declared child ../child; " + replace},
+			{name: "workspace", files: map[string]string{"go.mod": "module example.com/widget\n\ngo 1.27.0\n", "go.work": "go 1.27.0\n\nuse (\n\t.\n\t../child\n)\n"},
+				want: "/../child builds against declared child ../child; " + replace},
+			{name: "workspace off", files: map[string]string{"go.mod": "module example.com/widget\n\ngo 1.27.0\n", "go.work": "go 1.27.0\n\nuse ../child\n"}, env: []string{"GOWORK=off"}},
+			{name: "other replace", files: map[string]string{"go.mod": "module example.com/widget\n\ngo 1.27.0\n\nreplace example.com/other => ../other\n"}},
+		}
+	case "Rust":
+		pin := "remove the override, then move the pin by setting the dependency tag to <tag> and running cargo update -p child"
+		return []childOverrideCase{
+			{name: "path dependency", files: map[string]string{"Cargo.toml": "[package]\nname = \"widget\"\n\n[dependencies]\nchild = { path = \"../child\" }\n"},
+				want: "Cargo.toml path dependency or [patch] entry ./../child builds against declared child ../child; " + pin},
+			{name: "config patch", files: map[string]string{"Cargo.toml": "[package]\nname = \"widget\"\n", ".cargo/config.toml": "[patch.\"https://example.com/child\"]\nchild = { path = \"../child\" }\n"},
+				want: ".cargo/config.toml path override or [patch] entry ./../child builds against declared child ../child; " + pin},
+			{name: "other paths", files: map[string]string{"Cargo.toml": "[package]\nname = \"widget\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[dependencies]\nother = { path = \"../other\" }\n", "src/lib.rs": ""}},
+		}
+	case "Swift":
+		pin := "remove the override, then move the pin by setting the version in Package.swift, running swift package unedit child, and swift package resolve"
+		return []childOverrideCase{
+			{name: "package path", files: map[string]string{"Package.swift": "let package = Package(name: \"widget\", dependencies: [.package(path: \"../child\")])\n"},
+				want: "Package.swift .package(path:) ./../child builds against declared child ../child; " + pin},
+			{name: "edit mode", files: map[string]string{"Package.swift": "let package = Package(name: \"widget\")\n", ".build/workspace-state.json": "{\n  \"dependencies\" : [\n    {\n      \"state\" : {\n        \"name\" : \"edited\",\n        \"path\" : \"../child\"\n      }\n    }\n  ]\n}\n"},
+				want: "swift package edit ./../child builds against declared child ../child; " + pin},
+			{name: "other path", files: map[string]string{"Package.swift": "let package = Package(name: \"widget\", dependencies: [.package(path: \"../other\")])\n"}},
+		}
+	default:
+		return []childOverrideCase{
+			{name: "module source", files: map[string]string{"main.tf": "module \"child\" {\n  source = \"../child//modules/x\"\n}\n"},
+				want: "main.tf module source ./../child//modules/x builds against declared child ../child; replace the local source with the git source of ../child and set ?ref=<tag> in each module block"},
+			{name: "local module", files: map[string]string{"main.tf": "module \"local\" {\n  source = \"./modules/local\"\n}\n", "modules/local/main.tf": ""}},
+		}
+	}
+}
+
+func TestChildOverrideChecksNameTheChild(t *testing.T) {
+	root := repoRoot(t)
+	for _, profile := range childBuildProfiles() {
+		stack := strings.TrimPrefix(profile.name, "root ")
+		for _, tc := range childOverrideCases(stack) {
+			for _, label := range []string{"prep", "release"} {
+				t.Run(profile.name+"/"+tc.name+"/"+label, func(t *testing.T) {
+					base := t.TempDir()
+					parent := filepath.Join(base, "parent")
+					writeChildTooling(t, root, parent, profile)
+					writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../child\n"), 0o644)
+					writeBuildFixture(t, filepath.Join(base, "child", "go.mod"), []byte("module example.com/child\n\ngo 1.27.0\n"), 0o644)
+					writeBuildFixture(t, filepath.Join(base, "child", "Cargo.toml"), []byte("[package]\nname = \"child\"\n"), 0o644)
+					writeBuildFixture(t, filepath.Join(base, "child", "modules", "x", "main.tf"), nil, 0o644)
+					writeBuildFixture(t, filepath.Join(base, "other", "go.mod"), []byte("module example.com/other\n"), 0o644)
+					for path, content := range tc.files {
+						writeBuildFixture(t, filepath.Join(parent, filepath.FromSlash(path)), []byte(content), 0o644)
+					}
+					cmd := exec.Command("/bin/bash", "-c", profile.loader+"_color_init\n_children_check_overrides \"$1\"\n", "_", label)
+					cmd.Dir = parent
+					cmd.Env = append(append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "GOWORK="), tc.env...)
+					out, err := cmd.CombinedOutput()
+					if tc.want == "" {
+						if err != nil || len(out) != 0 {
+							t.Fatalf("override outside every declared child stopped %s: err=%v out=%s", label, err, out)
+						}
+						return
+					}
+					if err == nil || !strings.HasPrefix(string(out), label+": ") || !strings.Contains(string(out), tc.want) {
+						t.Fatalf("%s did not refuse the child override: err=%v out=%s want %q", label, err, out, tc.want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestChildOverrideChecksGuardOnlyPrepAndRelease(t *testing.T) {
+	root := repoRoot(t)
+	for _, profile := range childBuildProfiles() {
+		script := string(mustRead(t, filepath.Join(root, profile.path)))
+		for _, call := range []string{"_children_check_overrides prep || return 1\n", "_children_check_overrides release || return 1\n"} {
+			if count := strings.Count(script, call); count != 1 {
+				t.Errorf("%s calls %q %d times, want once", profile.name, strings.TrimSpace(call), count)
+			}
+		}
+		start := strings.Index(script, "\n_build_children() {")
+		end := strings.Index(script[start+1:], "\n}\n")
+		if start < 0 || end < 0 || strings.Contains(script[start:start+1+end], "_children_check_overrides") {
+			t.Errorf("%s full build must accept a local override to a declared child", profile.name)
+		}
+	}
+}
+
+func TestRenderedGoBuildSkipsTidyOnlyForChildWorkspace(t *testing.T) {
+	root := repoRoot(t)
+	script := mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
+	for _, tc := range []struct {
+		name, use string
+		tidies    int
+		skip      bool
+	}{
+		{name: "child workspace", use: "use (\n\t.\n\t../child\n)\n", tidies: 1, skip: true},
+		{name: "workspace without a child", use: "use .\n", tidies: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			parent := filepath.Join(base, "parent")
+			child := filepath.Join(base, "child")
+			for _, dir := range []string{parent, child} {
+				writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+				writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+				writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\n\nconst programVersion = \"1.2.3\"\n\nfunc main() {}\n"), 0o644)
+				writeBuildFixture(t, filepath.Join(dir, "internal/domain/domain.go"), []byte("package domain\n"), 0o644)
+			}
+			writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../child\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(parent, "go.work"), []byte("go 1.27.0\n\n"+tc.use), 0o644)
+			fakeBin := filepath.Join(base, "fakebin")
+			gopath := filepath.Join(base, "gopath")
+			tmpRoot := filepath.Join(base, "tmp")
+			trace := filepath.Join(base, "go.trace")
+			for _, dir := range []string{fakeBin, filepath.Join(gopath, "bin"), tmpRoot} {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGoScript), 0o755)
+			cmd := exec.Command("/bin/bash", "./build.sh")
+			cmd.Dir = parent
+			cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "GOVNA_FORCE_TTY=0", "GOWORK=", "FAKE_GOPATH="+gopath, "FAKE_TRACE="+trace, "TMPDIR="+tmpRoot+"/", "PATH="+fakeBin+":"+os.Getenv("PATH"))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("parent build with a workspace: %v:\n%s", err, out)
+			}
+			skipLine := "==> Skip go mod tidy while go.work names child ../child; the release rebuild runs it"
+			if got := strings.Contains(string(out), skipLine); got != tc.skip {
+				t.Fatalf("skip line present=%v, want %v:\n%s", got, tc.skip, out)
+			}
+			if got := strings.Count(string(mustRead(t, trace)), "mod tidy\n"); got != tc.tidies {
+				t.Fatalf("go mod tidy ran %d times, want %d", got, tc.tidies)
+			}
+		})
+	}
+}
+
+func TestGoLibraryReleasesFromItsTagAlone(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
+	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/engine\n\ngo 1.27.0\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "engine.go"), []byte("package engine\n"), 0o644)
+	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"), 0o644)
+	gitFixture(t, dir, "init", "-q")
+	gitFixture(t, dir, "config", "user.name", "Fixture")
+	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
+	gitFixture(t, dir, "add", ".")
+	gitFixture(t, dir, "commit", "-qm", "baseline")
+	remote := addReleaseRemote(t, dir)
+	fakeBin := t.TempDir()
+	trace := filepath.Join(t.TempDir(), "go.trace")
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte("#!/bin/bash\nprintf '%s\\n' \"$*\" >>\"$FAKE_TRACE\"\n[ \"$1\" != build ]\n"), 0o755)
+	env := []string{"NO_COLOR=1", "TERM=dumb", "FAKE_TRACE=" + trace, "PATH=" + fakeBin + ":" + os.Getenv("PATH")}
+	runWith := func(args ...string) string {
+		cmd := exec.Command("/bin/bash", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v:\n%s", strings.Join(args, " "), err, out)
+		}
+		return string(out)
+	}
+	runWith("./build.sh", "prep", "v0.2.0", "library release")
+	if !strings.Contains(string(mustRead(t, filepath.Join(dir, "CHANGELOG.md"))), "| 0.2.0 | library release |") {
+		t.Fatal("library prep did not add the CHANGELOG row")
+	}
+	out := runWith("./build.sh", "v0.2.0", "library release", "--yes")
+	for _, want := range []string{"- release the library from its tag; compile and install no utility", "==> Release a library with no cmd/<target>/main.go from its tag alone"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("library release output lacks %q:\n%s", want, out)
+		}
+	}
+	head := strings.TrimSpace(string(gitFixtureOutput(t, dir, "rev-parse", "HEAD")))
+	if got := strings.TrimSpace(string(gitFixtureOutput(t, remote, "rev-parse", "refs/tags/v0.2.0^{commit}"))); got != head {
+		t.Fatalf("remote tag commit=%s want %s", got, head)
+	}
+	if data, err := os.ReadFile(trace); err == nil && strings.Contains(string(data), "build") {
+		t.Fatalf("library release ran go build:\n%s", data)
 	}
 }

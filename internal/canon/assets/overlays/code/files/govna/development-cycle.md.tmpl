@@ -53,7 +53,7 @@ The lifecycle makes recurring programming checkpoints and their settled context 
 - Expect a child to hold its pointer `AGENTS.md`, its stack's build tooling, `.gitignore`, `CHANGELOG.md`, and its own content.
 - Add a child to a Claude Code session with `--add-dir <path>` at startup or `/add-dir <path>` during the session.
 - Add a child to a Codex CLI session with `--add-dir <path>` at startup.
-- Leave each child release for the Director to run in the child before the parent's pin update.
+- Follow `govna/build-release.md` `## Child Releases` to release a child.
 - Drop a child with `govna rm --child` before running `govna apply` in the child to promote it to a peer.
 
 ## Notes

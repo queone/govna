@@ -35,7 +35,12 @@
 - Name the child and its recovery action in every child-build failure.
 - Skip child builds during a scoped build and print one line saying so.
 - Keep each child build's own side effects, such as installing a Go child's utilities.
-- Ignore the registry during prep and release.
+- Stop prep and release when a local override resolves to a declared child.
+- Name the child, the override, and the pin update that removes it in that message.
+- Accept a local override to a declared child during a full build.
+- Accept every local override that resolves outside every declared child.
+- Clone each declared child at its registry path before a full build, including in CI.
+- Run a scoped build in a clone that lacks its children.
 
 ## Go
 
@@ -88,6 +93,13 @@
 - Create the release tag only after compilation, validation, installation, and rechecks pass.
 - Push nothing after an earlier release failure.
 - Remove invocation-owned release outputs on every handled exit.
+- Release a repository with no `cmd/<target>/main.go` from its tag alone, without compiling or installing a utility.
+- Use `go work init . <child>` for a child override.
+- Detect a child override in a `go.mod` `replace` directive and in the workspace that `go env GOWORK` names.
+- Skip `go mod tidy` in a full build only while that workspace names a declared child.
+- Print one line that names the child when the build skips `go mod tidy`.
+- Move a pin with `go mod edit -dropreplace=<module>` when a replace exists, then `go get <module>@<tag>`.
+- Set `GOPRIVATE` or `GOPROXY=direct` when `go get` cannot see a just-pushed tag.
 
 ## Rust
 
@@ -102,6 +114,9 @@
 - Accept declared binary names for scoped builds.
 - Preserve package-wide shared validation during scoped builds.
 - Require one literal `PROGRAM_VERSION: &str` strict stable SemVer declaration in each declared binary path.
+- Use a `[patch]` entry with a `path` for a child override.
+- Detect a child override in a `path` dependency or `[patch]` entry in `Cargo.toml` or `.cargo/config.toml`.
+- Move a pin by setting the dependency's `tag`, removing the override, then running `cargo update -p <crate>`.
 
 ## Terraform
 
@@ -112,6 +127,9 @@
 - Keep Terraform working data in repository-local ignored artifact directories.
 - Derive release versions from Git tags without a source version bump.
 - Reject scoped builds because Terraform validation is repository-wide.
+- Use a local module `source` for a child override.
+- Detect a child override in any `.tf` module `source`.
+- Move a pin by setting `?ref=<tag>` in each child module `source`.
 
 ## Swift
 
@@ -128,6 +146,9 @@
 - Leave `Package.swift` unchanged during release prep.
 - Install executable products into `${SWIFT_BIN_HOME:-$HOME/.local/bin}` by atomically replacing regular destination files and refusing unsafe entries.
 - Let library-only packages complete without installation.
+- Use `swift package edit --path <child> <package>` for a child override.
+- Detect a child override in `.package(path:)` and in edit mode.
+- Move a pin by setting the version in `Package.swift`, running `swift package unedit <package>`, then `swift package resolve`.
 - Use the canonical color and plain-text presentation policy for build, prep, and release output.
 - Accept executable-product names for scoped builds while retaining package-wide formatting and tests.
 - Build only selected executable products during scoped builds.

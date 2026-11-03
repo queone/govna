@@ -321,6 +321,7 @@ _validate_changelog_release_row() { # $1=path $2=version $3=message
 # message shape, no existing tag, and the exact CHANGELOG row after Unreleased.
 _release_validate_prepared() { # $1=tag $2=message
   local tag="$1" message="$2" version="${1#v}"
+  _children_check_overrides release || return 1
   { [ "$tag" = "v$version" ] && _is_strict_stable_semver "$version"; } ||
     { _release_refuse "tag must use strict stable SemVer vMAJOR.MINOR.PATCH ($(_go_quote "$tag"))" "$tag" "$message"; return 1; }
   [ -n "$message" ] || { _release_refuse 'message must be non-empty' "$tag" "$message"; return 1; }
@@ -521,8 +522,9 @@ prep_run() {
     return 1
   fi
 
-  # Phase 2: validate git state.
+  # Phase 2: validate git state and refuse a local override to a declared child.
   _prep_validate_git_state "$root" "$version" || return 1
+  _children_check_overrides prep || return 1
 
   # Phase 3: pre-check build.
   if [ "$dry" -ne 1 ] && [ "$nobuild" -ne 1 ]; then
@@ -923,6 +925,34 @@ _prep_build() { # $1=root -> runs ./build.sh; sets _prep_build_err on failure
 # Dispatch
 # ════════════════════════════════════════════════════════════════════════════
 
+# _child_override_candidates prints "<override><TAB><path>" for each Terraform
+# local override: a module source path in any .tf file.
+_child_override_candidates() {
+  local file dir
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    dir=$(dirname "$file")
+    awk '
+      /^[[:space:]]*(#|\/\/)/ { next }
+      match($0, /source[[:space:]]*=[[:space:]]*"\.\.?\/[^"]*"/) {
+        value = substr($0, RSTART, RLENGTH)
+        sub(/^[^"]*"/, "", value)
+        sub(/"$/, "", value)
+        print value
+      }
+    ' "$file" | while IFS= read -r value; do
+      printf '%s module source\t%s\n' "${file#./}" "$dir/$value"
+    done
+  done <<EOF
+$(find . -name .terraform -prune -o -name .git -prune -o -name '*.tf' -type f -print 2>/dev/null | LC_ALL=C sort)
+EOF
+}
+
+# _child_override_recovery names the Terraform pin update that replaces an override.
+_child_override_recovery() { # $1=child entry
+  printf 'replace the local source with the git source of %s and set ?ref=<tag> in each module block' "$1"
+}
+
 # --- child repositories (identical in every CODE stack build script) ---
 
 # _children_fail prints one child-build failure with its recovery action.
@@ -1013,6 +1043,10 @@ _build_children() { # $1=scoped $2...=tooling paths
   done <"$registry"
   [ "${#entries[@]}" -gt 0 ] || return 0
   for entry in "${entries[@]}"; do
+    if [ ! -e "$entry" ] && [ ! -L "$entry" ]; then
+      _children_fail "child $entry is missing; clone the child repository at $entry, run a scoped build, which skips children, or remove it with govna rm --child"
+      return 1
+    fi
     child=$(cd "$entry" 2>/dev/null && pwd -P) || {
       _children_fail "child $entry is not a directory; restore the child repository or remove it with govna rm --child"
       return 1
@@ -1040,6 +1074,57 @@ _build_children() { # $1=scoped $2...=tooling paths
     }
     printf '\n'
   done
+}
+
+# _children_dirs prints "<entry><TAB><directory>" for each declared child
+# directory that exists, after validating govna/children.txt.
+_children_dirs() {
+  local registry='govna/children.txt' entry dir first=1
+  [ -e "$registry" ] || return 0
+  _children_validate "$registry" || return 1
+  while IFS= read -r entry; do
+    if [ "$first" -eq 1 ]; then
+      first=0
+      continue
+    fi
+    dir=$(cd "$entry" 2>/dev/null && pwd -P) || continue
+    printf '%s\t%s\n' "$entry" "$dir"
+  done <"$registry"
+}
+
+# _children_owner prints the declared child entry whose directory holds path.
+_children_owner() { # $1=_children_dirs output $2=path
+  local resolved entry dir
+  resolved=$(cd "$2" 2>/dev/null && pwd -P) || return 0
+  while IFS="$(printf '\t')" read -r entry dir; do
+    [ -n "$entry" ] || continue
+    case "$resolved/" in "$dir/"*)
+      printf '%s\n' "$entry"
+      return 0
+      ;;
+    esac
+  done <<EOF
+$1
+EOF
+}
+
+# _children_check_overrides stops prep or release when a local override from
+# this stack's _child_override_candidates hook resolves to a declared child.
+_children_check_overrides() { # $1=prep|release
+  local label="$1" children candidates kind path entry found=0
+  children=$(_children_dirs) || return 1
+  [ -n "$children" ] || return 0
+  candidates=$(_child_override_candidates) || return 1
+  while IFS="$(printf '\t')" read -r kind path; do
+    [ -n "$kind" ] || continue
+    entry=$(_children_owner "$children" "$path")
+    [ -n "$entry" ] || continue
+    printf '%s: %s %s builds against declared child %s; %s\n' "$label" "$kind" "$path" "$entry" "$(_child_override_recovery "$entry")" >&2
+    found=1
+  done <<EOF
+$candidates
+EOF
+  [ "$found" -eq 0 ]
 }
 
 # --- end child repositories ---

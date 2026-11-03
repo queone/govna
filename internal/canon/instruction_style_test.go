@@ -1743,7 +1743,6 @@ var agentReleaseRules = map[string][]string{
 		"Treat `release` or `rel` followed by a named batch as Package of that batch plus one agent-run release.",
 		"Stop before the release when Package fails or needs a Director decision.",
 		"Run the printed release command with `--yes` appended.",
-		"Run no other git or GitHub write under the keyword.",
 		"Retry nothing after a release failure.",
 		"Report the failure output and the printed recovery command to the Director.",
 		"Report Package and the release result in one completion report.",
@@ -1753,6 +1752,78 @@ var agentReleaseRules = map[string][]string{
 	"govna/roles.md": {
 		"Execute a release command only under `AGENTS.md` `### Agent Release`.",
 	},
+}
+
+// childReleaseRules lists every rule that releasing changed children before
+// their CODE parent adds or rewrites, keyed by the rendered file that owns it.
+var childReleaseRules = map[string][]string{
+	"AGENTS.md": {
+		"Run no other git or GitHub write under the keyword except each child release under `### Child Repositories`.",
+		"Build the parent against each child that the active AC changes through the stack's local override during Implement and Ratify validation.",
+		"Treat a Package request as authorization for each child prep, local-override removal, and parent pin update.",
+		"Release each changed child before the parent's pin update.",
+		"Run each child's printed release command with `--yes` appended under `release` or `rel`.",
+		"Stop before the parent's pin update when a child release fails.",
+		"Fix a failure after a published child tag forward with a child patch release.",
+		"Keep every published child tag unchanged.",
+		"Record each child version change in the parent's `history.md` section.",
+		"Follow `govna/build-release.md` `## Child Releases` for the two Package stages.",
+	},
+	"govna/build-release.md": {
+		"Apply this section when `govna/children.txt` declares a child.",
+		"Treat a child as changed when its working tree or commits differ from its latest tag, or when it has no tag.",
+		"Run stage 1 when any declared child is changed.",
+		"Choose each changed child's version by semver from that child's own changes.",
+		"Write each child release message in plain words without AC identifiers.",
+		"Run each changed child's prep in that child.",
+		"End plain Package stage 1 by presenting each child's release command.",
+		"Start the stage 1 report with the plain line `Package paused for child releases.`.",
+		"Continue to stage 2 after the child releases under `release` or `rel`.",
+		"Run stage 2 when no declared child is changed.",
+		"Remove each local override that resolves to a declared child.",
+		"Move each child pin to that child's latest tag with the stack's command in `govna/code-stacks.md`.",
+		"Run the full build only after every override is removed and every pin is moved.",
+		"Write the `history.md` section after that full build passes.",
+		"Run the parent's prep after the `history.md` section.",
+		"List each child release before the parent's release in the Package completion report.",
+		"List every `go.mod` change beyond the child pin lines in a Go parent's Package completion report.",
+		"State the fix-forward recovery in every report of a failure after a published child tag.",
+	},
+	"govna/development-cycle.md": {
+		"Follow `govna/build-release.md` `## Child Releases` to release a child.",
+	},
+	"govna/code-stacks.md": {
+		"Stop prep and release when a local override resolves to a declared child.",
+		"Name the child, the override, and the pin update that removes it in that message.",
+		"Accept a local override to a declared child during a full build.",
+		"Accept every local override that resolves outside every declared child.",
+		"Clone each declared child at its registry path before a full build, including in CI.",
+		"Run a scoped build in a clone that lacks its children.",
+		"Release a repository with no `cmd/<target>/main.go` from its tag alone, without compiling or installing a utility.",
+		"Use `go work init . <child>` for a child override.",
+		"Detect a child override in a `go.mod` `replace` directive and in the workspace that `go env GOWORK` names.",
+		"Skip `go mod tidy` in a full build only while that workspace names a declared child.",
+		"Print one line that names the child when the build skips `go mod tidy`.",
+		"Move a pin with `go mod edit -dropreplace=<module>` when a replace exists, then `go get <module>@<tag>`.",
+		"Set `GOPRIVATE` or `GOPROXY=direct` when `go get` cannot see a just-pushed tag.",
+		"Use a `[patch]` entry with a `path` for a child override.",
+		"Detect a child override in a `path` dependency or `[patch]` entry in `Cargo.toml` or `.cargo/config.toml`.",
+		"Move a pin by setting the dependency's `tag`, removing the override, then running `cargo update -p <crate>`.",
+		"Use a local module `source` for a child override.",
+		"Detect a child override in any `.tf` module `source`.",
+		"Move a pin by setting `?ref=<tag>` in each child module `source`.",
+		"Use `swift package edit --path <child> <package>` for a child override.",
+		"Detect a child override in `.package(path:)` and in edit mode.",
+		"Move a pin by setting the version in `Package.swift`, running `swift package unedit <package>`, then `swift package resolve`.",
+	},
+}
+
+// childReleaseRetired lists wording that the child release chain deletes from
+// every rendered CODE governance file.
+var childReleaseRetired = []string{
+	"Leave each child release for the Director",
+	"Ignore the registry during prep and release.",
+	"- Run no other git or GitHub write under the keyword.\n",
 }
 
 // agentReleaseRetired lists wording that the phase-action and agent-release
@@ -1771,6 +1842,25 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 			rules := map[string][]string{}
 			for path, list := range agentReleaseRules {
 				rules[path] = append(rules[path], list...)
+			}
+			if p.config.Flavor == Code {
+				for path, list := range childReleaseRules {
+					rules[path] = append(rules[path], list...)
+				}
+				for path, content := range map[string]string{
+					"AGENTS.md":                  fileText(t, files, "AGENTS.md"),
+					"govna/build-release.md":     fileText(t, files, "govna/build-release.md"),
+					"govna/development-cycle.md": fileText(t, files, "govna/development-cycle.md"),
+					"govna/code-stacks.md":       fileText(t, files, "govna/code-stacks.md"),
+				} {
+					for _, retired := range childReleaseRetired {
+						if strings.Contains(content, retired) {
+							t.Errorf("%s retains retired child release wording: %q", path, retired)
+						}
+					}
+				}
+			} else {
+				rules["AGENTS.md"] = append(rules["AGENTS.md"], "Run no other git or GitHub write under the keyword.")
 			}
 			if p.config.Flavor == Code {
 				rules["govna/build-release.md"] = append(rules["govna/build-release.md"], "Append `--yes` or `-y` to skip that prompt only for an agent-run release under `AGENTS.md` `### Agent Release`.")

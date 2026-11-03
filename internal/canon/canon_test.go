@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.87.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.88.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -560,7 +560,7 @@ func TestPackageCompletionContract(t *testing.T) {
 }
 
 func TestAgentReleaseContract(t *testing.T) {
-	const block = "\n### Agent Release\n\n" +
+	const docBlock = "\n### Agent Release\n\n" +
 		"- Apply these rules when the Director sends `release` or `rel`, standalone or with a named batch.\n" +
 		"- Treat standalone `release` or `rel` as authorization for Package plus one agent-run release.\n" +
 		"- Apply standalone `release` or `rel` to the same release batch as standalone Package.\n" +
@@ -585,8 +585,14 @@ func TestAgentReleaseContract(t *testing.T) {
 		"Interpret standalone `release` or `rel` only as an agent-run release under `### Agent Release`.",
 		"as the named-batch Package form.",
 	}
-	assertContract := func(t *testing.T, name, agents string, governance map[string]string) {
+	codeBlock := strings.Replace(docBlock, "- Run no other git or GitHub write under the keyword.\n",
+		"- Run no other git or GitHub write under the keyword except each child release under `### Child Repositories`.\n", 1)
+	assertContract := func(t *testing.T, name string, flavor Flavor, agents string, governance map[string]string) {
 		t.Helper()
+		block := docBlock
+		if flavor == Code {
+			block = codeBlock
+		}
 		_, rest, ok := strings.Cut(agents, "\n## Approval Boundaries\n")
 		boundaries, _, _ := strings.Cut(rest, "\n## File-Change Discipline\n")
 		if !ok || strings.Count(boundaries, block) != 1 || strings.Count(agents, "### Agent Release\n") != 1 {
@@ -610,7 +616,7 @@ func TestAgentReleaseContract(t *testing.T) {
 		}
 		rootFiles[path] = string(data)
 	}
-	assertContract(t, "repository", rootFiles["AGENTS.md"], rootFiles)
+	assertContract(t, "repository", Code, rootFiles["AGENTS.md"], rootFiles)
 
 	for _, p := range dedupProfiles() {
 		t.Run(p.name, func(t *testing.T) {
@@ -624,7 +630,7 @@ func TestAgentReleaseContract(t *testing.T) {
 					governance[file.Path] = string(file.Content)
 				}
 			}
-			assertContract(t, p.name, fileText(t, files, "AGENTS.md"), governance)
+			assertContract(t, p.name, p.config.Flavor, fileText(t, files, "AGENTS.md"), governance)
 		})
 	}
 }

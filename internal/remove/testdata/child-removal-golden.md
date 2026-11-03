@@ -2,7 +2,7 @@
 
 ## Summary
 
-Govna executable v9.8.7 created this plan from its embedded governance files (canon v0.87.0). This AC drops the child repository `../engine` from this parent: it rewrites the child's `AGENTS.md` to the orphan note and removes the child from `govna/children.txt`. Every other file stays unchanged.
+Govna executable v9.8.7 created this plan from its embedded governance files (canon v0.88.0). This AC drops the child repository `../engine` from this parent: it rewrites the child's `AGENTS.md` to the orphan note and removes the child from `govna/children.txt`. Every other file stays unchanged.
 
 ### Removal Instructions
 
