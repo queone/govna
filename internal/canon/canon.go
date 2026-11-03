@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.85.0"
+const Version = "0.86.0"
 
 const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
@@ -176,6 +176,78 @@ func Render(cfg Config) ([]File, error) {
 		files = append(files, File{Path: path, Content: out[path]})
 	}
 	return files, nil
+}
+
+const (
+	childPointerAsset = "assets/child/pointer-AGENTS.md.tmpl"
+	childOrphanAsset  = "assets/child/orphan-AGENTS.md.tmpl"
+)
+
+// ChildTooling returns the build tooling a child repository on stack receives:
+// every file in the stack's build overlay, in byte order.
+func ChildTooling(stack string) ([]string, error) {
+	canonical, ok := CanonicalStack(stack)
+	if !ok {
+		return nil, fmt.Errorf("unsupported CODE stack %q: use %s", stack, SupportedStackChoices)
+	}
+	out := map[string][]byte{}
+	if err := walkOverlay("assets/overlays/code/stacks/"+strings.ToLower(canonical)+"/", nil, out); err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(out))
+	for path := range out {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+// RenderChild returns the child files for a CODE stack in byte order: the
+// pointer AGENTS.md, the stack's build tooling, .gitignore, and CHANGELOG.md.
+func RenderChild(stack string) ([]File, error) {
+	tooling, err := ChildTooling(stack)
+	if err != nil {
+		return nil, err
+	}
+	files, err := Render(Config{Flavor: Code, RepoName: "child", Stack: stack, ModulePath: "child"})
+	if err != nil {
+		return nil, err
+	}
+	keep := map[string]bool{".gitignore": true, "CHANGELOG.md": true}
+	for _, path := range tooling {
+		keep[path] = true
+	}
+	pointer, err := renderAsset(childPointerAsset, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := []File{{Path: "AGENTS.md", Content: pointer}}
+	for _, file := range files {
+		if keep[file.Path] {
+			out = append(out, file)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
+// RenderOrphan returns the orphan note that replaces a dropped child's pointer.
+func RenderOrphan() ([]File, error) {
+	orphan, err := renderAsset(childOrphanAsset, nil)
+	if err != nil {
+		return nil, err
+	}
+	return []File{{Path: "AGENTS.md", Content: orphan}}, nil
+}
+
+// IsChildAgentFile reports whether content is exactly the canon child pointer or orphan note.
+func IsChildAgentFile(content []byte) bool {
+	for _, asset := range []string{childPointerAsset, childOrphanAsset} {
+		if data, err := fs.ReadFile(assets, asset); err == nil && string(data) == string(content) {
+			return true
+		}
+	}
+	return false
 }
 
 func walkOverlay(prefix string, values map[string]string, out map[string][]byte) error {

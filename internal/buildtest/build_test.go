@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/queone/govna/internal/canon"
+	"github.com/queone/govna/internal/repository"
 )
 
 func repoRoot(t *testing.T) string {
@@ -59,6 +60,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Go", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
 			bindings: []binding{
+				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
+				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
 				{claim: "Compile each selected utility once in an invocation-owned external temporary directory.", implementation: "go build -o \"$compiled_path\"", regression: "TestRenderedGoBuildExecutesWithoutNetwork"},
 				{claim: "Terminate after handling HUP, INT, or TERM.", implementation: "_build_signal_exit", regression: "TestGoBuildSignalsTerminateAndCleanOwnedArtifacts"},
 				{claim: "Validate every selected compiled utility's help output against `## CLI Usage Formatting` before installing any selected utility.", implementation: "_validate_utility_help_output \"$compiled_path\"", regression: "TestRenderedGoHelpProbeRejectsEachDefect"},
@@ -74,6 +77,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Rust", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
 			bindings: []binding{
+				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh tests/build_cli.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
+				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
 				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
 				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 				{claim: "Use `unborn` in place of the `HEAD` hash in the validation token before the first commit.", implementation: "printf 'unborn\\n'", regression: "test_validation_token_without_commits", shellRegression: true, claimsPath: "govna/development-guidelines.md"},
@@ -88,6 +93,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Swift", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
 			bindings: []binding{
+				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
+				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
 				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
 				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
@@ -101,6 +108,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			name: "Terraform", claimsPath: "govna/code-stacks.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
 			bindings: []binding{
+				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
+				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
 				{claim: "Refuse a release from a detached `HEAD` before the approval prompt in every stack.", implementation: "_rel_refuse_detached_head || return 1", regression: "TestDetachedHeadReleaseIsRefused"},
 				{claim: "Push the branch with `git push -u origin HEAD` when it has no upstream.", implementation: "_rel_push_branch_args=(push -u origin HEAD)", regression: "TestFirstReleaseWithoutCommitsSetsUpstream"},
 				{claim: "Accept `--yes` or `-y` after the two release arguments in every stack.", implementation: "-y | --yes) _rel_assume_yes=1", regression: "TestNonGoReleaseYesSkipsOnlyThePrompt"},
@@ -232,8 +241,12 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 		}
 	}
 	wantReferences := []string{
+		"_build_children",
 		"_byte_len",
 		"_capture_worktree_tree",
+		"_children_fail",
+		"_children_run_build",
+		"_children_validate",
 		"_cleanup_build_owned",
 		"_cleanup_prep_owned",
 		"_collect_test_files",
@@ -426,125 +439,7 @@ func TestRenderedGoBuildExecutesWithoutNetwork(t *testing.T) {
 	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fakeGo := `#!/bin/bash
-set -euo pipefail
-printf '%s\n' "$*" >>"$FAKE_TRACE"
-printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
-case "$1" in
-list)
-  printf '%s\n' 'example.com/widget'
-  ;;
-env)
-  case "$2" in
-  GOPATH) printf '%s\n' "$FAKE_GOPATH" ;;
-  GOEXE) printf '\n' ;;
-  *) exit 2 ;;
-  esac
-  ;;
-mod)
-  [ "$2" = tidy ]
-  ;;
-fmt|vet)
-  ;;
-fix)
-  if [ "$2" = -diff ] && [ -n "${FAKE_FIX_FILE:-}" ]; then
-    printf -- '--- %s (old)\n+++ %s (new)\n@@ -1 +1 @@\n-old\n+new\n' "$PWD/$FAKE_FIX_FILE" "$PWD/$FAKE_FIX_FILE"
-    exit 1
-  fi
-  ;;
-test)
-  cover=''
-  for arg in "$@"; do
-    case "$arg" in -coverprofile=*) cover="${arg#-coverprofile=}" ;; esac
-  done
-  [ -n "$cover" ]
-  printf '%s\n' 'mode: set' 'example.com/widget/internal/domain/domain.go:1.1,1.2 1 1' >"$cover"
-  if [ "${FAKE_TEST_FAIL:-}" = 1 ]; then
-    printf 'injected test failure\n' >&2
-    exit 8
-  fi
-  ;;
-tool)
-  [ "$2" = cover ]
-  if [ "${FAKE_COVER_FAIL:-}" = 1 ]; then
-    printf 'injected coverage failure\n' >&2
-    exit 8
-  fi
-  printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
-  ;;
-install)
-  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.2' ]
-  mkdir -p "$FAKE_GOPATH/bin"
-  cat >"$FAKE_GOPATH/bin/staticcheck" <<'STATICCHECK'
-#!/bin/bash
-printf 'staticcheck %s\n' "$*" >>"$FAKE_TRACE"
-printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
-case "${FAKE_STATICCHECK_FAIL:-}" in
-export)
-  printf '%s\n' '-: # math/bits' 'error in importing "math/bits" (cannot decode "math/bits", export data version 5 is greater than maximum supported version 4); please report an issue'
-  exit 1
-  ;;
-issue)
-  printf '%s\n' 'cmd/alpha/main.go:3:7: const programVersion is unused (U1000)'
-  exit 1
-  ;;
-esac
-exit 0
-STATICCHECK
-  chmod +x "$FAKE_GOPATH/bin/staticcheck"
-  ;;
-build)
-  output=''
-  target=''
-  shift
-  while [ "$#" -gt 0 ]; do
-    if [ "$1" = -o ]; then
-      shift
-      output="$1"
-    else
-      target="$1"
-    fi
-    shift
-  done
-  [ -n "$output" ]
-  case "$target" in
-  ./cmd/alpha) utility=alpha; version=1.0.0 ;;
-  ./cmd/widget) utility=widget; version=1.2.3 ;;
-  ./cmd/zeta) utility=zeta; version=2.0.0 ;;
-  *) printf 'unexpected fake go build target: %s\n' "$target" >&2; exit 2 ;;
-  esac
-  if [ "${FAKE_BUILD_FAIL_TARGET:-}" = "$utility" ]; then
-    printf 'injected build failure for %s\n' "$utility" >&2
-    exit 9
-  fi
-  reported_version="$version"
-  if [ "${FAKE_BAD_VERSION_TARGET:-}" = "$utility" ]; then
-    reported_version=9.9.9
-  fi
-  mkdir -p "$(dirname "$output")"
-  cat >"$output" <<EOF
-#!/bin/bash
-if [ "\${1:-}" = --version ]; then
-  if [ -n "\${FAKE_TRACE:-}" ]; then printf 'version $utility\n' >>"\${FAKE_TRACE}"; fi
-  printf '$utility v$reported_version\n'
-  exit 0
-fi
-case "\${1:-}" in
--h | '-?' | --help)
-  printf '%s\n' '$utility v$reported_version' 'Fake $utility utility' 'example.com/widget' '' 'Usage' '  $utility [options]' '' 'Options' '  -v, --version   print executable version' '  -h, -?, --help  show this help'
-  exit 0
-  ;;
-esac
-exit 2
-EOF
-  chmod +x "$output"
-  ;;
-*)
-  printf 'unexpected fake go command: %s\n' "$*" >&2
-  exit 2
-  ;;
-esac
-`
+	fakeGo := fakeGoScript
 	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGo), 0o755)
 	fakeMv := "#!/bin/bash\nprintf 'mv %s\\n' \"$*\" >>\"$FAKE_TRACE\"\nif [ \"${FAKE_MV_FAIL:-}\" = 1 ]; then printf 'injected install failure\\n' >&2; exit 9; fi\nexec /bin/mv \"$@\"\n"
 	writeBuildFixture(t, filepath.Join(fakeBin, "mv"), []byte(fakeMv), 0o755)
@@ -3836,5 +3731,332 @@ func TestRenderedRustBuildSuitePasses(t *testing.T) {
 	out, err := run(t, dir, "", "tests/build_cli.sh")
 	if err != nil || !strings.Contains(out, "build CLI tests:") {
 		t.Fatalf("rendered Rust build suite: %v:\n%s", err, out)
+	}
+}
+
+// fakeGoScript is the fake go toolchain shared by the rendered Go build tests.
+const fakeGoScript = `#!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FAKE_TRACE"
+printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
+case "$1" in
+list)
+  printf '%s\n' 'example.com/widget'
+  ;;
+env)
+  case "$2" in
+  GOPATH) printf '%s\n' "$FAKE_GOPATH" ;;
+  GOEXE) printf '\n' ;;
+  *) exit 2 ;;
+  esac
+  ;;
+mod)
+  [ "$2" = tidy ]
+  ;;
+fmt|vet)
+  ;;
+fix)
+  if [ "$2" = -diff ] && [ -n "${FAKE_FIX_FILE:-}" ]; then
+    printf -- '--- %s (old)\n+++ %s (new)\n@@ -1 +1 @@\n-old\n+new\n' "$PWD/$FAKE_FIX_FILE" "$PWD/$FAKE_FIX_FILE"
+    exit 1
+  fi
+  ;;
+test)
+  cover=''
+  for arg in "$@"; do
+    case "$arg" in -coverprofile=*) cover="${arg#-coverprofile=}" ;; esac
+  done
+  [ -n "$cover" ]
+  printf '%s\n' 'mode: set' 'example.com/widget/internal/domain/domain.go:1.1,1.2 1 1' >"$cover"
+  if [ "${FAKE_TEST_FAIL:-}" = 1 ]; then
+    printf 'injected test failure\n' >&2
+    exit 8
+  fi
+  ;;
+tool)
+  [ "$2" = cover ]
+  if [ "${FAKE_COVER_FAIL:-}" = 1 ]; then
+    printf 'injected coverage failure\n' >&2
+    exit 8
+  fi
+  printf '%s\n' 'example.com/widget/internal/domain/domain.go:1: f 100.0%' 'total: (statements) 100.0%'
+  ;;
+install)
+  [ "$2" = 'honnef.co/go/tools/cmd/staticcheck@v0.8.2' ]
+  mkdir -p "$FAKE_GOPATH/bin"
+  cat >"$FAKE_GOPATH/bin/staticcheck" <<'STATICCHECK'
+#!/bin/bash
+printf 'staticcheck %s\n' "$*" >>"$FAKE_TRACE"
+printf '%s\n' "${GOTOOLCHAIN:-}" >>"$FAKE_TRACE.toolchain"
+case "${FAKE_STATICCHECK_FAIL:-}" in
+export)
+  printf '%s\n' '-: # math/bits' 'error in importing "math/bits" (cannot decode "math/bits", export data version 5 is greater than maximum supported version 4); please report an issue'
+  exit 1
+  ;;
+issue)
+  printf '%s\n' 'cmd/alpha/main.go:3:7: const programVersion is unused (U1000)'
+  exit 1
+  ;;
+esac
+exit 0
+STATICCHECK
+  chmod +x "$FAKE_GOPATH/bin/staticcheck"
+  ;;
+build)
+  output=''
+  target=''
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then
+      shift
+      output="$1"
+    else
+      target="$1"
+    fi
+    shift
+  done
+  [ -n "$output" ]
+  case "$target" in
+  ./cmd/alpha) utility=alpha; version=1.0.0 ;;
+  ./cmd/widget) utility=widget; version=1.2.3 ;;
+  ./cmd/zeta) utility=zeta; version=2.0.0 ;;
+  *) printf 'unexpected fake go build target: %s\n' "$target" >&2; exit 2 ;;
+  esac
+  if [ "${FAKE_BUILD_FAIL_TARGET:-}" = "$utility" ]; then
+    printf 'injected build failure for %s\n' "$utility" >&2
+    exit 9
+  fi
+  reported_version="$version"
+  if [ "${FAKE_BAD_VERSION_TARGET:-}" = "$utility" ]; then
+    reported_version=9.9.9
+  fi
+  mkdir -p "$(dirname "$output")"
+  cat >"$output" <<EOF
+#!/bin/bash
+if [ "\${1:-}" = --version ]; then
+  if [ -n "\${FAKE_TRACE:-}" ]; then printf 'version $utility\n' >>"\${FAKE_TRACE}"; fi
+  printf '$utility v$reported_version\n'
+  exit 0
+fi
+case "\${1:-}" in
+-h | '-?' | --help)
+  printf '%s\n' '$utility v$reported_version' 'Fake $utility utility' 'example.com/widget' '' 'Usage' '  $utility [options]' '' 'Options' '  -v, --version   print executable version' '  -h, -?, --help  show this help'
+  exit 0
+  ;;
+esac
+exit 2
+EOF
+  chmod +x "$output"
+  ;;
+*)
+  printf 'unexpected fake go command: %s\n' "$*" >&2
+  exit 2
+  ;;
+esac
+`
+
+// childRegistryFixtures pairs each child registry body with whether every reader accepts it.
+var childRegistryFixtures = []struct {
+	name   string
+	body   string
+	accept bool
+}{
+	{"header only", "govna-children-v1\n", true},
+	{"sorted siblings", "govna-children-v1\n../a\n../b/c\n", true},
+	{"missing header", "../a\n", false},
+	{"unsorted entries", "govna-children-v1\n../b\n../a\n", false},
+	{"duplicate entries", "govna-children-v1\n../a\n../a\n", false},
+	{"missing final newline", "govna-children-v1\n../a", false},
+	{"absolute path", "govna-children-v1\n/srv/a\n", false},
+	{"backslash", "govna-children-v1\n..\\a\n", false},
+	{"tab", "govna-children-v1\n../a\tb\n", false},
+	{"blank entry", "govna-children-v1\n\n", false},
+	{"trailing slash", "govna-children-v1\n../a/\n", false},
+	{"dot component", "govna-children-v1\n./a\n", false},
+	{"dotdot after a name", "govna-children-v1\n../a/../b\n", false},
+}
+
+type childBuildProfile struct {
+	name, path, loader string
+	tooling            []string
+}
+
+func childBuildProfiles() []childBuildProfile {
+	source := "source ./build.sh\n"
+	swift := "eval \"$(sed '/^main \\\"$@\\\"/,$d' ./build.sh)\"\n"
+	stacks := "internal/canon/assets/overlays/code/stacks/"
+	return []childBuildProfile{
+		{name: "root Go", path: "build.sh", loader: source, tooling: []string{"build.sh"}},
+		{name: "Go", path: stacks + "go/build.sh.tmpl", loader: source, tooling: []string{"build.sh"}},
+		{name: "Rust", path: stacks + "rust/build.sh.tmpl", loader: source, tooling: []string{"build.sh", "tests/build_cli.sh"}},
+		{name: "Swift", path: stacks + "swift/build.sh.tmpl", loader: swift, tooling: []string{"build.sh"}},
+		{name: "Terraform", path: stacks + "terraform/build.sh.tmpl", loader: source, tooling: []string{"build.sh"}},
+	}
+}
+
+// writeChildTooling copies a profile's build tooling into dir.
+func writeChildTooling(t *testing.T, root, dir string, profile childBuildProfile) {
+	t.Helper()
+	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, profile.path)), 0o755)
+	for _, path := range profile.tooling {
+		if path == "build.sh" {
+			continue
+		}
+		source := filepath.Join(root, "internal/canon/assets/overlays/code/stacks/rust", path+".tmpl")
+		writeBuildFixture(t, filepath.Join(dir, filepath.FromSlash(path)), mustRead(t, source), 0o755)
+	}
+}
+
+func TestChildBuildHelperIsSharedByEveryStack(t *testing.T) {
+	root := repoRoot(t)
+	var want string
+	for _, profile := range childBuildProfiles() {
+		script := string(mustRead(t, filepath.Join(root, profile.path)))
+		start := strings.Index(script, "# --- child repositories (identical in every CODE stack build script) ---\n")
+		end := strings.Index(script, "# --- end child repositories ---\n")
+		if start < 0 || end < start {
+			t.Fatalf("%s lacks the shared child-build helper", profile.name)
+		}
+		block := script[start:end]
+		if want == "" {
+			want = block
+		} else if block != want {
+			t.Errorf("%s child-build helper differs from the other stacks", profile.name)
+		}
+	}
+}
+
+func TestChildRegistryReadersAgree(t *testing.T) {
+	root := repoRoot(t)
+	for _, fixture := range childRegistryFixtures {
+		if _, err := repository.ParseChildren([]byte(fixture.body)); (err == nil) != fixture.accept {
+			t.Errorf("Go reader %s: err=%v want accept=%v", fixture.name, err, fixture.accept)
+		}
+	}
+	for _, profile := range childBuildProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeChildTooling(t, root, dir, profile)
+			for _, fixture := range childRegistryFixtures {
+				writeBuildFixture(t, filepath.Join(dir, "govna", "children.txt"), []byte(fixture.body), 0o644)
+				out, err := run(t, dir, "", "-c", profile.loader+"_color_init\n_children_validate govna/children.txt\n")
+				if (err == nil) != fixture.accept {
+					t.Errorf("shell reader %s: err=%v want accept=%v: %s", fixture.name, err, fixture.accept, out)
+				}
+				if !fixture.accept && !strings.Contains(out, "build: govna/children.txt: ") {
+					t.Errorf("shell reader %s rejection omits the registry and its rule: %s", fixture.name, out)
+				}
+			}
+		})
+	}
+}
+
+func TestChildBuildHelperRunsMatchingChildren(t *testing.T) {
+	root := repoRoot(t)
+	for _, profile := range childBuildProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			base := t.TempDir()
+			parent := filepath.Join(base, "parent")
+			trace := filepath.Join(base, "trace")
+			for _, dir := range []string{parent, filepath.Join(base, "c1"), filepath.Join(base, "c2")} {
+				writeChildTooling(t, root, dir, profile)
+			}
+			probe := profile.loader + "_color_init\n" +
+				"_children_run_build() { printf '%s\\n' \"$1\" >>\"$TRACE\"; [ \"${FAIL_CHILD:-}\" != \"${1##*/}\" ]; }\n" +
+				"_build_children \"$1\" " + strings.Join(profile.tooling, " ") + "\n"
+			runProbe := func(scoped string, env ...string) (string, string, error) {
+				_ = os.Remove(trace)
+				cmd := exec.Command("/bin/bash", "-c", probe, "_", scoped)
+				cmd.Dir = parent
+				cmd.Env = append(append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "TRACE="+trace), env...)
+				out, err := cmd.CombinedOutput()
+				ran, _ := os.ReadFile(trace)
+				return string(out), string(ran), err
+			}
+			if out, ran, err := runProbe("0"); err != nil || out != "" || ran != "" {
+				t.Fatalf("build without a registry changed: err=%v out=%q ran=%q", err, out, ran)
+			}
+			writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../c1\n../c2\n"), 0o644)
+			resolved, err := filepath.EvalSymlinks(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c1, c2 := filepath.Join(resolved, "c1"), filepath.Join(resolved, "c2")
+			out, ran, err := runProbe("0")
+			if err != nil || ran != c1+"\n"+c2+"\n" {
+				t.Fatalf("full build ran=%q err=%v out=%s", ran, err, out)
+			}
+			if first, second := strings.Index(out, "==> Build child repository ../c1"), strings.Index(out, "==> Build child repository ../c2"); first < 0 || second < first {
+				t.Fatalf("full build did not announce children in registry order:\n%s", out)
+			}
+			out, ran, err = runProbe("1")
+			if err != nil || ran != "" || out != "==> Skip child repository builds for a scoped build\n" {
+				t.Fatalf("scoped build: err=%v ran=%q out=%q", err, ran, out)
+			}
+			out, ran, err = runProbe("0", "FAIL_CHILD=c1")
+			if err == nil || ran != c1+"\n" || !strings.Contains(out, "build: child ../c1: build failed; fix the child repository and rerun ./build.sh") {
+				t.Fatalf("failing child: err=%v ran=%q out=%s", err, ran, out)
+			}
+			last := profile.tooling[len(profile.tooling)-1]
+			changed := filepath.Join(base, "c2", filepath.FromSlash(last))
+			writeBuildFixture(t, changed, append(mustRead(t, changed), []byte("# local edit\n")...), 0o755)
+			out, ran, err = runProbe("0")
+			if err == nil || ran != c1+"\n" || !strings.Contains(out, "build: child ../c2: "+last+" differs from this repository's copy; run govna audit here and apply its child updates") {
+				t.Fatalf("differing tooling: err=%v ran=%q out=%s", err, ran, out)
+			}
+			writeBuildFixture(t, filepath.Join(parent, "inner", "build.sh"), []byte("#!/bin/bash\n"), 0o755)
+			writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\ninner\n"), 0o644)
+			if out, ran, err = runProbe("0"); err == nil || ran != "" || !strings.Contains(out, "build: child inner is inside this repository") {
+				t.Fatalf("child inside the parent: err=%v ran=%q out=%s", err, ran, out)
+			}
+			writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../missing\n"), 0o644)
+			if out, ran, err = runProbe("0"); err == nil || ran != "" || !strings.Contains(out, "build: child ../missing is not a directory") {
+				t.Fatalf("missing child: err=%v ran=%q out=%s", err, ran, out)
+			}
+		})
+	}
+}
+
+func TestRenderedGoBuildRunsChildFirst(t *testing.T) {
+	root := repoRoot(t)
+	base := t.TempDir()
+	parent := filepath.Join(base, "parent")
+	child := filepath.Join(base, "child")
+	script := mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
+	for _, dir := range []string{parent, child} {
+		writeBuildFixture(t, filepath.Join(dir, "build.sh"), script, 0o755)
+		writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+		writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\n\nconst programVersion = \"1.2.3\"\n\nfunc main() {}\n"), 0o644)
+		writeBuildFixture(t, filepath.Join(dir, "internal/domain/domain.go"), []byte("package domain\n"), 0o644)
+	}
+	writeBuildFixture(t, filepath.Join(parent, "govna", "children.txt"), []byte("govna-children-v1\n../child\n"), 0o644)
+	fakeBin := filepath.Join(base, "fakebin")
+	gopath := filepath.Join(base, "gopath")
+	tmpRoot := filepath.Join(base, "tmp")
+	trace := filepath.Join(base, "go.trace")
+	for _, dir := range []string{fakeBin, filepath.Join(gopath, "bin"), tmpRoot} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeBuildFixture(t, filepath.Join(fakeBin, "go"), []byte(fakeGoScript), 0o755)
+	cmd := exec.Command("/bin/bash", "./build.sh")
+	cmd.Dir = parent
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb", "GOVNA_FORCE_TTY=0", "FAKE_GOPATH="+gopath, "FAKE_TRACE="+trace, "TMPDIR="+tmpRoot+"/", "PATH="+fakeBin+":"+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("parent build with a child: %v:\n%s", err, out)
+	}
+	output := string(out)
+	header := strings.Index(output, "==> Build child repository ../child")
+	tidy := strings.Index(output, "==> Update go.mod to reflect actual dependencies")
+	if header < 0 || tidy < header || strings.Count(output, "==> Update go.mod to reflect actual dependencies") != 2 {
+		t.Fatalf("parent build did not run the child build before its own steps:\n%s", output)
+	}
+	if _, err := os.Stat(filepath.Join(child, "govna")); !os.IsNotExist(err) {
+		t.Fatalf("child fixture must have no govna directory: %v", err)
+	}
+	if got := strings.Count(string(mustRead(t, trace)), "mod tidy\n"); got != 2 {
+		t.Fatalf("go mod tidy ran %d times, want once for the child and once for the parent", got)
 	}
 }

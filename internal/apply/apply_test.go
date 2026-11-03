@@ -35,8 +35,8 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 	created := adoption(7, "widget", "CODE", testProgramVersion, nil, repository.AgentFileAbsent)
 	for _, want := range []string{
 		"# AC7 Review Files Added by Govna",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.85.0) for the CODE repository widget.",
-		"Govna executable v9.8.7 added its embedded governance files (canon v0.85.0). The list below records whether each file was written, merged, or preserved.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.86.0) for the CODE repository widget.",
+		"Govna executable v9.8.7 added its embedded governance files (canon v0.86.0). The list below records whether each file was written, merged, or preserved.",
 		"Files Govna processed:",
 		"- Files not listed above.",
 		hashCheck,
@@ -46,7 +46,7 @@ func TestAdoptionVersionAxesAndInstructions(t *testing.T) {
 			t.Errorf("created adoption omits %q", want)
 		}
 	}
-	for _, invalid := range []string{"Applied govna v0.85.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
+	for _, invalid := range []string{"Applied govna v0.86.0", "Director reads", "review applied governance", "overlay", "consumer-owned", "CLAUDE.md", "**AT2**", "Verify AGENTS.md reflects", "delivery model", "repository-owned section"} {
 		if strings.Contains(created, invalid) {
 			t.Errorf("created adoption retains invalid text %q", invalid)
 		}
@@ -796,4 +796,202 @@ func normalizeTarget(out string) string {
 		}
 	}
 	return strings.Join(kept, "\n")
+}
+
+// childManifests names one manifest per CODE stack for child-mode fixtures.
+var childManifests = map[string][2]string{
+	"Go":        {"go.mod", "module example.com/engine\n\ngo 1.27.0\n"},
+	"Rust":      {"Cargo.toml", "[package]\nname = \"engine\"\nversion = \"0.1.0\"\n"},
+	"Swift":     {"Package.swift", "// swift-tools-version: 6.0\n"},
+	"Terraform": {".terraform.lock.hcl", "# fixture\n"},
+}
+
+// childParentFixture writes an adopted CODE parent named zq-private-parent and an
+// empty child named engine beside it, and returns both directories.
+func childParentFixture(t *testing.T, stack string) (string, string) {
+	t.Helper()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(base, "zq-private-parent")
+	child := filepath.Join(base, "engine")
+	module := ""
+	if stack == "Go" {
+		module = "example.com/zq-private-parent"
+	}
+	files, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "zq-private-parent", Stack: stack, ModulePath: module})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		writeFixture(t, filepath.Join(parent, filepath.FromSlash(file.Path)), file.Content)
+	}
+	manifest := childManifests[stack]
+	writeFixture(t, filepath.Join(parent, manifest[0]), []byte(manifest[1]))
+	writeFixture(t, filepath.Join(child, manifest[0]), []byte(manifest[1]))
+	return parent, child
+}
+
+func writeFixture(t *testing.T, path string, content []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestApplyChildWritesChildFilesAndRegistry(t *testing.T) {
+	for _, stack := range canon.Stacks() {
+		t.Run(stack, func(t *testing.T) {
+			parent, child := childParentFixture(t, stack)
+			out, errOut, code := runAt(t, parent, "--child", "../engine")
+			if code != 0 || errOut != "" {
+				t.Fatalf("code=%d stdout=%s stderr=%s", code, out, errOut)
+			}
+			want, err := canon.RenderChild(stack)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest := childManifests[stack][0]
+			got := map[string]bool{}
+			if err := filepath.WalkDir(child, func(path string, entry os.DirEntry, err error) error {
+				if err != nil || entry.IsDir() {
+					return err
+				}
+				rel, _ := filepath.Rel(child, path)
+				got[filepath.ToSlash(rel)] = true
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(want)+1 || !got[manifest] {
+				t.Fatalf("child files=%v, want the child files plus %s", got, manifest)
+			}
+			for _, file := range want {
+				data, err := os.ReadFile(filepath.Join(child, filepath.FromSlash(file.Path)))
+				if err != nil || !bytes.Equal(data, file.Content) {
+					t.Fatalf("%s differs from the child render: %v", file.Path, err)
+				}
+				if bytes.Contains(data, []byte("zq-private-parent")) || bytes.Contains(data, []byte(parent)) {
+					t.Fatalf("child %s names the parent", file.Path)
+				}
+			}
+			if registry, err := os.ReadFile(filepath.Join(parent, "govna", "children.txt")); err != nil || string(registry) != "govna-children-v1\n../engine\n" {
+				t.Fatalf("registry=%q err=%v", registry, err)
+			}
+			if _, err := os.Stat(filepath.Join(child, "govna")); !os.IsNotExist(err) {
+				t.Fatalf("child received a govna directory: %v", err)
+			}
+			if stack == "Go" {
+				assertGolden(t, filepath.Join(parent, "govna", "ac1-govna-apply-child.md"), "child-golden.md")
+			}
+		})
+	}
+}
+
+func TestApplyChildRejectsBeforeWriting(t *testing.T) {
+	cases := []struct {
+		name, arg, want string
+		setup           func(t *testing.T, parent, child string)
+	}{
+		{"DOC parent", "../engine", "applies only to a CODE parent", func(t *testing.T, parent, child string) {
+			writeFixture(t, filepath.Join(parent, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.86.0\nrepo_type = DOC\n"))
+		}},
+		{"unadopted parent", "../engine", "has no govna/metadata.txt; run govna apply here first", func(t *testing.T, parent, child string) {
+			os.Remove(filepath.Join(parent, "govna", "metadata.txt"))
+		}},
+		{"stack mismatch", "../engine", "uses the Rust stack but the parent uses Go; a child must use its parent's stack", func(t *testing.T, parent, child string) {
+			os.Remove(filepath.Join(child, "go.mod"))
+			writeFixture(t, filepath.Join(child, "Cargo.toml"), []byte("[package]\nname = \"engine\"\n"))
+		}},
+		{"child inside parent", "inner", "is inside the parent repository", func(t *testing.T, parent, child string) {
+			writeFixture(t, filepath.Join(parent, "inner", "go.mod"), []byte("module example.com/inner\n"))
+		}},
+		{"parent inside child", "..", "contains the parent repository", nil},
+		{"adopted child", "../engine", "has already adopted Govna (govna/metadata.txt exists)", func(t *testing.T, parent, child string) {
+			writeFixture(t, filepath.Join(child, "govna", "metadata.txt"), []byte("repo_type = CODE\n"))
+		}},
+		{"link", "../link", "is a symbolic link; pass the child repository's real directory", func(t *testing.T, parent, child string) {
+			if err := os.Symlink(child, filepath.Join(filepath.Dir(parent), "link")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"missing path", "../missing", "does not exist; clone or restore the child repository there", nil},
+		{"file", "../file", "is not a directory; pass the child repository's root directory", func(t *testing.T, parent, child string) {
+			writeFixture(t, filepath.Join(filepath.Dir(parent), "file"), []byte("x\n"))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, child := childParentFixture(t, "Go")
+			if tc.setup != nil {
+				tc.setup(t, parent, child)
+			}
+			_, errOut, code := runAt(t, parent, "--child", tc.arg)
+			if code != 1 || !strings.Contains(errOut, tc.want) {
+				t.Fatalf("code=%d stderr=%q, want %q", code, errOut, tc.want)
+			}
+			if _, err := os.Stat(filepath.Join(child, "AGENTS.md")); !os.IsNotExist(err) {
+				t.Fatalf("rejected child mode wrote a child file: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(parent, "govna", "children.txt")); !os.IsNotExist(err) {
+				t.Fatalf("rejected child mode wrote the registry: %v", err)
+			}
+		})
+	}
+	parent, _ := childParentFixture(t, "Go")
+	if _, errOut, code := runAt(t, parent, "--child", "../engine", "--stack", "Go"); code != 2 || !strings.Contains(errOut, "--child takes its flavor and stack from the parent") {
+		t.Fatalf("combined options code=%d stderr=%q", code, errOut)
+	}
+}
+
+func TestApplyReplacesChildPointerAndOrphanNote(t *testing.T) {
+	pointer, err := canon.RenderChild("Go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan, err := canon.RenderOrphan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "engine", Stack: "Go", ModulePath: "example.com/engine"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonAgents := agentsOf(full)
+	for name, agents := range map[string][]byte{"pointer": agentsOf(pointer), "orphan": agentsOf(orphan)} {
+		t.Run(name, func(t *testing.T) {
+			d := t.TempDir()
+			writeFixture(t, filepath.Join(d, "go.mod"), []byte("module example.com/engine\n\ngo 1.27.0\n"))
+			writeFixture(t, filepath.Join(d, "AGENTS.md"), agents)
+			out, errOut, code := runAt(t, d)
+			if code != 0 || strings.Contains(errOut, "boundary") || !strings.Contains(out, "replaced AGENTS.md (child pointer or orphan note)") {
+				t.Fatalf("code=%d stdout=%s stderr=%s", code, out, errOut)
+			}
+			if got, _ := os.ReadFile(filepath.Join(d, "AGENTS.md")); !bytes.Equal(got, canonAgents) {
+				t.Fatal("AGENTS.md is not the full canon file")
+			}
+			if ac, _ := os.ReadFile(filepath.Join(d, "govna", "ac1-govna-apply.md")); !strings.Contains(string(ac), "- `AGENTS.md` (replaced the child pointer or orphan note with the full Govna file)") {
+				t.Fatalf("adoption AC omits the replacement:\n%s", ac)
+			}
+		})
+	}
+	d := t.TempDir()
+	writeFixture(t, filepath.Join(d, "go.mod"), []byte("module example.com/engine\n\ngo 1.27.0\n"))
+	writeFixture(t, filepath.Join(d, "AGENTS.md"), append(append([]byte{}, agentsOf(pointer)...), []byte("- Local rule.\n")...))
+	if _, errOut, code := runAt(t, d); code != 0 || !strings.Contains(errOut, "replacing the whole file because the named Govna/local boundary is missing") {
+		t.Fatalf("edited pointer code=%d stderr=%s", code, errOut)
+	}
+}
+
+func agentsOf(files []canon.File) []byte {
+	for _, file := range files {
+		if file.Path == "AGENTS.md" {
+			return file.Content
+		}
+	}
+	return nil
 }

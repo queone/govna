@@ -526,3 +526,56 @@ func TestAgentVersionProbeReadsAndBoundsTheProgram(t *testing.T) {
 		}
 	})
 }
+
+func TestChildRegistryAndResolution(t *testing.T) {
+	entries, err := ParseChildren([]byte("govna-children-v1\n../a\n../b/c\n"))
+	if err != nil || strings.Join(entries, ",") != "../a,../b/c" {
+		t.Fatalf("entries=%v err=%v", entries, err)
+	}
+	if _, err := ParseChildren([]byte("govna-children-v1\n../b\n../a\n")); err == nil || !strings.Contains(err.Error(), "keep the govna-children-v1 header, then one byte-sorted child path per line") {
+		t.Fatalf("unsorted registry error=%v", err)
+	}
+	if got := string(FormatChildren([]string{"../b", "../a", "../b"})); got != "govna-children-v1\n../a\n../b\n" {
+		t.Fatalf("formatted registry=%q", got)
+	}
+	if got := string(FormatChildren(nil)); got != "govna-children-v1\n" {
+		t.Fatalf("formatted empty registry=%q", got)
+	}
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(base, "parent")
+	child := filepath.Join(base, "child")
+	for _, dir := range []string{filepath.Join(parent, "inner"), child} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(base, "file"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(child, filepath.Join(base, "link")); err != nil {
+		t.Fatal(err)
+	}
+	for _, arg := range []string{"../child", child} {
+		dir, err := ResolveChild(parent, arg)
+		if err != nil || dir != child {
+			t.Fatalf("ResolveChild(%q)=%q, %v", arg, dir, err)
+		}
+		if entry, err := ChildEntry(parent, dir); err != nil || entry != "../child" {
+			t.Fatalf("ChildEntry=%q, %v", entry, err)
+		}
+	}
+	for arg, want := range map[string]string{
+		"inner":      "inner is inside the parent repository; keep a child repository outside its parent's worktree",
+		"..":         ".. contains the parent repository; pass a separate repository beside the parent",
+		"../missing": "../missing does not exist; clone or restore the child repository there",
+		"../file":    "../file is not a directory; pass the child repository's root directory",
+		"../link":    "../link is a symbolic link; pass the child repository's real directory",
+	} {
+		if _, err := ResolveChild(parent, arg); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("ResolveChild(%q) error=%v, want %q", arg, err, want)
+		}
+	}
+}

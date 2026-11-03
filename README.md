@@ -204,6 +204,9 @@ Flags:
 - `-n, --repo-name <name>` — set the repository name; otherwise use the current directory name.
 - `-m, --module-path <path>` — set the Go module path; otherwise read it from `go.mod`.
 - `-g, --init-git` — initialize Git on `main` when the target is not already a repository.
+- `-c, --child <path>` — add the repository at `<path>` as a child of this adopted CODE parent; takes no other option.
+
+A child repository is a separate repository that this parent imports at a pinned version and governs from its own sessions, such as a public engine for a private game. Run `govna apply --child ../engine` from the parent. Govna checks that the child is beside the parent, uses the parent's stack, and has not adopted Govna. It then writes the child files: a pointer `AGENTS.md` that never names the parent, the stack's build tooling (`build.sh`, plus `tests/build_cli.sh` for Rust), `.gitignore`, and `CHANGELOG.md`. It records the child in `govna/children.txt` and writes a review AC in the parent. The parent's full `./build.sh` runs the child's `build.sh` first, but only when the child's build tooling matches the parent's copy. A later `govna apply` in the child replaces an unedited pointer with the full Govna files. DOC repositories have no child repositories.
 
 Apply keeps an existing `README.md`, `CHANGELOG.md`, `arch.md`, or `plan.md`, merges every registered governance boundary whether or not an agent instruction file already exists, recognizes a boundary with LF or CRLF line endings, and reports every outcome in the adoption AC. Before writing anything, apply validates every destination: it rejects a symbolic link at a managed path or intermediate directory, a directory or special file where a regular file belongs, and any path outside the target, naming the path and the recovery action. Every read and write runs through a handle contained in the resolved target. After adoption, the repository owns its generated files and may adapt them to local needs.
 
@@ -227,6 +230,8 @@ Audit stub filenames remain keyed by canon version. Their guarded markers record
 
 An explicit agent-mediated request to run `govna audit` also authorizes immediate review of one emitted or reused adoption AC. The executable still performs only deterministic comparison and emission. The Operator performs Audit, completes no-edit Refine after every blocker is resolved, runs Pre-Implementation Verification, reports readiness only when that checklist passes, and stops before Implement. A clean result, a check-mode result, or a pre-emission failure enters no AC phase. A correction that would change the immutable AC requires a new audit emission.
 
+In a parent with `govna/children.txt`, audit also checks each child's files and names them by parent-relative path, such as `../engine/build.sh`. It always updates a differing pointer or build tooling file, gives a differing child `.gitignore` the ordinary choices, and checks only the shape of the child's `CHANGELOG.md`. `govna/preserve.txt` can keep a declared child's `.gitignore` only.
+
 Use `--json` to emit the deterministic machine report alongside the Markdown result. Use `--check` (`-c`) to report the result without writing anything; it exits `3` when updates or Director choices are needed and `0` when none are. Use `--diff-lines <N>` to control the per-file diff truncation limit. See [`govna/audit.md`](govna/audit.md) for the classification and adoption model.
 
 ### `rm`
@@ -239,6 +244,8 @@ govna rm
 
 The command labels files for deletion, preservation, or Director review and writes a guarded removal AC. It does not carry out any removal choice or delete repository content.
 
+In a parent with child repositories, the removal AC also rewrites each child's `AGENTS.md` to a short orphan note and deletes `govna/children.txt`, and keeps every other child file. Run `govna rm --child <path>` (`-c`) to write an AC that drops one declared child only.
+
 Follow [Leave the Trial or Remove Govna](#leave-the-trial-or-remove-govna) to review and implement that plan through your agent CLI. Removal does not recover pre-adoption file contents.
 
 Removal stubs use the same canon-keyed path and dual-axis guarded-marker model as audit stubs.
@@ -250,6 +257,8 @@ Write the selected CODE or DOC built-in governance files to a target directory f
 ```bash
 govna render --flavor code --stack Go --module-path example.com/my-service <target>
 ```
+
+Use `--child` (`-c`) to write only the child files for the selected CODE stack, or `--orphan` (`-o`) to write only the orphan note as `AGENTS.md`. Neither applies to DOC.
 
 Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned. Render validates destinations the same way apply does and rejects links, directories, and special files at managed paths before writing anything. It never creates or changes `CLAUDE.md`.
 

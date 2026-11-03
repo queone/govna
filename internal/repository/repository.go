@@ -480,6 +480,147 @@ func RequireGitWorktree(root string) error {
 	}
 	return nil
 }
+
+// ChildRegistryPath is the parent's list of declared child repositories.
+const ChildRegistryPath = "govna/children.txt"
+
+const childRegistryHeader = "govna-children-v1"
+
+// ValidateChildEntry reports why entry is not a slash-normalized path relative to
+// the parent root. Leading ".." components are allowed; "." components, a ".."
+// after a name, and empty components are not.
+func ValidateChildEntry(entry string) error {
+	switch {
+	case entry == "":
+		return errors.New("is empty")
+	case strings.HasPrefix(entry, "/") || filepath.IsAbs(entry):
+		return errors.New("is an absolute path")
+	case strings.HasSuffix(entry, "/"):
+		return errors.New("ends with a slash")
+	case strings.ContainsRune(entry, '\\'):
+		return errors.New("contains a backslash")
+	}
+	for _, r := range entry {
+		if r < 0x20 || r == 0x7f {
+			return errors.New("contains a tab or another control character")
+		}
+	}
+	named := false
+	for part := range strings.SplitSeq(entry, "/") {
+		switch part {
+		case "":
+			return errors.New("contains an empty path component")
+		case ".":
+			return errors.New(`contains a "." component`)
+		case "..":
+			if named {
+				return errors.New(`contains a ".." component after a directory name`)
+			}
+		default:
+			named = true
+		}
+	}
+	if !named {
+		return errors.New("names no directory")
+	}
+	return nil
+}
+
+// ParseChildren validates registry bytes and returns its entries in file order.
+func ParseChildren(data []byte) ([]string, error) {
+	bad := func(problem string) ([]string, error) {
+		return nil, usererr.Errorf("invalid %s: %s; keep the %s header, then one byte-sorted child path per line", ChildRegistryPath, problem, childRegistryHeader)
+	}
+	if len(data) == 0 || data[len(data)-1] != '\n' {
+		return bad("require a final newline")
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if lines[0] != childRegistryHeader {
+		return bad("first line must be " + childRegistryHeader)
+	}
+	entries := lines[1:]
+	for i, entry := range entries {
+		if err := ValidateChildEntry(entry); err != nil {
+			return bad(fmt.Sprintf("entry %q %v", entry, err))
+		}
+		if i > 0 && entry <= entries[i-1] {
+			return bad("entries must be unique and byte-sorted")
+		}
+	}
+	return entries, nil
+}
+
+// FormatChildren renders entries as a registry with its header, sorted and unique.
+func FormatChildren(entries []string) []byte {
+	sorted := slices.Clone(entries)
+	slices.Sort(sorted)
+	sorted = slices.Compact(sorted)
+	return []byte(childRegistryHeader + "\n" + strings.Join(append(sorted, ""), "\n"))
+}
+
+// ReadChildren reads and validates the parent's child registry.
+func (a *Access) ReadChildren() ([]string, bool, error) {
+	data, present, err := a.ReadOptional(ChildRegistryPath)
+	if err != nil {
+		return nil, false, fmt.Errorf("read %s: %w", ChildRegistryPath, err)
+	}
+	if !present {
+		return nil, false, nil
+	}
+	entries, err := ParseChildren(data)
+	return entries, true, err
+}
+
+// ResolveChild resolves a child path from the parent's resolved root. It rejects a
+// missing path, a link, a non-directory, a child inside the parent, and a parent
+// inside the child, and returns the child's resolved directory.
+func ResolveChild(parentDir, entry string) (string, error) {
+	joined := filepath.Join(parentDir, filepath.FromSlash(entry))
+	if filepath.IsAbs(entry) {
+		joined = filepath.Clean(entry)
+	}
+	info, err := os.Lstat(joined)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", &PathError{Path: entry, Problem: "does not exist", Recovery: "clone or restore the child repository there, or pass the child's real path"}
+	case err != nil:
+		return "", fmt.Errorf("inspect child %s: %w", entry, err)
+	case info.Mode()&fs.ModeSymlink != 0:
+		return "", &PathError{Path: entry, Problem: "is a symbolic link", Recovery: "pass the child repository's real directory"}
+	case !info.IsDir():
+		return "", &PathError{Path: entry, Problem: "is not a directory", Recovery: "pass the child repository's root directory"}
+	}
+	resolved, err := filepath.EvalSymlinks(joined)
+	if err != nil {
+		return "", fmt.Errorf("resolve child %s: %w", entry, err)
+	}
+	if within(parentDir, resolved) {
+		return "", &PathError{Path: entry, Problem: "is inside the parent repository", Recovery: "keep a child repository outside its parent's worktree"}
+	}
+	if within(resolved, parentDir) {
+		return "", &PathError{Path: entry, Problem: "contains the parent repository", Recovery: "pass a separate repository beside the parent"}
+	}
+	return resolved, nil
+}
+
+// ChildEntry returns the registry entry for a resolved child directory.
+func ChildEntry(parentDir, childDir string) (string, error) {
+	rel, err := filepath.Rel(parentDir, childDir)
+	if err != nil {
+		return "", fmt.Errorf("relate child %s to parent %s: %w", childDir, parentDir, err)
+	}
+	entry := filepath.ToSlash(rel)
+	if err := ValidateChildEntry(entry); err != nil {
+		return "", &PathError{Path: entry, Problem: err.Error(), Recovery: "pass a child repository on the same filesystem beside the parent"}
+	}
+	return entry, nil
+}
+
+func within(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
+}
+
 func exists(name string) bool { _, err := os.Lstat(name); return err == nil }
 
 func readContainedOptional(root, rel string) ([]byte, bool, error) {

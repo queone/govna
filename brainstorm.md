@@ -113,3 +113,102 @@ it as repository-owned. Shape 1 turns that line inside one file into a file boun
 - Where do active AC files live: `PROJECT/govna/` or the root `govna/` with a project prefix?
 - How does Package name a release batch when two projects ship from one commit?
 - Should the trial repository also try Jujutsu, since it costs nothing to add or remove?
+
+## Parent-governed child repositories
+
+Captured 2026-11-03 from the `mud` consumer. `mud` is private; its game engine and a game verifier must be public, so
+anyone can replay a game and check its fairness proof. Go modules and GitHub visibility make that a separate
+repository, `mud-engine`, which `mud` imports at a pinned tag. The engine has no roadmap of its own: every change
+comes from a `mud` need. Today's canon offers two poor fits:
+
+- Full adoption makes the child a peer: two AC sequences, two sessions, two closure audits, and two Package runs for
+  each engine change, and a `mud` AC that waits on another repository's AC.
+- Ancillary work (`### Primary And Ancillary Scope`) needs a fresh request each time, cannot satisfy primary scope,
+  tests, validation, or phase gates, and `### Agent Release` runs "no other git or GitHub write", so `rel` cannot
+  release the child before the parent.
+
+The "Costs and risks" above already name the gap: "A public project may need to stay separate, or be published
+through Josh."
+
+### The boundary
+
+- A child repository is separate only for a structural reason: other visibility, or a package system that requires its
+  own repository, such as SwiftPM's root `Package.swift` or the Terraform registry's one-repository-per-module rule.
+- A child has exactly one parent, which plans, validates, and releases it.
+- A child is a dependency child: the parent imports it at a pinned version, so the child releases first.
+- A child uses the same CODE stack as its parent, because the parent's build script updates the pin in the parent's own
+  manifest.
+- A repository with its own roadmap, or several consumers that develop against it, stays a peer with full adoption,
+  as `gkit` is for `macfit`, `skout`, and `attune`.
+- A child that gains a second developing consumer is promoted to a peer.
+
+### Settled design
+
+Decided 2026-11-03 after a cross-stack and DOC review.
+
+- Declaration: the parent lists each child's relative path in a registry file under `govna/`.
+- Child files: a pointer `AGENTS.md`, the canon `build.sh` for the shared stack, that stack's `.gitignore`, and a
+  `CHANGELOG.md`. The child gets no `govna/` directory and no canon copy.
+- Pointer: the child's `AGENTS.md` never names the parent, so a private parent's name stays out of a public child. An
+  agent opened in the child stops and asks for the parent's session.
+- Adoption: `govna apply` gains a child mode with a short and a long flag. It rejects a DOC parent and a child whose
+  stack differs from the parent's.
+- Scope: a declared child's paths are primary scope whenever an AC's `## In Scope` names them, not ancillary work.
+- ACs: one sequence, in the parent only. The child's commits and CHANGELOG use plain words without AC identifiers, and
+  the parent's Package deletes the AC.
+- Validation: the parent's full build runs each declared child's `build.sh` first. Each stack sets versions its own
+  way (Go `programVersion`, Rust `Cargo.toml` and `Cargo.lock`, Swift and Terraform tag only), so only the child's own
+  stack script can check and release it. The canon scripts already run without a `govna/` directory.
+- Audit: `govna audit` in the parent also checks each child's pointer, build script, `.gitignore`, and CHANGELOG shape.
+- Orphaning: when the parent removes Govna or drops a child, the child's `AGENTS.md` becomes a short orphan note: a
+  parent used to govern this repository, no Govna contract applies now, and `govna apply` adopts Govna here as a
+  standalone repository. The note does not name the parent. The child keeps `build.sh`, `.gitignore`, and
+  `CHANGELOG.md`.
+- Promotion: `govna apply` in the child recognizes a pointer or orphan `AGENTS.md` as Govna-managed and replaces it
+  with the full canon. The parent drops the child first, then the child adopts.
+- Sessions: the parent's session adds each child as a writable directory. Claude Code uses `--add-dir` or `/add-dir`,
+  and the Codex CLI uses `--add-dir`.
+- Release order: child release, parent pin update, parent full build, parent release. `rel` runs the whole chain. An
+  unused child tag is harmless, while a missing one is never pinned.
+- Versions: the child keeps its own strict semver and moves only when it changes. The child's release message uses
+  plain words, the parent's message keeps its AC references, and the parent's `history.md` section records the
+  child's version change.
+- Local overrides: Package evidence uses the child's released version with no local override. Each stack adapter
+  detects its own override form: Go `replace` or `go.work`, Rust path dependencies or `[patch]`, Swift
+  `.package(path:)`, and Terraform `source = "../child"`.
+- Consumption: git tags only. A registry publish step for crates.io, npm, PyPI, or Maven Central stays out of scope,
+  and the plan's Java, Node, and Python adapter item carries that note.
+- Go libraries: the Go adapter releases a repository with no `cmd/<target>/main.go`, with its version from the tag
+  only, as Swift already does. Today it fails with `release: no cmd/<target>/main.go utilities were discovered`.
+- DOC: out of scope as parent and as child. A DOC repository has no manifest to pin, and its natural children, such as
+  docs sites, are distribution children.
+
+### Delivery
+
+- First AC: declaration, child files, `govna apply` and `govna rm` child modes, scope rules, validation, audit,
+  orphaning, promotion, and sessions.
+- Second AC: the `rel` chain, pin updates, local-override detection in every stack adapter, the child's release
+  message and `history.md` record, and the Go library-only release.
+
+### Distribution children
+
+Deferred to a separate plan item. A distribution child uses the parent's release, so it releases after the parent and
+pins nothing: a Homebrew tap formula needs the checksum of the parent's release file, and a GitHub Action or docs site
+wraps a released version. Taps and Action repositories also have no govna stack, so they cannot get a canonical
+`build.sh`.
+
+### Against shape 4
+
+Shape 4 keeps the child as a directory of the parent and publishes it. For a private parent it fits worse:
+`git subtree split` carries the parent's private commit messages into the public repository unless tooling squashes
+them, Josh needs a running proxy, and the parent builds the child from a permanent local `replace`, so "the parent
+runs the published version" rests on the release script instead of Go's checksum database. A real child repository
+with real tags keeps the module system honest. In a later monorepo (shape 1), a child becomes a published project
+directory, so the two directions do not conflict.
+
+### Interim in a consumer
+
+`mud` runs `mud-engine` as a child now, under a temporary mitigation recorded only in its active AC and compatible
+with canon: the Director names the child when authorizing Implement; the child is checked with the same commands its
+`build.sh` would run; only parent-side evidence satisfies parent gates; the Director runs the child's release, and the
+parent pins the tag before Ratify. The mitigation ends when govna ships child support and `mud` adopts it.

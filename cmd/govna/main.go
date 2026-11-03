@@ -15,8 +15,8 @@ import (
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.49.1"
-const canonVersion = "0.85.0"
+const programVersion = "0.50.0"
+const canonVersion = "0.86.0"
 
 // modulePath is the module the update check asks the proxy about, and
 // installPath is the package its upgrade command installs.
@@ -201,6 +201,8 @@ func renderPage() help.Page {
 			{Form: "-f, --flavor code|doc", Meaning: "select Govna file set: CODE or DOC (default: inferred from cwd)"},
 			{Form: "-s, --stack NAME", Meaning: "select CODE stack (default: inferred from cwd manifests)"},
 			{Form: "-m, --module-path PATH", Meaning: "module path for Go CODE files (default: read from cwd's go.mod)"},
+			{Form: "-c, --child", Meaning: "write only the child repository files for the CODE stack"},
+			{Form: "-o, --orphan", Meaning: "write only the orphan note for a dropped child repository"},
 		}},
 	)
 }
@@ -228,6 +230,7 @@ func applyPage() help.Page {
 			{Form: "-n, --repo-name NAME", Meaning: "repo name (default: basename of cwd)"},
 			{Form: "-m, --module-path PATH", Meaning: "module path for Go CODE files (default: read from go.mod)"},
 			{Form: "-g, --init-git", Meaning: "initialize git if the target is not a repo"},
+			{Form: "-c, --child PATH", Meaning: "add the repository at PATH as a child of this CODE parent"},
 		}},
 	)
 }

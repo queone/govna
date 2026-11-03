@@ -49,6 +49,7 @@ Every emitted audit AC uses these shared explanations:
 | `ambiguity` | Govna cannot safely choose between updating and keeping the file. |
 | `target-has-no-canon` | The file is absent from the selected current canon but specific repository evidence connects it to Govna. |
 | `migration-required` | A required Govna control file is missing and must be added through the AC. |
+| `manual-fix` | The child's CHANGELOG.md breaks the canonical table shape, and only a manual edit that keeps every row can restore it. |
 | `retired-link` | A Govna link that Claude Code no longer needs and the AC deletes. |
 | `force-sync` | This file's governed structure always syncs to canon, regardless of local edits or the preserve list. |
 
@@ -96,6 +97,8 @@ govna-preserve-v1
 ```
 
 Require a final newline. Keep entries nonempty, slash-normalized, unique, and byte-sorted. Reject absolute paths, backslashes, tabs, blank entries, `.` or `..` components, leading or trailing slashes, duplicates, and `govna/preserve.txt` itself. Accept a header-only file as the canonical empty on-disk registry.
+
+Accept an entry that starts with `..` only when it names the `.gitignore` of a child declared in `govna/children.txt`, such as `../mud-engine/.gitignore`. Reject every other such entry, because a child's pointer and build tooling always update.
 
 Add an exact path for a resolved preserve outcome. Remove an exact path for a resolved sync, delete, or canon-backed migration outcome. Preserve unrelated entries. Leave the registry absent or unchanged when its state already satisfies every resolved outcome. Verify registry changes before installing the canon baseline.
 
@@ -167,6 +170,30 @@ Audit prints two hints to stderr on every run. The hints leave the exit code, st
 - Print an upgrade hint when `claude --version` reports a version lower than 2.1.277.
 - Skip the upgrade hint when `claude` is absent, fails, exceeds two seconds, or prints an unreadable version.
 - Print a deletable hint when the repository root holds its own regular file or symbolic link named `CLAUDE.md`.
+
+## Child repositories
+
+A CODE parent lists each child repository in optional `govna/children.txt`:
+
+```text
+govna-children-v1
+<parent-relative-path>
+```
+
+- Require the header, a final newline, and nonempty, unique, byte-sorted entries.
+- Require each entry to be a slash-normalized path relative to the parent root, with `..` components only at its start.
+- Reject absolute paths, backslashes, control characters, `.` components, and leading or trailing slashes.
+- Require each entry to resolve to a real directory outside the parent worktree that does not contain the parent.
+- Stop audit before emission when the registry is malformed or a child cannot be read.
+- Stop audit and rm before emission when a DOC repository has the registry.
+- Exclude the registry from rendered canon, canon baselines, ordinary audit drift, and target-only evidence.
+- Compare each child's files with `govna render --child` for the parent's stack.
+- Name each child file by its parent-relative path in the Markdown and JSON file lists.
+- Force-sync a differing or missing child pointer or build tooling file.
+- Give a differing child `.gitignore` the ordinary Director choices.
+- Check only the canonical heading and two-column table shape of a child `CHANGELOG.md`.
+- Classify a child `CHANGELOG.md` with a broken shape as `manual-fix`.
+- Write the orphan note from `govna render --orphan` when the parent drops a child.
 
 ## Canon baseline manifest
 

@@ -15,8 +15,8 @@ import (
 )
 
 type Config struct {
-	Flavor, Stack, RepoName, ModulePath string
-	InitGit                             bool
+	Flavor, Stack, RepoName, ModulePath, Child string
+	InitGit                                    bool
 }
 type Outcome struct{ Path, Label string }
 
@@ -39,6 +39,9 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	if repository.IsSource(cwd) {
 		fmt.Fprintf(stderr, "apply: Govna files cannot be added inside the Govna source checkout at %s; run this command from the target repository\n", cwd)
 		return 1
+	}
+	if cfg.Child != "" {
+		return runChild(cfg.Child, stdout, stderr, cwd, programVersion)
 	}
 	access, err := repository.Open(cwd)
 	if err != nil {
@@ -113,6 +116,22 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	for _, file := range files {
 		label := labelWritten
 		if present(access, file.Path) {
+			if file.Path == "AGENTS.md" {
+				old, e := access.ReadFile(file.Path)
+				if e != nil {
+					fmt.Fprintf(stderr, "apply: read %s: %v\n", file.Path, e)
+					return 1
+				}
+				if canon.IsChildAgentFile(old) {
+					if err := access.WriteFile(file.Path, file.Content, 0o644); err != nil {
+						fmt.Fprintf(stderr, "apply: write %s: %v\n", file.Path, err)
+						return 1
+					}
+					fmt.Fprintf(stdout, "replaced %s (child pointer or orphan note)\n", file.Path)
+					outcomes = append(outcomes, Outcome{file.Path, "replaced the child pointer or orphan note with the full Govna file"})
+					continue
+				}
+			}
 			switch file.Path {
 			case "README.md", "CHANGELOG.md", "arch.md", "plan.md":
 				label = "kept existing file"
@@ -312,6 +331,14 @@ func parse(args []string) (Config, error) {
 			c.ModulePath = args[i]
 		case "-g", "--init-git":
 			c.InitGit = true
+		case "-c", "--child":
+			if i++; i >= len(args) {
+				return c, fmt.Errorf("apply: -c, --child <path> requires a value")
+			}
+			c.Child = strings.TrimSpace(args[i])
+			if c.Child == "" {
+				return c, fmt.Errorf("apply: -c, --child <path> requires a non-empty value")
+			}
 		default:
 			return c, fmt.Errorf("apply: no positional arguments accepted; run from the target repo root (got: [%s])", args[i])
 		}
@@ -319,7 +346,161 @@ func parse(args []string) (Config, error) {
 	if c.Flavor != "" && c.Flavor != "code" && c.Flavor != "doc" {
 		return c, fmt.Errorf("apply: --flavor must be code or doc, got %q", c.Flavor)
 	}
+	if c.Child != "" && (c.Flavor != "" || c.Stack != "" || c.RepoName != "" || c.ModulePath != "" || c.InitGit) {
+		return c, fmt.Errorf("apply: --child takes its flavor and stack from the parent; remove the other options")
+	}
 	return c, nil
+}
+
+// runChild adds the child repository at arg to the adopted CODE parent at cwd: it
+// writes the child files into the child, records the child in the parent's
+// registry, and writes a review AC in the parent.
+func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) int {
+	parent, err := repository.Open(cwd)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: open parent %s: %v\n", cwd, err)
+		return 1
+	}
+	defer parent.Close()
+	metadata, adopted, err := parent.ReadOptional("govna/metadata.txt")
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: read govna/metadata.txt: %v\n", err)
+		return 1
+	}
+	if !adopted {
+		fmt.Fprintf(stderr, "apply: --child needs an adopted CODE parent, and %s has no govna/metadata.txt; run govna apply here first\n", cwd)
+		return 1
+	}
+	values := metadataValues(metadata)
+	if values["repo_type"] != "CODE" {
+		fmt.Fprintln(stderr, "apply: --child applies only to a CODE parent; a DOC repository has no child repositories")
+		return 1
+	}
+	stack, ok := canon.CanonicalStack(values["code_stack"])
+	if !ok {
+		fmt.Fprintf(stderr, "apply: govna/metadata.txt names unsupported CODE stack %q; use %s\n", values["code_stack"], canon.SupportedStackChoices)
+		return 1
+	}
+	entries, _, err := parent.ReadChildren()
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: %v\n", err)
+		return 1
+	}
+	childDir, err := repository.ResolveChild(parent.Dir(), arg)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: child %v\n", err)
+		return 1
+	}
+	entry, err := repository.ChildEntry(parent.Dir(), childDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: child %v\n", err)
+		return 1
+	}
+	child, err := repository.Open(childDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: open child %s: %v\n", entry, err)
+		return 1
+	}
+	defer child.Close()
+	if present(child, "govna/metadata.txt") {
+		fmt.Fprintf(stderr, "apply: child %s has already adopted Govna (govna/metadata.txt exists); run govna rm there and remove its Govna files before adding it as a child\n", entry)
+		return 1
+	}
+	childStack := repository.Stack(childDir)
+	if childStack == "" {
+		fmt.Fprintf(stderr, "apply: could not infer a CODE stack in child %s; add its %s manifest first\n", entry, stack)
+		return 1
+	}
+	if childStack != stack {
+		fmt.Fprintf(stderr, "apply: child %s uses the %s stack but the parent uses %s; a child must use its parent's stack\n", entry, childStack, stack)
+		return 1
+	}
+	files, err := canon.RenderChild(stack)
+	if err != nil {
+		fmt.Fprintf(stderr, "apply: %v\n", err)
+		return 1
+	}
+	for _, file := range files {
+		if err := child.Preflight(file.Path); err != nil {
+			fmt.Fprintf(stderr, "apply: check destination %s/%s: %v\n", entry, file.Path, err)
+			return 1
+		}
+	}
+	if err := parent.Preflight(repository.ChildRegistryPath); err != nil {
+		fmt.Fprintf(stderr, "apply: check destination %s: %v\n", repository.ChildRegistryPath, err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "mode: apply child")
+	fmt.Fprintf(stdout, "parent: %s\n", cwd)
+	fmt.Fprintf(stdout, "child: %s\n", entry)
+	outcomes := []Outcome{}
+	for _, file := range files {
+		rel := entry + "/" + file.Path
+		label := labelWritten
+		if present(child, file.Path) {
+			if file.Path == "CHANGELOG.md" {
+				fmt.Fprintf(stdout, "kept %s (existing file)\n", rel)
+				outcomes = append(outcomes, Outcome{rel, "kept existing file"})
+				continue
+			}
+			label = "replaced existing file"
+			if file.Path == "AGENTS.md" {
+				if old, e := child.ReadFile(file.Path); e == nil && !canon.IsChildAgentFile(old) {
+					fmt.Fprintf(stderr, "warning: replaced the existing %s with the child pointer; recover its old content from Git if you still need it\n", rel)
+				}
+			}
+		}
+		perm := os.FileMode(0o644)
+		if path.Ext(file.Path) == ".sh" {
+			perm = 0o755
+		}
+		if err := child.WriteFile(file.Path, file.Content, perm); err != nil {
+			fmt.Fprintf(stderr, "apply: write %s: %v\n", rel, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "wrote %s (Govna child file)\n", rel)
+		outcomes = append(outcomes, Outcome{rel, label})
+	}
+	if err := parent.WriteFile(repository.ChildRegistryPath, repository.FormatChildren(append(entries, entry)), 0o644); err != nil {
+		fmt.Fprintf(stderr, "apply: write %s: %v\n", repository.ChildRegistryPath, err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "wrote %s (child registry)\n", repository.ChildRegistryPath)
+	n, err := emission.Next(cwd, nil)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	rel := fmt.Sprintf("govna/ac%d-govna-apply-child.md", n)
+	if err := parent.WriteFile(rel, []byte(childAdoption(n, entry, stack, programVersion, outcomes)), 0o644); err != nil {
+		fmt.Fprintf(stderr, "apply: write %s: %v\n", rel, err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "wrote %s (review AC)\n", rel)
+	return 0
+}
+
+func metadataValues(data []byte) map[string]string {
+	values := map[string]string{}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if key, value, ok := strings.Cut(line, " = "); ok {
+			values[key] = strings.TrimSpace(value)
+		}
+	}
+	return values
+}
+
+func childAdoption(n int, entry, stack, programVersion string, out []Outcome) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# AC%d Review Child Repository %s\n\n## Summary\n\nGovna executable v%s added its embedded child files (canon v%s) for the %s child repository `%s` and listed it in `%s`. The list below records whether each file was written, replaced, or kept.\n\n## In Scope\n\nFiles Govna processed:\n\n", n, entry, programVersion, canon.Version, stack, entry, repository.ChildRegistryPath)
+	for _, o := range out {
+		fmt.Fprintf(&b, "- `%s` (%s)\n", o.Path, o.Label)
+	}
+	fmt.Fprintf(&b, "- `%s` (lists `%s`)\n", repository.ChildRegistryPath, entry)
+	b.WriteString("\n## Out Of Scope\n\n- Files not listed above.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n")
+	fmt.Fprintf(&b, "**AT1** [Automated] [Pre-release gate] — Verify every written child file matches `govna render --child` for the %s stack.\n\n", stack)
+	fmt.Fprintf(&b, "**AT2** [Automated] [Pre-release gate] — Verify `./build.sh` runs the build of `%s` before its own steps.\n\n", entry)
+	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
+	return b.String()
 }
 
 // merge joins the rendered canon zone above the registered boundary of path with the

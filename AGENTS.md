@@ -404,6 +404,15 @@ Note: this rule does not prohibit batching independent commands.
 - Prevent ancillary work from satisfying primary-repository scope, tests, validation, or phase gates.
 - Restate the primary repository and paused phase when returning from ancillary work.
 
+### Child Repositories
+
+- Apply these rules when `govna/children.txt` declares a child repository.
+- Treat a declared child named in the active AC's `## In Scope` as primary scope instead of ancillary work.
+- Exclude child files and child commit messages from every bare-identifier allowance in `### AC Mechanics`.
+- Add each declared child as a writable session directory before editing it.
+- Follow `govna/development-cycle.md` `## Child Repositories` for the session procedure.
+- Change child membership only through `govna apply --child` and `govna rm --child`.
+
 ### Pre-Implementation Verification
 
 - Run this checklist after the Director resolves all review questions.

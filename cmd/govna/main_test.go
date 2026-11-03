@@ -143,6 +143,8 @@ func TestCommandHelpPages(t *testing.T) {
 		"  -f, --flavor code|doc   select Govna file set: CODE or DOC (default: inferred from cwd)\n" +
 		"  -s, --stack NAME        select CODE stack (default: inferred from cwd manifests)\n" +
 		"  -m, --module-path PATH  module path for Go CODE files (default: read from cwd's go.mod)\n" +
+		"  -c, --child             write only the child repository files for the CODE stack\n" +
+		"  -o, --orphan            write only the orphan note for a dropped child repository\n" +
 		"  -v, --version           print executable version\n" +
 		"  -h, -?, --help          show this help\n"
 	audit := pageHeader() +
@@ -177,6 +179,7 @@ func TestCommandHelpPages(t *testing.T) {
 		"  -n, --repo-name NAME    repo name (default: basename of cwd)\n" +
 		"  -m, --module-path PATH  module path for Go CODE files (default: read from go.mod)\n" +
 		"  -g, --init-git          initialize git if the target is not a repo\n" +
+		"  -c, --child PATH        add the repository at PATH as a child of this CODE parent\n" +
 		"  -v, --version           print executable version\n" +
 		"  -h, -?, --help          show this help\n"
 	rm := pageHeader() +
@@ -191,6 +194,7 @@ func TestCommandHelpPages(t *testing.T) {
 		"  -f, --flavor code|doc  Govna file set (CODE or DOC; default: auto-detect)\n" +
 		"  -s, --stack NAME       CODE stack (default: inferred from manifests)\n" +
 		"  -n, --repo-name NAME   override repo name (default: basename of cwd)\n" +
+		"  -c, --child PATH       write an AC that drops one declared child repository\n" +
 		"  -v, --version          print executable version\n" +
 		"  -h, -?, --help         show this help\n"
 	for _, tc := range []struct {
@@ -257,7 +261,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("audit code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.85.0.md"))
+	auditMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-audit-v0.86.0.md"))
 	if err != nil || len(auditMatches) != 1 {
 		t.Fatalf("audit matches=%v err=%v", auditMatches, err)
 	}
@@ -267,7 +271,7 @@ func TestTopLevelGeneratedVersionAxes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rm code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.85.0.md"))
+	removalMatches, err := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-v0.86.0.md"))
 	if err != nil || len(removalMatches) != 1 {
 		t.Fatalf("removal matches=%v err=%v", removalMatches, err)
 	}

@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.85.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.86.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -264,7 +264,7 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 		assets    []string
 	}{
 		{"govna/ac-template.md", []string{"assets/overlays/code/files/govna/ac-template.md.tmpl"}},
-		{"govna/audit.md", []string{"assets/overlays/code/files/govna/audit.md.tmpl", "assets/overlays/doc/files/govna/audit.md.tmpl"}},
+		{"govna/audit.md", []string{"assets/overlays/code/files/govna/audit.md.tmpl"}},
 		{"govna/canon-cycle.md", []string{"assets/overlays/code/files/govna/canon-cycle.md.tmpl", "assets/overlays/doc/files/govna/canon-cycle.md.tmpl"}},
 		{"govna/development-cycle.md", []string{"assets/overlays/code/files/govna/development-cycle.md.tmpl"}},
 		{"govna/operator-contract-rationale.md", []string{"assets/overlays/code/files/govna/operator-contract-rationale.md.tmpl", "assets/overlays/doc/files/govna/operator-contract-rationale.md.tmpl"}},
@@ -295,6 +295,17 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	}
 	if string(docRoles) != wantDocRoles {
 		t.Error("DOC roles differ from authority beyond the release-document path")
+	}
+	audit, err := os.ReadFile(filepath.Join(root, "govna", "audit.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	docAudit, err := fs.ReadFile(assets, "assets/overlays/doc/files/govna/audit.md.tmpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(docAudit) != docAuditText(t, string(audit)) {
+		t.Error("DOC audit differs from authority beyond the CODE-only child repository text")
 	}
 	agents, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
 	if err != nil {
@@ -369,6 +380,28 @@ var auditEmissionRules = []string{
 	"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
 }
 
+// docAuditText derives the DOC audit document from the govna/audit.md
+// authority by removing the CODE-only child repository text.
+func docAuditText(t *testing.T, authority string) string {
+	t.Helper()
+	text := authority
+	for _, codeOnly := range []struct {
+		pattern     string
+		replacement string
+	}{
+		{"(?m)^\\| `manual-fix` \\|.*\n", ""},
+		{"(?m)^Accept an entry that starts with `\\.\\.`.*\n\n", ""},
+		{"(?s)## Child repositories\n.*?(## Canon baseline manifest\n)", "$1"},
+	} {
+		re := regexp.MustCompile(codeOnly.pattern)
+		if count := len(re.FindAllStringIndex(text, -1)); count != 1 {
+			t.Fatalf("govna/audit.md CODE-only text %q count=%d, want 1", codeOnly.pattern, count)
+		}
+		text = re.ReplaceAllString(text, codeOnly.replacement)
+	}
+	return text
+}
+
 func TestAuditValidationContract(t *testing.T) {
 	root := filepath.Join("..", "..")
 	paths := []string{
@@ -382,9 +415,13 @@ func TestAuditValidationContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		want := string(authority)
+		if strings.Contains(path, "/doc/") {
+			want = docAuditText(t, want)
+		}
 		if authority == nil {
 			authority = content
-		} else if string(content) != string(authority) {
+		} else if string(content) != want {
 			t.Errorf("%s does not mirror govna/audit.md", path)
 		}
 		for _, required := range auditValidationRules {
@@ -2280,6 +2317,97 @@ func TestGoToolchainPinRulesRenderOnce(t *testing.T) {
 	for _, c := range checks {
 		if got := strings.Count(c.text, c.want); got != 1 {
 			t.Errorf("%s count=%d for %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestChildRenderPerStack(t *testing.T) {
+	orphan, err := RenderOrphan()
+	if err != nil || len(orphan) != 1 || orphan[0].Path != "AGENTS.md" {
+		t.Fatalf("orphan render=%v err=%v", orphan, err)
+	}
+	for _, stack := range Stacks() {
+		t.Run(stack, func(t *testing.T) {
+			child, err := RenderChild(stack)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []string{".gitignore", "AGENTS.md", "CHANGELOG.md", "build.sh"}
+			if stack == "Rust" {
+				want = append(want, "tests/build_cli.sh")
+			}
+			got := make([]string, 0, len(child))
+			for _, file := range child {
+				got = append(got, file.Path)
+			}
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Fatalf("child files=%v want=%v", got, want)
+			}
+			full, err := Render(Config{Flavor: Code, RepoName: "zq-private-parent", Stack: stack, ModulePath: "example.com/zq-private-parent"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range want[2:] {
+				if fileText(t, child, path) != fileText(t, full, path) && path != "AGENTS.md" {
+					t.Errorf("child %s differs from the parent's canon %s", path, path)
+				}
+			}
+			if fileText(t, child, ".gitignore") != fileText(t, full, ".gitignore") {
+				t.Error("child .gitignore differs from the parent's canon .gitignore")
+			}
+			pointer := fileText(t, child, "AGENTS.md")
+			for _, text := range []string{pointer, string(orphan[0].Content)} {
+				if strings.Contains(text, "zq-private-parent") || strings.Contains(text, "{{") {
+					t.Fatalf("child agent file names a parent or keeps a placeholder:\n%s", text)
+				}
+				if !IsChildAgentFile([]byte(text)) {
+					t.Fatal("child agent file is not recognized")
+				}
+			}
+			if !strings.Contains(pointer, "- Stop when this session started in this repository.\n") {
+				t.Fatalf("pointer does not limit its stop to a session started in the child:\n%s", pointer)
+			}
+			if IsChildAgentFile([]byte(fileText(t, full, "AGENTS.md"))) {
+				t.Fatal("full canon AGENTS.md is mistaken for a child agent file")
+			}
+		})
+	}
+}
+
+func TestChildRepositoryRulesRenderForCodeOnly(t *testing.T) {
+	block := "### Child Repositories\n\n" +
+		"- Apply these rules when `govna/children.txt` declares a child repository.\n" +
+		"- Treat a declared child named in the active AC's `## In Scope` as primary scope instead of ancillary work.\n" +
+		"- Exclude child files and child commit messages from every bare-identifier allowance in `### AC Mechanics`.\n" +
+		"- Add each declared child as a writable session directory before editing it.\n" +
+		"- Follow `govna/development-cycle.md` `## Child Repositories` for the session procedure.\n" +
+		"- Change child membership only through `govna apply --child` and `govna rm --child`.\n"
+	for _, stack := range Stacks() {
+		files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(fileText(t, files, "AGENTS.md"), block) {
+			t.Errorf("%s AGENTS.md omits the child repository rules", stack)
+		}
+		cycle := fileText(t, files, "govna/development-cycle.md")
+		for _, want := range []string{
+			"- Add a child to a Claude Code session with `--add-dir <path>` at startup or `/add-dir <path>` during the session.\n",
+			"- Add a child to a Codex CLI session with `--add-dir <path>` at startup.\n",
+			"- Record the same identities for each in-scope child repository.\n",
+		} {
+			if !strings.Contains(cycle, want) {
+				t.Errorf("%s development cycle omits %q", stack, want)
+			}
+		}
+	}
+	doc, err := Render(Config{Flavor: Doc, RepoName: "handbook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range doc {
+		if strings.Contains(string(file.Content), "children.txt") || strings.Contains(string(file.Content), "Child Repositories") {
+			t.Errorf("DOC %s mentions child repositories", file.Path)
 		}
 	}
 }

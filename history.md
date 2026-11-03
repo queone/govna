@@ -2,6 +2,42 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.50.0
+
+Added:
+- `govna apply --child <path>` adds a same-stack child repository beside a CODE parent and lists it in `govna/children.txt`.
+- A child gets a pointer `AGENTS.md`, the stack build tooling, `.gitignore`, and `CHANGELOG.md`, and no `govna/` directory.
+- `govna audit` checks each declared child's files and names them by parent-relative path, such as `../engine/build.sh`.
+- Audit always updates a child pointer or build tooling file, and gives a child `.gitignore` the ordinary choices.
+- Audit checks only the shape of a child `CHANGELOG.md`, and the new `manual-fix` label marks a broken shape.
+- `govna/preserve.txt` can keep a declared child's `.gitignore`.
+- `govna rm` rewrites each child `AGENTS.md` to an orphan note, and `govna rm --child` drops one child.
+- `govna render --child` writes the child files, and `govna render --orphan` writes the orphan note.
+- Every CODE stack's full build runs each declared child's `build.sh` first.
+- CODE `AGENTS.md`, `development-cycle.md`, `code-stacks.md`, and `audit.md` add child repository rules.
+
+Changed:
+- `govna apply` replaces an unedited child pointer or orphan note with the full Govna files.
+- Audit ACs with child files confirm parent files against the CODE render and child files against the child render.
+
+Deferred:
+- Child release from the parent's release, the parent pin update, and override detection, to a later AC.
+- Distribution children, such as a Homebrew tap, a GitHub Action, or a docs site.
+
+Decisions:
+- A child is a separate same-stack repository that the parent imports at a pinned version.
+- Each child keeps its own stack build script, so the design works for every CODE stack.
+- The pointer never names the parent, so a public child does not expose a private parent.
+- A dropped child gets an orphan note that tells a later agent to run `govna apply` there.
+- A preserve entry outside the parent can name only a child `.gitignore`, because the pointer and tooling must match canon.
+- The parent skips child builds for a scoped build, and fails when a child's tooling differs from its own.
+- DOC repositories have no children, and DOC `audit.md` omits the child text.
+- The Director releases a child by hand until the child release AC ships.
+
+Risks:
+- No release check has run a real child build with a real toolchain yet.
+- The parent full build runs each child's `build.sh` with all of its side effects.
+
 ## v0.49.0
 
 Added:

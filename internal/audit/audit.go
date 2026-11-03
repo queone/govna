@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -53,6 +54,8 @@ type FileResult struct {
 	targetHash              string
 	targetPresent           bool
 	targetInspected         bool
+	childEntry              string
+	childPath               string
 }
 
 type Header struct {
@@ -360,8 +363,18 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	if err := checkCoherence(canonMap); err != nil {
 		return report, false, err
 	}
+	children, childrenPresent, err := access.ReadChildren()
+	if err != nil {
+		return report, false, err
+	}
+	if childrenPresent && flavor == canon.Doc {
+		return report, false, usererr.Errorf("%s is present in a DOC repository, and DOC repositories have no child repositories; delete %s and re-run audit", repository.ChildRegistryPath, repository.ChildRegistryPath)
+	}
 	preserve, err := parsePreserve(access.ReadOptional(preservePath))
 	if err != nil {
+		return report, false, err
+	}
+	if err := checkChildPreserve(preserve, children); err != nil {
 		return report, false, err
 	}
 	repoCheck, err := parseRepoCheck(access.ReadOptional(repoCheckPath))
@@ -491,6 +504,11 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		}
 		report.Files = append(report.Files, fr)
 	}
+	childFiles, err := childResults(access.Dir(), children, stack, preserve, cfg.DiffLines)
+	if err != nil {
+		return report, false, err
+	}
+	report.Files = append(report.Files, childFiles...)
 	agentFile, err := access.AgentFile()
 	if err != nil {
 		return report, false, inspectError(repository.AgentFilePath, err)
@@ -708,6 +726,19 @@ func parsePreserve(data []byte, present bool, err error) (map[string]bool, error
 		if p == "" || p <= previous || p == preservePath || strings.ContainsAny(p, "\\\t") || filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.HasSuffix(p, "/") {
 			return bad("entries must be nonempty, normalized, unique, and byte-sorted")
 		}
+		if strings.HasPrefix(p, "../") {
+			dir, file := path.Split(p)
+			dir = strings.TrimSuffix(dir, "/")
+			if repository.ValidateChildEntry(dir) != nil || file == "" || file == "." || file == ".." {
+				return bad("entries contain invalid path components")
+			}
+			if file != ".gitignore" {
+				return bad(p + " cannot be preserved because a child's pointer and build tooling always update; preserve only " + dir + "/.gitignore or remove the entry")
+			}
+			previous = p
+			out[p] = true
+			continue
+		}
 		for part := range strings.SplitSeq(p, "/") {
 			if part == "." || part == ".." || part == "" {
 				return bad("entries contain invalid path components")
@@ -862,7 +893,7 @@ func targetOnly(access *repository.Access, current map[string][]byte, base *base
 	out := map[string]string{}
 	var failure error
 	add := func(path, evidence string) {
-		if failure != nil || path == preservePath || path == repoCheckPath {
+		if failure != nil || path == preservePath || path == repoCheckPath || path == repository.ChildRegistryPath {
 			return
 		}
 		if _, ok := current[path]; ok {
@@ -1074,7 +1105,7 @@ func comparisonDescription(f FileResult, path string) string {
 	}
 }
 func actionable(c string) bool {
-	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon" || c == "retired-link"
+	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon" || c == "retired-link" || c == "manual-fix"
 }
 
 type classificationInfo struct{ singular, plural, meaning string }
@@ -1082,7 +1113,7 @@ type classificationInfo struct{ singular, plural, meaning string }
 // classificationOrder fixes the rendering order for plainTally; classificationInfos is the
 // single source of truth for plainTally and classificationMeaning, plus the synthetic
 // "force-sync" entry used for a file whose Classification is overridden by forceSync.
-var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "retired-link", "force-sync"}
+var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "manual-fix", "retired-link", "force-sync"}
 
 var classificationInfos = map[string]classificationInfo{
 	"match":               {"file needs no update", "files need no update", "the file already needs no Govna update"},
@@ -1093,6 +1124,7 @@ var classificationInfos = map[string]classificationInfo{
 	"missing-in-target":   {"missing Govna file", "missing Govna files", "a file from current Govna rules is missing from the repository"},
 	"target-has-no-canon": {"Govna-linked extra file", "Govna-linked extra files", "the file is absent from the selected current canon but specific repository evidence connects it to Govna"},
 	"migration-required":  {"missing required control file", "missing required control files", "a required Govna control file is missing and must be added through the AC"},
+	"manual-fix":          {"child file needs a manual fix", "child files need a manual fix", "the child's CHANGELOG.md breaks the canonical table shape, and only a manual edit that keeps every row can restore it"},
 	"retired-link":        {"retired Govna link", "retired Govna links", "a Govna link that Claude Code no longer needs and the AC deletes"},
 	"force-sync":          {"file always synced regardless of local edits", "files always synced regardless of local edits", "this file's governed structure always syncs to canon, regardless of local edits or the preserve list"},
 }
@@ -1231,7 +1263,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	if m := regexp.MustCompile(`^ac([0-9]+)-`).FindStringSubmatch(base); m != nil {
 		number = m[1]
 	}
-	var sync, migrate, preserve, review, retired []FileResult
+	var sync, migrate, preserve, review, retired, manual []FileResult
 	for _, f := range report.Files {
 		if f.forceSync {
 			sync = append(sync, f)
@@ -1248,6 +1280,8 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 			review = append(review, f)
 		case "retired-link":
 			retired = append(retired, f)
+		case "manual-fix":
+			manual = append(manual, f)
 		}
 	}
 	var b strings.Builder
@@ -1256,6 +1290,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
 	if len(retired) > 0 {
 		b.WriteString("Govna also found 1 retired Govna link that this AC deletes.\n\n")
+	}
+	if len(manual) > 0 {
+		fmt.Fprintf(&b, "Govna also found %s.\n\n", countPhrase(len(manual), "child file needing a manual fix", "child files needing a manual fix"))
 	}
 	b.WriteString("## In Scope\n\n")
 	writeGroup := func(title string, files []FileResult) {
@@ -1277,12 +1314,21 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	writeGroup("Files ready to update", sync)
 	writeGroup("Required control files", migrate)
 	writeGroup("Files needing a Director choice", review)
+	if len(manual) > 0 {
+		writeGroup("Files needing a manual fix", manual)
+	}
 	if len(retired) > 0 {
 		b.WriteString("### Retired Govna link\n\n- `CLAUDE.md` — delete the retired Govna link; Claude Code v2.1.277 or later reads `AGENTS.md` directly.\n\n")
 	}
-	writeAuditReview(&b, sync, migrate, review)
+	writeAuditReview(&b, report.selectedStack, sync, migrate, review)
 	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
-	if report.Header.Flavor == "code" {
+	if hasChildFile(sync, review) {
+		b.WriteString("- Create a temporary copy of the child files with `govna render --child`.\n")
+	}
+	if report.Header.Flavor == "code" && hasChildFile(sync, review) {
+		b.WriteString("- Confirm each parent file selected for update exists in the selected CODE render.\n")
+		b.WriteString("- Confirm each child file selected for update exists in the child render.\n")
+	} else if report.Header.Flavor == "code" {
 		b.WriteString("- Confirm each file selected for update exists in the selected CODE render.\n")
 	}
 	b.WriteString("- Apply each Director choice only to its authorized file region.\n- Write `govna/canon-baseline.txt` as the final file update.\n")
@@ -1378,6 +1424,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	for _, f := range review {
 		writeRouteATs(&b, &at, f)
 	}
+	for _, f := range manual {
+		writeAT(&b, &at, "Verify `%s` keeps every row and passes the canonical CHANGELOG heading and two-column table shape.", f.Path)
+	}
 	if len(retired) > 0 {
 		writeAT(&b, &at, "Verify CLAUDE.md no longer exists.")
 	}
@@ -1404,16 +1453,23 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	return b.String()
 }
 
-func writeAuditReview(b *strings.Builder, groups ...[]FileResult) {
+func writeAuditReview(b *strings.Builder, stack string, groups ...[]FileResult) {
 	b.WriteString("### Audit Review\n\n")
 	b.WriteString("- Use the same resolved Govna executable that emitted this AC.\n")
 	b.WriteString("- Verify its detailed version output matches this AC's guarded marker.\n")
 	b.WriteString("- Create one unique system-temporary scratch directory outside this repository.\n")
 	b.WriteString("- Render the selected canon into that directory once with the resolved executable.\n")
 	b.WriteString("- Verify the rendered `govna/canon-baseline.txt` canon version matches this AC's guarded marker.\n")
+	if hasChildFile(groups...) {
+		fmt.Fprintf(b, "- Render the child files once into a second scratch directory with `govna render --child --stack %s <child-scratch>`.\n", stack)
+	}
 	for _, files := range groups {
 		for _, file := range files {
 			switch {
+			case file.childEntry != "" && !auditReviewTargetPresent(file):
+				fmt.Fprintf(b, "- Compare `%s` with `diff -u /dev/null <child-scratch>/%s`.\n", file.Path, file.childPath)
+			case file.childEntry != "":
+				fmt.Fprintf(b, "- Compare `%s` with `diff -u <child-scratch>/%s %s`.\n", file.Path, file.childPath, file.Path)
 			case !auditReviewCanonPresent(file):
 				fmt.Fprintf(b, "- Verify `%s` is absent from the selected scratch render with `test ! -e <scratch>/%s`.\n", file.Path, file.Path)
 			case !auditReviewTargetPresent(file):
@@ -1435,6 +1491,138 @@ func writeAuditReview(b *strings.Builder, groups ...[]FileResult) {
 	b.WriteString("- Remove the exact scratch directory before reporting Audit completion or a blocker.\n")
 	b.WriteString("- Use no JSON diff field as required review evidence.\n")
 	b.WriteString("\n")
+}
+
+func hasChildFile(groups ...[]FileResult) bool {
+	for _, files := range groups {
+		for _, file := range files {
+			if file.childEntry != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkChildPreserve requires every preserve entry outside the repository to sit
+// under a declared child. parsePreserve already limits such entries to a child's
+// .gitignore, because a child's pointer and build tooling always update.
+func checkChildPreserve(preserve map[string]bool, children []string) error {
+	declared := map[string]bool{}
+	for _, entry := range children {
+		declared[entry] = true
+	}
+	entries := make([]string, 0, len(preserve))
+	for entry := range preserve {
+		entries = append(entries, entry)
+	}
+	sort.Strings(entries)
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry, "../") {
+			continue
+		}
+		if dir := path.Dir(entry); !declared[dir] {
+			return usererr.Errorf("invalid %s: %s is not under a child declared in %s; remove the entry or add the child with govna apply --child", preservePath, entry, repository.ChildRegistryPath)
+		}
+	}
+	return nil
+}
+
+var changelogRowRE = regexp.MustCompile(`^\| [^|]+ \|(\\\||[^|])*\|$`)
+
+// changelogShape mirrors the canonical build scripts' CHANGELOG heading and
+// two-column table check.
+func changelogShape(data []byte) bool {
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	want := []string{"# Changelog", "", "| Version | Summary |", "|---------|---------|", "| Unreleased | |"}
+	if len(lines) < len(want) {
+		return false
+	}
+	for i, line := range want {
+		if lines[i] != line {
+			return false
+		}
+	}
+	for _, line := range lines[len(want)-1:] {
+		if !changelogRowRE.MatchString(line) {
+			return false
+		}
+	}
+	return true
+}
+
+// childResults classifies each declared child's files against the child render
+// for stack. A child's pointer and build tooling always update, its .gitignore
+// takes the ordinary choices, and its CHANGELOG.md gets a shape check only.
+func childResults(parentDir string, entries []string, stack string, preserve map[string]bool, limit int) ([]FileResult, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	files, err := canon.RenderChild(stack)
+	if err != nil {
+		return nil, err
+	}
+	tooling, err := canon.ChildTooling(stack)
+	if err != nil {
+		return nil, err
+	}
+	forced := map[string]bool{"AGENTS.md": true}
+	for _, p := range tooling {
+		forced[p] = true
+	}
+	var out []FileResult
+	for _, entry := range entries {
+		dir, err := repository.ResolveChild(parentDir, entry)
+		if err != nil {
+			return nil, fmt.Errorf("inspect child %w; fix %s or restore the child repository", err, repository.ChildRegistryPath)
+		}
+		child, err := repository.Open(dir)
+		if err != nil {
+			return nil, fmt.Errorf("open child %s: %w", entry, err)
+		}
+		for _, file := range files {
+			rel := entry + "/" + file.Path
+			fr := FileResult{Path: rel, CanonReference: "govna @ v" + canon.Version + ": child " + file.Path, canonPresent: true, targetInspected: true, childEntry: entry, childPath: file.Path}
+			got, present, err := child.ReadOptional(file.Path)
+			if err != nil {
+				child.Close()
+				return nil, inspectError(rel, err)
+			}
+			fr.targetPresent = present
+			switch {
+			case file.Path == "CHANGELOG.md" && present:
+				fr.Classification = "match"
+				if !changelogShape(got) {
+					fr.Classification = "manual-fix"
+					fr.CanonReference = "canonical CHANGELOG heading and two-column table shape"
+				}
+			case !present && preserve[rel]:
+				fr.Classification = "match"
+				fr.PreserveEntries = []string{rel}
+			case !present:
+				fr.Classification = "missing-in-target"
+				fr.Diff = diffText(file.Content, nil, rel, limit)
+			case bytes.Equal(got, file.Content):
+				fr.Classification = "match"
+			case forced[file.Path]:
+				fr.Classification = "ambiguity"
+				fr.forceSync = true
+				fr.EffectiveClassification = "force-sync"
+				fr.Diff = diffText(file.Content, got, rel, limit)
+			case preserve[rel]:
+				fr.Classification = "preserve"
+				fr.PreserveEntries = []string{rel}
+				fr.Diff = diffText(file.Content, got, rel, limit)
+			default:
+				fr.Classification = "ambiguity"
+				fr.Diff = diffText(file.Content, got, rel, limit)
+			}
+			fr.CompareCommand = comparisonDescription(fr, rel)
+			out = append(out, fr)
+		}
+		child.Close()
+	}
+	return out, nil
 }
 
 func auditReviewCanonPresent(file FileResult) bool {

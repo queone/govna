@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/queone/govna/internal/canon"
 )
 
 func TestRunCodeAndAlias(t *testing.T) {
@@ -361,5 +363,86 @@ func TestRenderReplacesRegularFilesAndAcceptsRootAlias(t *testing.T) {
 	assertRenderFixture(t, filepath.Join(real, "keep.txt"), "keep\n", 0o600)
 	if _, err := os.Lstat(filepath.Join(real, "govna", "metadata.txt")); err != nil {
 		t.Fatalf("nested render missing: %v", err)
+	}
+}
+
+func TestRenderChildFilesAndOrphanNote(t *testing.T) {
+	for _, stack := range canon.Stacks() {
+		t.Run(stack, func(t *testing.T) {
+			cwd := t.TempDir()
+			target := filepath.Join(cwd, "child")
+			var stdout, stderr bytes.Buffer
+			if code := Run([]string{"--child", "--stack", stack, target}, &stdout, &stderr, cwd); code != 0 {
+				t.Fatalf("code=%d stderr=%s", code, stderr.String())
+			}
+			want, err := canon.RenderChild(stack)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertRenderedExactly(t, target, want)
+			rust := false
+			for _, file := range want {
+				rust = rust || file.Path == "tests/build_cli.sh"
+			}
+			if rust != (stack == "Rust") {
+				t.Fatalf("child render includes tests/build_cli.sh=%v for %s", rust, stack)
+			}
+		})
+	}
+	cwd := t.TempDir()
+	target := filepath.Join(cwd, "orphan")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"-o", target}, &stdout, &stderr, cwd); code != 0 {
+		t.Fatalf("orphan code=%d stderr=%s", code, stderr.String())
+	}
+	orphan, err := canon.RenderOrphan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRenderedExactly(t, target, orphan)
+	for _, args := range [][]string{{"--child", "--flavor", "doc", "x"}, {"--orphan", "--flavor", "doc", "x"}} {
+		stderr.Reset()
+		if code := Run(args, &stdout, &stderr, cwd); code != 1 || !strings.Contains(stderr.String(), "applies only to CODE canon because DOC repositories have no child repositories") {
+			t.Fatalf("%v code=%d stderr=%s", args, code, stderr.String())
+		}
+	}
+	docCwd := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(docCwd, "govna"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(docCwd, "govna", "metadata.txt"), []byte("schema_version = 1\ncanon_version = v0.86.0\nrepo_type = DOC\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if code := Run([]string{"--child", "--stack", "Go", "x"}, &stdout, &stderr, docCwd); code != 1 || !strings.Contains(stderr.String(), "run it from a CODE repository or pass --flavor code") {
+		t.Fatalf("DOC cwd code=%d stderr=%s", code, stderr.String())
+	}
+	stderr.Reset()
+	if code := Run([]string{"--child", "--orphan", "x"}, &stdout, &stderr, cwd); code != 2 || !strings.Contains(stderr.String(), "--child and --orphan cannot be combined") {
+		t.Fatalf("combined modes code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func assertRenderedExactly(t *testing.T, target string, want []canon.File) {
+	t.Helper()
+	got := map[string][]byte{}
+	if err := filepath.WalkDir(target, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(target, path)
+		data, err := os.ReadFile(path)
+		got[filepath.ToSlash(rel)] = data
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("rendered %d files, want %d: %v", len(got), len(want), got)
+	}
+	for _, file := range want {
+		if !bytes.Equal(got[file.Path], file.Content) {
+			t.Fatalf("%s differs from the canon render", file.Path)
+		}
 	}
 }

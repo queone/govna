@@ -24,6 +24,19 @@
 - Push the branch with `git push -u origin HEAD` when it has no upstream.
 - Keep each stack's branch push when the branch has an upstream.
 
+## Child Repositories
+
+- Read `govna/children.txt` at the start of every build in every stack.
+- Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.
+- Run each declared child's `build.sh` before the parent's own build steps during a full build.
+- Run a child only when every build tooling file matches the parent's copy byte for byte.
+- Treat `build.sh` as the build tooling in Go, Swift, and Terraform, and `build.sh` plus `tests/build_cli.sh` in Rust.
+- Stop the parent build when a child is missing, sits inside the parent, contains the parent, has different build tooling, or fails its build.
+- Name the child and its recovery action in every child-build failure.
+- Skip child builds during a scoped build and print one line saying so.
+- Keep each child build's own side effects, such as installing a Go child's utilities.
+- Ignore the registry during prep and release.
+
 ## Go
 
 - Discover utilities from regular `cmd/<target>/main.go` files in byte order.

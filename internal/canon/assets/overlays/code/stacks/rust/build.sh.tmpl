@@ -992,6 +992,9 @@ build_run() {
   local verbose="$1"
   shift
   local targets=("$@")
+  local child_scoped=0
+  [ "${#targets[@]}" -eq 0 ] || child_scoped=1
+  _build_children "$child_scoped" build.sh tests/build_cli.sh || return 1
   _load_bin_targets || return 1
   _require_cargo || return 1
   if [ "${#targets[@]}" -eq 0 ]; then
@@ -1593,6 +1596,127 @@ rel_main() {
   fi
   rel_run "$(_trim "$1")" "$(_trim "$2")"
 }
+
+# --- child repositories (identical in every CODE stack build script) ---
+
+# _children_fail prints one child-build failure with its recovery action.
+_children_fail() {
+  printf 'build: %s\n' "$1" >&2
+}
+
+# _children_validate checks govna/children.txt: the govna-children-v1 header,
+# a final newline, and unique, byte-sorted, slash-normalized relative paths.
+_children_validate() { # $1=registry
+  local registry="$1" first=1 previous='' entry rest part named
+  if [ ! -s "$registry" ] || [ -n "$(tail -c 1 "$registry")" ]; then
+    _children_fail "$registry: require the govna-children-v1 header and a final newline"
+    return 1
+  fi
+  while IFS= read -r entry; do
+    if [ "$first" -eq 1 ]; then
+      first=0
+      [ "$entry" = govna-children-v1 ] || {
+        _children_fail "$registry: first line must be govna-children-v1"
+        return 1
+      }
+      continue
+    fi
+    case "$entry" in
+    '' | /* | */ | *\\* | *[[:cntrl:]]*)
+      _children_fail "$registry: entry '$entry' must be a nonempty relative path without a backslash, a control character, or a leading or trailing slash"
+      return 1
+      ;;
+    esac
+    named=0
+    rest="$entry/"
+    while [ -n "$rest" ]; do
+      part="${rest%%/*}"
+      rest="${rest#*/}"
+      case "$part" in
+      '' | .)
+        _children_fail "$registry: entry '$entry' contains an empty or '.' component"
+        return 1
+        ;;
+      ..)
+        [ "$named" -eq 0 ] || {
+          _children_fail "$registry: entry '$entry' contains '..' after a directory name"
+          return 1
+        }
+        ;;
+      *) named=1 ;;
+      esac
+    done
+    [ "$named" -eq 1 ] || {
+      _children_fail "$registry: entry '$entry' names no directory"
+      return 1
+    }
+    if [ -n "$previous" ] && ! [ "$previous" \< "$entry" ]; then
+      _children_fail "$registry: entries must be unique and byte-sorted"
+      return 1
+    fi
+    previous="$entry"
+  done <"$registry"
+}
+
+# _children_run_build runs one child repository's build.sh from its root.
+_children_run_build() { # $1=child directory
+  (cd "$1" && ./build.sh)
+}
+
+# _build_children runs each declared child repository's build.sh before the
+# parent build. $1=1 for a scoped build; the remaining arguments name the
+# stack's build tooling, which must match the child's copy byte for byte.
+_build_children() { # $1=scoped $2...=tooling paths
+  local scoped="$1"
+  shift
+  local registry='govna/children.txt'
+  [ -e "$registry" ] || return 0
+  _children_validate "$registry" || return 1
+  if [ "$scoped" -eq 1 ]; then
+    printf '%s\n' "$(yel7 '==> Skip child repository builds for a scoped build')"
+    return 0
+  fi
+  local parent child entry file first=1 entries=()
+  parent=$(pwd -P) || return 1
+  while IFS= read -r entry; do
+    if [ "$first" -eq 1 ]; then
+      first=0
+      continue
+    fi
+    entries+=("$entry")
+  done <"$registry"
+  [ "${#entries[@]}" -gt 0 ] || return 0
+  for entry in "${entries[@]}"; do
+    child=$(cd "$entry" 2>/dev/null && pwd -P) || {
+      _children_fail "child $entry is not a directory; restore the child repository or remove it with govna rm --child"
+      return 1
+    }
+    case "$child/" in "$parent/"*)
+      _children_fail "child $entry is inside this repository; keep a child repository outside its parent"
+      return 1
+      ;;
+    esac
+    case "$parent/" in "$child/"*)
+      _children_fail "child $entry contains this repository; declare a separate repository beside the parent"
+      return 1
+      ;;
+    esac
+    for file in "$@"; do
+      cmp -s "$file" "$child/$file" || {
+        _children_fail "child $entry: $file differs from this repository's copy; run govna audit here and apply its child updates"
+        return 1
+      }
+    done
+    printf '%s\n' "$(yel7 "==> Build child repository $entry")"
+    _children_run_build "$child" || {
+      _children_fail "child $entry: build failed; fix the child repository and rerun ./build.sh"
+      return 1
+    }
+    printf '\n'
+  done
+}
+
+# --- end child repositories ---
 
 main() {
   _color_init

@@ -266,6 +266,19 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I71", "Remove the exact scratch directory before reporting Audit completion or a blocker."},
 	{"I72", "Use no JSON diff field as required review evidence."},
 	{"I73", "Compare the canon zone of <path> above exact boundary <boundary> with <diff-command>."},
+	{"I74", "Render the child files once into a second scratch directory with <render-command>."},
+	{"I75", "Create a temporary copy of the child files with govna render --child."},
+	{"I76", "Verify <path> keeps every row and passes the canonical CHANGELOG heading and two-column table shape."},
+	{"I77", "Verify every written child file matches govna render --child for the <stack> stack."},
+	{"I78", "Verify ./build.sh runs the build of <child> before its own steps."},
+	{"I79", "Create the orphan note with govna render --orphan <orphan-scratch>."},
+	{"I80", "Copy <orphan-scratch>/AGENTS.md to <path>."},
+	{"I81", "Remove the <child> line from govna/children.txt."},
+	{"I82", "Verify <path> matches govna render --orphan."},
+	{"I83", "Verify govna/children.txt no longer lists <child>."},
+	{"I84", "Copy <orphan-scratch>/AGENTS.md over each child AGENTS.md under ## In Scope."},
+	{"I85", "Confirm each parent file selected for update exists in the selected CODE render."},
+	{"I86", "Confirm each child file selected for update exists in the child render."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -275,7 +288,7 @@ var (
 	inferredCheckInstruction   = regexp.MustCompile("^Run `[^`]+` after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
 	notApplicableInstruction   = regexp.MustCompile("^Verify the `Not applicable` evidence still holds after the selected file updates and before `govna/canon-baseline.txt` installation \\([^)]*\\)\\.$")
 	renderRemovalInstruction   = regexp.MustCompile("^Create a temporary copy of the selected Govna files with `govna render --flavor (?:doc|code(?: --stack [^`]+)?) <scratch>`\\.$")
-	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff (?:-ru <scratch>/[^`]+ [^`]+|-u /dev/null <scratch>/[^`]+)`\\.$")
+	compareRemovalInstruction  = regexp.MustCompile("^Compare `[^`]+` with `diff (?:-ru <scratch>/[^`]+ [^`]+|-u /dev/null <scratch>/[^`]+|-u <child-scratch>/[^`]+ [^`]+|-u /dev/null <child-scratch>/[^`]+)`\\.$")
 	auditCanonZoneInstruction  = regexp.MustCompile("^Compare the canon zone of `[^`]+` above exact boundary `[^`]+` with `diff -u .+`\\.$")
 	auditAbsentInstruction     = regexp.MustCompile("^Verify `[^`]+` is absent from the selected scratch render with `test ! -e <scratch>/[^`]+`\\.$")
 	chooseRemovalInstruction   = regexp.MustCompile("^Choose what to remove from `[^`]+`: only its Govna-managed section, nothing, or the whole file\\.$")
@@ -317,6 +330,14 @@ var generatedDynamicInstructions = []struct {
 	{regexp.MustCompile("^Verify the Unreleased CHANGELOG Summary changes only through exact removal of .+ for `[^`]+`\\.$"), "Verify the Unreleased CHANGELOG Summary changes only through exact removal of <phrases> for <path>."},
 	{regexp.MustCompile("^Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for `[^`]+`\\.$"), "Verify every CHANGELOG line outside the Unreleased Summary remains byte-identical for <path>."},
 	{auditAbsentInstruction, "Verify <path> is absent from the selected scratch render with <absence-command>."},
+	{regexp.MustCompile("^Render the child files once into a second scratch directory with `govna render --child --stack [^`]+ <child-scratch>`\\.$"), "Render the child files once into a second scratch directory with <render-command>."},
+	{regexp.MustCompile("^Verify `[^`]+` keeps every row and passes the canonical CHANGELOG heading and two-column table shape\\.$"), "Verify <path> keeps every row and passes the canonical CHANGELOG heading and two-column table shape."},
+	{regexp.MustCompile("^Verify every written child file matches `govna render --child` for the [A-Za-z]+ stack\\.$"), "Verify every written child file matches govna render --child for the <stack> stack."},
+	{regexp.MustCompile("^Verify `\\./build\\.sh` runs the build of `[^`]+` before its own steps\\.$"), "Verify ./build.sh runs the build of <child> before its own steps."},
+	{regexp.MustCompile("^Copy `<orphan-scratch>/AGENTS\\.md` to `[^`]+`\\.$"), "Copy <orphan-scratch>/AGENTS.md to <path>."},
+	{regexp.MustCompile("^Remove the `[^`]+` line from `govna/children\\.txt`\\.$"), "Remove the <child> line from govna/children.txt."},
+	{regexp.MustCompile("^Verify `[^`]+` matches `govna render --orphan`\\.$"), "Verify <path> matches govna render --orphan."},
+	{regexp.MustCompile("^Verify `govna/children\\.txt` no longer lists `[^`]+`\\.$"), "Verify govna/children.txt no longer lists <child>."},
 }
 
 var generatedProseStarters = func() map[string]bool {
@@ -329,8 +350,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 73 {
-		t.Fatalf("generated instruction manifest has %d entries, want 73", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 86 {
+		t.Fatalf("generated instruction manifest has %d entries, want 86", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -356,8 +377,8 @@ func TestGeneratedInstructionManifest(t *testing.T) {
 }
 
 func TestGeneratedDynamicInstructionManifestCoverage(t *testing.T) {
-	if len(generatedDynamicInstructions) != 31 {
-		t.Fatalf("dynamic generated instruction normalizers=%d, want 31", len(generatedDynamicInstructions))
+	if len(generatedDynamicInstructions) != 39 {
+		t.Fatalf("dynamic generated instruction normalizers=%d, want 39", len(generatedDynamicInstructions))
 	}
 	manifest := generatedManifestByText(t)
 	seen := map[string]bool{}
@@ -444,6 +465,14 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		},
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
+		},
+		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1},
+		"internal/remove/testdata/child-removal-golden.md": {"I79": 1, "I80": 1, "I81": 1, "I82": 1, "I83": 1},
+		"internal/audit/testdata/child-golden.md": {
+			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
+			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
+			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
+			"I70": 1, "I71": 1, "I72": 1, "I74": 1, "I75": 1, "I76": 1, "I85": 1, "I86": 1,
 		},
 	}
 	manifest := generatedManifestByText(t)
