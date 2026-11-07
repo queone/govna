@@ -593,12 +593,14 @@ func TestReplyLimitsFollowPlainLanguage(t *testing.T) {
 		"Use one term for each concept.",
 		"Use the active voice.",
 		"Use the passive voice only when the actor is unknown or unimportant.",
+		"Keep each sentence that tells the reader to act to 20 words or fewer.",
+		"Keep every other sentence to 25 words or fewer.",
 		"Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.",
 	}
 	placement := "- Pair each necessary Govna label with its plain-language meaning at first use in a document.\n\n" +
 		"### STE Replies\n\n- " + strings.Join(limits, "\n- ") + "\n\n" +
 		"Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement `### Plain Language` and `## Review Style` instead of replacing them.\n\n" +
-		"### Session Entry\n"
+		"### Chat Format\n"
 	for _, path := range agentsRewrittenPaths {
 		content := readSourceForLanguageTest(t, path)
 		if count := strings.Count(content, "### STE Replies\n"); count != 1 {
@@ -614,6 +616,70 @@ func TestReplyLimitsFollowPlainLanguage(t *testing.T) {
 	}
 	if strings.Contains(projectRules, "### STE Replies") {
 		t.Error("AGENTS.md keeps a local reply-limits copy in Project Rules")
+	}
+}
+
+// chatFormatRules lists, in order, the AGENTS.md rules that shape the lines,
+// lists, characters, and step-by-step pacing of a chat reply.
+var chatFormatRules = []string{
+	"Apply these rules to chat replies only.",
+	"Start each prose sentence on a new line.",
+	"Keep each prose line to about 120 characters or fewer.",
+	"Break a longer prose sentence at a clause boundary within the limit, such as after a comma, semicolon, or colon.",
+	"Break a longer prose sentence at the last space within the limit when no clause boundary fits.",
+	"Indent each later line of a list item to the item's text.",
+	"Number the items of each list that the Director may act on, such as questions, options, findings, and decisions.",
+	"Use the `## Review Style` finding identifiers instead of list numbers wherever Review Style assigns them.",
+	"Restart list numbers in each reply.",
+	"Leave narrative bullets unnumbered.",
+	"Use plain ASCII characters.",
+	"Show a status as `pending`, `done`, `blocked`, `-`, `[x]`, or `[ ]` instead of a decorative glyph or emoji.",
+	"Give one step per reply when the Director asks to go step by step.",
+	"Wait for the Director's result before giving the next step.",
+	"Extend the `### STE Replies` exemptions to these rules.",
+	"Exempt tables, headings, and URLs from these rules too.",
+}
+
+// chatFormatNote states what the chat line rules cannot control.
+const chatFormatNote = "Note: an agent cannot see the terminal width, so a terminal narrower than 120 columns can still wrap a line inside a phrase. Sentence and clause breaks make each source line easier to read, but they cannot control those extra wraps. A renderer that joins single line breaks reflows the paragraph to the terminal width."
+
+// acGroupingRules keeps related straightforward work in one AC.
+const acGroupingRules = "- Keep related straightforward changes together in one AC.\n" +
+	"- Recommend an AC split only when the parts have independent objectives, risks, or release timing, or exceed practical inline capacity.\n"
+
+func TestChatFormatFollowsReplyLimits(t *testing.T) {
+	group := "Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement `### Plain Language` and `## Review Style` instead of replacing them.\n\n" +
+		"### Chat Format\n\n- " + strings.Join(chatFormatRules, "\n- ") + "\n\n" + chatFormatNote + "\n\n### Session Entry\n"
+	paste := "- Paste the literal output in a code block when the Director asks to see a file or command output.\n" +
+		"- Place any summary after the literal output instead of in its place.\n"
+	codeNonTrivial := "- Treat every non-trivial change as AC-first work unless the Director explicitly overrides it.\n"
+	nonTrivial := map[string]string{
+		"AGENTS.md": codeNonTrivial,
+		"internal/canon/assets/base/AGENTS.md.tmpl":               codeNonTrivial,
+		"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl": "- Treat every non-trivial change outside a content entry as AC-first work unless the Director explicitly overrides it.\n",
+	}
+	for _, path := range agentsRewrittenPaths {
+		content := readSourceForLanguageTest(t, path)
+		if count := strings.Count(content, "### Chat Format\n"); count != 1 {
+			t.Errorf("%s chat-format group count=%d, want 1", path, count)
+		}
+		if !strings.Contains(content, group) {
+			t.Errorf("%s does not carry exactly the chat-format rules and note between the reply limits and Session Entry", path)
+		}
+		if count := strings.Count(content, paste); count != 1 {
+			t.Errorf("%s literal-output summary rule count=%d, want 1 directly after the literal-output rule", path, count)
+		}
+		if count := strings.Count(content, nonTrivial[path]+acGroupingRules); count != 1 {
+			t.Errorf("%s AC grouping rules count=%d, want 1 directly after the non-trivial-change rule", path, count)
+		}
+	}
+	for _, rule := range chatFormatRules {
+		if !focusedImperativeStarter(rule) {
+			t.Errorf("chat-format rule lacks an imperative starter: %s", rule)
+		}
+		if secondAction.MatchString(rule) {
+			t.Errorf("chat-format rule contains a second action: %s", rule)
+		}
 	}
 }
 
@@ -1597,6 +1663,11 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Remain in Refine when the checklist finds a gap.",
 		"Default to plain text.",
 		"Color `Verified:`, `Red-teamed:`, and `Not checked:` cyan only when the response channel explicitly supports native color or ANSI color and color is enabled.",
+		"Keep each sentence that tells the reader to act to 20 words or fewer.",
+		"Keep every other sentence to 25 words or fewer.",
+		"Place any summary after the literal output instead of in its place.",
+		"Keep related straightforward changes together in one AC.",
+		"Recommend an AC split only when the parts have independent objectives, risks, or release timing, or exceed practical inline capacity.",
 	},
 	"govna/roles.md": {
 		"Verify changed scope, behavior, content, claims, references, structure, terminology, and tests against governing contracts.",
@@ -1691,6 +1762,7 @@ func TestStateEachRuleOnceRules(t *testing.T) {
 			for path, list := range stateEachRuleOnceRules {
 				rules[path] = append(rules[path], list...)
 			}
+			rules["AGENTS.md"] = append(rules["AGENTS.md"], chatFormatRules...)
 			rules[p.cyclePath] = append(rules[p.cyclePath], "Apply `AGENTS.md` `### Four-Phase Workflow`, `### Phase-Advancement Rules`, and `### Audit Adoption` to this cycle.")
 			release := "govna/release.md"
 			if p.config.Flavor == Code {
@@ -1939,8 +2011,6 @@ var shorterReportRules = map[string][]string{
 // shorterReportRetired lists wording the shorter-report change deletes from
 // every rendered governance file.
 var shorterReportRetired = []string{
-	"Keep each sentence that tells the reader to act to 20 words or fewer.",
-	"Keep every other sentence to 25 words or fewer.",
 	"Keep each paragraph to six sentences or fewer.",
 	"Give one instruction per sentence.",
 	"Start each warning with the command or the condition.",
@@ -2079,6 +2149,12 @@ var releaseHistoryFormatRules = []string{
 	"Write condensed Simplified Technical English.",
 	"Keep one fact per bullet.",
 	"Keep each bullet to at most 25 words.",
+	"Keep each line of a release section to about 120 characters or fewer.",
+	"Break a longer bullet at a clause boundary within the limit, such as after a comma, semicolon, or colon.",
+	"Break a longer bullet at the last space within the limit when no clause boundary fits.",
+	"Keep each path, URL, identifier, command, and exact quoted output unbroken and unchanged.",
+	"Let a line pass the limit only when a path, URL, identifier, command, or exact quoted output cannot fit within it.",
+	"Indent each later line of a bullet by two spaces.",
 	"Start at the first release after adoption.",
 	"Skip back-filling earlier releases.",
 }

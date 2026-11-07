@@ -63,6 +63,7 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Report each written deliverable with a one-paragraph chat summary plus the file path.
 - Quote at most short, targeted snippets from a written file when discussing a specific change.
 - Paste the literal output in a code block when the Director asks to see a file or command output.
+- Place any summary after the literal output instead of in its place.
 
 ### Plain Language
 
@@ -76,9 +77,32 @@ Note: prefer wording that is easiest for an LLM to follow, while staying simple 
 - Use one term for each concept.
 - Use the active voice.
 - Use the passive voice only when the actor is unknown or unimportant.
+- Keep each sentence that tells the reader to act to 20 words or fewer.
+- Keep every other sentence to 25 words or fewer.
 - Exempt code, commands, paths, identifiers, quoted text, and fixed lines that other AGENTS.md rules require from these limits.
 
 Note: these limits borrow from Simplified Technical English (ASD-STE100), and they supplement `### Plain Language` and `## Review Style` instead of replacing them.
+
+### Chat Format
+
+- Apply these rules to chat replies only.
+- Start each prose sentence on a new line.
+- Keep each prose line to about 120 characters or fewer.
+- Break a longer prose sentence at a clause boundary within the limit, such as after a comma, semicolon, or colon.
+- Break a longer prose sentence at the last space within the limit when no clause boundary fits.
+- Indent each later line of a list item to the item's text.
+- Number the items of each list that the Director may act on, such as questions, options, findings, and decisions.
+- Use the `## Review Style` finding identifiers instead of list numbers wherever Review Style assigns them.
+- Restart list numbers in each reply.
+- Leave narrative bullets unnumbered.
+- Use plain ASCII characters.
+- Show a status as `pending`, `done`, `blocked`, `-`, `[x]`, or `[ ]` instead of a decorative glyph or emoji.
+- Give one step per reply when the Director asks to go step by step.
+- Wait for the Director's result before giving the next step.
+- Extend the `### STE Replies` exemptions to these rules.
+- Exempt tables, headings, and URLs from these rules too.
+
+Note: an agent cannot see the terminal width, so a terminal narrower than 120 columns can still wrap a line inside a phrase. Sentence and clause breaks make each source line easier to read, but they cannot control those extra wraps. A renderer that joins single line breaks reflows the paragraph to the terminal width.
 
 ### Session Entry
 
@@ -234,6 +258,8 @@ Note: this rule does not prohibit batching independent commands.
 - Require an AC for architecture, schema, dependency, security, migration, external-integration, destructive, governance, or release decisions regardless of file count.
 - Preserve explicit authorization, scope, documentation, and same-pass test requirements for direct handling.
 - Treat every non-trivial change outside a content entry as AC-first work unless the Director explicitly overrides it.
+- Keep related straightforward changes together in one AC.
+- Recommend an AC split only when the parts have independent objectives, risks, or release timing, or exceed practical inline capacity.
 - Describe each direct-handled companion change in the release message when the release batch already carries an AC.
 - Draft no retroactive AC for such a companion change.
 - Draft `govna/ac<N>-<slug>.md` before implementation using `govna/ac-template.md`.

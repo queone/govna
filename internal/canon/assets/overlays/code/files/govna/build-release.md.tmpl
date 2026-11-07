@@ -159,6 +159,12 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Write condensed Simplified Technical English.
 - Keep one fact per bullet.
 - Keep each bullet to at most 25 words.
+- Keep each line of a release section to about 120 characters or fewer.
+- Break a longer bullet at a clause boundary within the limit, such as after a comma, semicolon, or colon.
+- Break a longer bullet at the last space within the limit when no clause boundary fits.
+- Keep each path, URL, identifier, command, and exact quoted output unbroken and unchanged.
+- Let a line pass the limit only when a path, URL, identifier, command, or exact quoted output cannot fit within it.
+- Indent each later line of a bullet by two spaces.
 - Start at the first release after adoption.
 - Skip back-filling earlier releases.
 

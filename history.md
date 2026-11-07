@@ -2,6 +2,39 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.55.0
+
+Added:
+- Canon `AGENTS.md` gains `### Chat Format`, so Claude, Codex,
+  and every other agent format chat replies by one rule set.
+- Each chat sentence starts a new line, and each chat line stays at about 120 characters.
+- A longer sentence breaks at a clause boundary, or else at the last space that fits.
+- Chat replies number each list that the Director may act on, use plain ASCII, and give one step per reply on request.
+- A summary of literal command or file output follows that output and never replaces it.
+- Two AC-First Workflow rules keep related straightforward changes in one AC.
+- `## Release History Format` keeps each `history.md` line at about 120 characters,
+  with the chat break rules and two-space continuation lines.
+- A `history.md` line keeps each path, URL, identifier, command, and quoted output whole,
+  and passes the limit only when one cannot fit.
+
+Changed:
+- `### STE Replies` again limits a sentence that tells the reader to act to 20 words,
+  and any other sentence to 25 words.
+
+Decisions:
+- The chat rules live in canon instead of one agent's personal rules file, because other agents never read that file.
+- Lines break at sentence and clause boundaries before any other space, so each source line reads naturally.
+- The 120-character limit applies to lines; the restored STE word limits govern sentence length.
+- An AC split needs independent objectives, risks, release timing, or more work than one agent can do inline.
+- The history line rules stay inside the history format, like its 25-word bullet limit.
+- Existing `history.md` sections keep their lines, because the format applies only to sections that Package writes.
+- The DOC flavor gets no history line rules, because it has no history format.
+
+Risks:
+- An agent cannot see the terminal width,
+  so a terminal narrower than 120 columns still wraps some lines inside a phrase.
+- Agents estimate character counts, so line lengths vary around 120.
+
 ## v0.54.2
 
 Changed:

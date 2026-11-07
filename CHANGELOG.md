@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.55.0 | AC79 every agent formats chat replies by one rule set; canon v0.91.0 |
 | 0.54.2 | AC78 the Go build works while go.work names a child; canon v0.90.1 |
 | 0.54.1 | Record the parked distribution-children analysis in brainstorm.md |
 | 0.54.0 | AC77 version-only govna updates stay quiet; canon v0.90.0 |
