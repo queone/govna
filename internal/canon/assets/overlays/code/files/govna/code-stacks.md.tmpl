@@ -42,6 +42,19 @@
 - Clone each declared child at its registry path before a full build, including in CI.
 - Run a scoped build in a clone that lacks its children.
 
+## Markdown Identifier Check
+
+- Scan every tracked or unignored Markdown file for bare AC, AT, and IE identifiers.
+- Run the scan before the first formatting step of every full and scoped build.
+- Run the scan at the start of every prep, before any write or dry-run report.
+- Fail on each identifier that `AGENTS.md` `### AC Mechanics` and `### Child Repositories` do not allow.
+- Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.
+- Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.
+- Treat a repository as a child when its `AGENTS.md` has a line that starts with `This repository is a Govna child repository.`.
+- Skip `tests/fixtures/` and every `testdata/` directory.
+- Name the file, line, identifier, and a placeholder fix such as `AC<N>` in each finding.
+- Keep the scan in one helper block that is identical in every build script.
+
 ## Go
 
 - Discover utilities from regular `cmd/<target>/main.go` files in byte order.

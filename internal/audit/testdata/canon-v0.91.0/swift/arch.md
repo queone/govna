@@ -1,0 +1,50 @@
+# widget Architecture
+
+## Purpose
+
+Describe the concrete outcome the system provides and the problem it solves.
+
+## System Summary
+
+Explain what enters the system, what it does, and what it produces before naming implementation components, boundaries, storage, or external integrations.
+
+## Current Platform
+
+- Swift
+
+## Major Components
+
+- entrypoints and user-facing surfaces
+- core domain or business logic
+- storage, messaging, or state boundaries
+- external integrations and trust boundaries
+
+## Core Files
+
+- `AGENTS.md`: base governance contract
+- `plan.md`: prioritized roadmap and approved direction
+- `history.md`: per-release record of product changes, decisions, and risks, written during Package
+- `build.sh`: self-contained build / release-prep / release script (Bash 3.2+, no external tools)
+- `govna/development-cycle.md`: workflow from roadmap through release
+- `govna/ac-template.md`: acceptance-criteria template for new work
+- `govna/build-release.md`: build, test, and release rules
+
+## Data And Control Flow
+
+Trace the main request, job, or publish path from the user-visible entry point to its result. Explain each practical effect before the component that performs it.
+
+## AC Lifecycle Control Flow
+
+The governed change path is `Draft → Audit → Refine → Implement → Ratify → Package`. Draft creates the AC; Audit, Refine, Implement, and Ratify are the four AC phases; Package is post-Ratify release preparation and is not a fifth phase.
+
+Integrated audit adoption is the only command-mediated phase exception. It can advance one emitted adoption AC through immediate Audit and no-edit Refine, but it cannot enter Implement. Every unpackaged AC with implementation in the unreleased state enters the pending release batch, including work awaiting Ratify. A private pre-Implement calculation prevents that complete batch from growing beyond one 80-byte prefix-plus-summary message. Package requires every member to be Ratified, rejects excluded implemented work, and rechecks the complete batch before prep. A named request such as `Package AC70+AC71` establishes a fitting multi-AC batch; a standalone Package alias reuses the complete batch already established in the active session.
+
+## Architecture Notes
+
+- record stable system decisions here
+- prefer durable structure and interfaces over transient implementation detail
+
+## Conventions
+
+- update this document when architecture or major workflow changes materially
+- keep implementation detail in code and stable architecture here

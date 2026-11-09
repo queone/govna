@@ -11,7 +11,7 @@ Refuse a release from a detached `HEAD` before the approval prompt.
 Push the branch with `git push -u origin HEAD` when it has no upstream.
 Accept strict semver `vMAJOR.MINOR.PATCH` or the dated form `vYY.MM.DDa` as the release tag.
 
-`build.sh` is self-contained Bash 3.2+ tooling. DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command.
+`build.sh` is self-contained Bash 3.2+ tooling. DOC repositories do not need a compiler toolchain for release preparation or release orchestration and define no automated content-validation command. Prep runs one automated content check: the Markdown identifier scan.
 
 Keep DOC release prep repository-wide.
 Reject CODE target selection.
@@ -33,6 +33,17 @@ rules in `govna/build-release.md`.
 - Require a 256-color-capable terminal before emitting ANSI sequences.
 - Preserve plain-text content and output streams when color is disabled.
 - Keep the self-contained build script compatible with Bash 3.2.
+
+### Markdown Identifier Check
+
+- Scan every tracked or unignored Markdown file for bare AC, AT, and IE identifiers.
+- Run the scan at the start of every prep, before any write or dry-run report.
+- Stop prep on each identifier that `AGENTS.md` `### AC Mechanics` does not allow.
+- Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.
+- Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.
+- Skip `tests/fixtures/` and every `testdata/` directory.
+- Name the file, line, identifier, and a placeholder fix such as `AC<N>` in each finding.
+- Keep the scan in one helper block that is identical in every build script.
 
 ## Acceptance Tests
 

@@ -92,19 +92,20 @@ Note: the operator flow has two steps.
 
 1. **Validate inputs.** Require strict stable SemVer and one non-empty, single-line, table-safe message of no more than 80 bytes.
 2. **Validate git state.** Inside a git work tree, target tag does not exist yet, HEAD is not at the latest tag with a clean working tree. Go accepts a repository with no commits.
-3. **Process version targets.**
+3. **Scan Markdown identifiers.** Run the scan in `govna/code-stacks.md` `## Markdown Identifier Check` and stop on any finding before any write, including under `--dry-run` or `-n`.
+4. **Process version targets.**
    - Detect every version target.
    - Validate every version target.
    - Follow this repository's Project Practices.
    - Follow the stack build implementation.
    - Reject missing, malformed, duplicate, or unsafe targets before any write.
    - Reject a bumped utility's README whose `### Usage` block cannot match the help probe.
-4. **Guard CHANGELOG shape and idempotency.**
+5. **Guard CHANGELOG shape and idempotency.**
    - Detect the root `CHANGELOG.md` target.
    - Require the canonical heading and two-column table.
    - Reject an existing row for the target version before any write.
-5. **Parse AC refs.** Scan the release message for `AC[0-9]+`; require one matching AC file for every unique reference after the Operator verifies exact release-batch equality. Accept a message without AC references.
-6. **Apply writes.**
+6. **Parse AC refs.** Scan the release message for `AC[0-9]+`; require one matching AC file for every unique reference after the Operator verifies exact release-batch equality. Accept a message without AC references.
+7. **Apply writes.**
    - Apply idempotent version bumps.
    - Rewrite each bumped utility's README `### Usage` version line.
    - Insert the CHANGELOG row under `| Unreleased | |`.
@@ -112,7 +113,7 @@ Note: the operator flow has two steps.
    - Sweep matching AC-pointer IE lines from `plan.md`.
    - Skip writes under `--dry-run` or `-n`.
    - Leave already-swept lines unchanged on rerun.
-7. **Verify and report.** Reject results outside the planned paths, verify every planned transformation, and print one shell-safe two-argument release command.
+8. **Verify and report.** Reject results outside the planned paths, verify every planned transformation, and print one shell-safe two-argument release command.
 
 CHANGELOG row shape (enforced by prep's insertion code and by convention):
 

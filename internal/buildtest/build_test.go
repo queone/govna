@@ -121,6 +121,36 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 		},
 	}
 
+	scanTest := "TestBareIdentifierScanFindsOnlyDisallowedIdentifiers"
+	sharedScan := []binding{
+		{claim: "Scan every tracked or unignored Markdown file for bare AC, AT, and IE identifiers.", implementation: "git ls-files -z --cached --others --exclude-standard -- '*.md'", regression: scanTest},
+		{claim: "Run the scan at the start of every prep, before any write or dry-run report.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
+		{claim: "Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.", implementation: "match(rest, /(AC|AT|IE)[0-9]+/)", regression: scanTest},
+		{claim: "Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.", implementation: "rest ~ /^[ \\t]*Historical:/", regression: scanTest},
+		{claim: "Skip `tests/fixtures/` and every `testdata/` directory.", implementation: "tests/fixtures/* | testdata/* | */testdata/*) continue", regression: scanTest},
+		{claim: "Name the file, line, identifier, and a placeholder fix such as `AC<N>` in each finding.", implementation: "bare identifier %s; replace it with plain words or a placeholder such as AC<N>", regression: scanTest},
+		{claim: "Keep the scan in one helper block that is identical in every build script.", implementation: strings.TrimSuffix(bareIdentifierBlockStart, "\n"), regression: "TestBareIdentifierScanIsSharedByEveryScript"},
+	}
+	for i := range profiles {
+		profiles[i].bindings = append(profiles[i].bindings, sharedScan...)
+		if profiles[i].name == "DOC" {
+			profiles[i].bindings = append(profiles[i].bindings,
+				binding{claim: "Stop prep on each identifier that `AGENTS.md` `### AC Mechanics` does not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
+				binding{claim: "Prep runs one automated content check: the Markdown identifier scan.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
+			)
+			continue
+		}
+		formatting := "TestBareIdentifierScanRunsBeforeFormatting"
+		if profiles[i].name == "Go" {
+			formatting = "TestRenderedGoBuildExecutesWithoutNetwork"
+		}
+		profiles[i].bindings = append(profiles[i].bindings,
+			binding{claim: "Run the scan before the first formatting step of every full and scoped build.", implementation: "_bare_id_check || return 1", regression: formatting},
+			binding{claim: "Fail on each identifier that `AGENTS.md` `### AC Mechanics` and `### Child Repositories` do not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
+			binding{claim: "Treat a repository as a child when its `AGENTS.md` has a line that starts with `This repository is a Govna child repository.`.", implementation: "_bare_id_is_child", regression: scanTest},
+		)
+	}
+
 	root := repoRoot(t)
 	goRegressions := string(mustRead(t, filepath.Join(root, "internal/buildtest/build_test.go")))
 	rustRegressions := string(mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/rust/tests/build_cli.sh.tmpl")))
@@ -235,12 +265,16 @@ func TestRenderedGoHelperClosure(t *testing.T) {
 	if err := closure.validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_pin_go_toolchain", "_release_compile_validate_install", "_staticcheck_failure_hint", "_tmp_root", "_utility_count_label", "_validate_changelog_shape"} {
+	for _, helper := range []string{"_build_signal_exit", "_capture_worktree_tree", "_extract_template_version", "_print_coverage_summary", "_domain_coverage", "_extract_program_version", "_install_validated_utility", "_is_strict_stable_semver", "_pin_go_toolchain", "_release_compile_validate_install", "_staticcheck_failure_hint", "_tmp_root", "_utility_count_label", "_validate_changelog_shape", "_bare_id_check", "_bare_id_is_child", "_bare_id_list_files", "_bare_id_scan"} {
 		if closure.definitions[helper] != 1 {
 			t.Errorf("%s definitions=%d", helper, closure.definitions[helper])
 		}
 	}
 	wantReferences := []string{
+		"_bare_id_check",
+		"_bare_id_is_child",
+		"_bare_id_list_files",
+		"_bare_id_scan",
 		"_build_children",
 		"_byte_len",
 		"_capture_worktree_tree",
@@ -727,6 +761,24 @@ func TestRenderedGoBuildExecutesWithoutNetwork(t *testing.T) {
 	}
 	if !strings.Contains(string(fixedOut), "==> Automatically fix code for API/language changes\n    Fixed files:\n    internal/domain/domain.go\n") || strings.Contains(string(fixedOut), "No fixes applied.") {
 		t.Fatalf("rendered build did not list the files go fix changed:\n%s", fixedOut)
+	}
+
+	if !strings.Contains(output, "==> Check markdown for nested fence issues\n    No nested-fence issues found.\n\n"+bareIdentifierStepHeader+"\n"+bareIdentifierCleanLine+"\n") {
+		t.Fatalf("rendered build does not run the bare identifier scan right after the nested-fence step:\n%s", output)
+	}
+	writeBuildFixture(t, filepath.Join(dir, "README.md"), []byte("# Widget\n\nSee AT3 for details.\n"), 0o644)
+	if err := os.Remove(trace); err != nil {
+		t.Fatal(err)
+	}
+	bare := exec.Command("/bin/bash", "./build.sh")
+	bare.Dir = dir
+	bare.Env = cmd.Env
+	bareOut, bareErr := bare.CombinedOutput()
+	if bareErr == nil || !strings.Contains(string(bareOut), bareIdentifierFinding("README.md", 3, "AT3")+"\n") {
+		t.Fatalf("rendered build passed a bare identifier: %v\n%s", bareErr, bareOut)
+	}
+	if traceAfter, err := os.ReadFile(trace); err == nil && strings.Contains(string(traceAfter), "fmt ") {
+		t.Fatalf("rendered build ran go fmt after a bare identifier finding:\n%s", traceAfter)
 	}
 }
 
@@ -4289,6 +4341,279 @@ func TestGoBuildReadsOneModulePathInAWorkspace(t *testing.T) {
 		}
 		if count := strings.Count(script, "go list -m"); count != 1 {
 			t.Errorf("%s runs go list -m %d times, want only the workspace-off read", path, count)
+		}
+	}
+}
+
+const (
+	bareIdentifierBlockStart = "# --- bare identifier scan (identical in every build script) ---\n"
+	bareIdentifierBlockEnd   = "# --- end bare identifier scan ---\n"
+	bareIdentifierStepHeader = "==> Check markdown for bare AC, AT, and IE identifiers"
+	bareIdentifierCleanLine  = "    No bare AC, AT, or IE identifiers found."
+)
+
+// bareIdentifierScript names one build script that carries the shared bare
+// identifier scan and the shell loader that defines its functions without
+// running main.
+type bareIdentifierScript struct {
+	name, path, loader string
+}
+
+// bareIdentifierScripts lists the root Go build script and every canon build
+// script template.
+func bareIdentifierScripts() []bareIdentifierScript {
+	source := "source ./build.sh\n"
+	swift := "eval \"$(sed '/^main \\\"$@\\\"/,$d' ./build.sh)\"\n"
+	stacks := "internal/canon/assets/overlays/code/stacks/"
+	return []bareIdentifierScript{
+		{name: "root Go", path: "build.sh", loader: source},
+		{name: "Go", path: stacks + "go/build.sh.tmpl", loader: source},
+		{name: "Rust", path: stacks + "rust/build.sh.tmpl", loader: source},
+		{name: "Swift", path: stacks + "swift/build.sh.tmpl", loader: swift},
+		{name: "Terraform", path: stacks + "terraform/build.sh.tmpl", loader: source},
+		{name: "DOC", path: "internal/canon/assets/overlays/doc/files/build.sh.tmpl", loader: source},
+	}
+}
+
+// bareIdentifierFinding formats one indented scan finding as the build prints it.
+func bareIdentifierFinding(path string, line int, id string) string {
+	return fmt.Sprintf("    %s:%d: bare identifier %s; replace it with plain words or a placeholder such as AC<N>, or move it to a place AGENTS.md ### AC Mechanics allows", path, line, id)
+}
+
+// bareIdentifierFindings returns the sorted finding lines in scan output.
+func bareIdentifierFindings(output string) []string {
+	var findings []string
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.HasPrefix(line, "    ") && strings.Contains(line, ": bare identifier ") {
+			findings = append(findings, line)
+		}
+	}
+	sort.Strings(findings)
+	return findings
+}
+
+// runBareIdentifierScan runs the shared scan step from script in dir.
+func runBareIdentifierScan(t *testing.T, dir string, script bareIdentifierScript) (string, error) {
+	t.Helper()
+	return run(t, dir, "", "-c", script.loader+"_color_init\n_bare_id_check\n")
+}
+
+func TestBareIdentifierScanIsSharedByEveryScript(t *testing.T) {
+	root := repoRoot(t)
+	var want string
+	for _, script := range bareIdentifierScripts() {
+		text := string(mustRead(t, filepath.Join(root, script.path)))
+		start := strings.Index(text, bareIdentifierBlockStart)
+		end := strings.Index(text, bareIdentifierBlockEnd)
+		if strings.Count(text, bareIdentifierBlockStart) != 1 || strings.Count(text, bareIdentifierBlockEnd) != 1 || end < start {
+			t.Fatalf("%s lacks exactly one shared bare identifier scan block", script.name)
+		}
+		block := text[start : end+len(bareIdentifierBlockEnd)]
+		if want == "" {
+			want = block
+		} else if block != want {
+			t.Errorf("%s bare identifier scan block differs from the other build scripts", script.name)
+		}
+	}
+}
+
+func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
+	root := repoRoot(t)
+	changelog := "# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | AC12 shipped |\n"
+	files := map[string]string{
+		"README.md":                "# Widget\n\nUse `Package AC70+AC71` to release.\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, and AC1x hold none.\n",
+		"history.md":               "# History\n\nShipped in AT3.\n",
+		"docs/guide.md":            "# Guide\n\nSupports IE11.\n<!-- Historical: AC12 shipped this -->\n",
+		"govna/ac-template.md":     "**AT1** [Automated]\n\nSee IE2.\n",
+		"govna/ac81-example.md":    "# AC81 Example\n",
+		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3.\n",
+		"CHANGELOG.md":             changelog,
+		"internal/x/testdata/g.md": "AC1 fixture\n",
+		"tests/fixtures/f.md":      "AC2 fixture\n",
+	}
+	shared := []string{
+		bareIdentifierFinding("README.md", 3, "AC70"),
+		bareIdentifierFinding("README.md", 3, "AC71"),
+		bareIdentifierFinding("history.md", 3, "AT3"),
+		bareIdentifierFinding("docs/guide.md", 3, "IE11"),
+		bareIdentifierFinding("govna/ac-template.md", 3, "IE2"),
+		bareIdentifierFinding("plan.md", 3, "AC3"),
+	}
+	untracked := bareIdentifierFinding("notes.md", 1, "AT9")
+	child := []string{
+		bareIdentifierFinding("CHANGELOG.md", 6, "AC12"),
+		bareIdentifierFinding("govna/ac81-example.md", 1, "AC81"),
+		bareIdentifierFinding("govna/ac-template.md", 1, "AT1"),
+		bareIdentifierFinding("plan.md", 3, "IE5"),
+		bareIdentifierFinding("docs/guide.md", 4, "AC12"),
+	}
+	pointer := mustRead(t, filepath.Join(root, "internal/canon/assets/child/pointer-AGENTS.md.tmpl"))
+	expect := func(t *testing.T, label, output string, err error, want []string) {
+		t.Helper()
+		sorted := append([]string{}, want...)
+		sort.Strings(sorted)
+		if got := bareIdentifierFindings(output); strings.Join(got, "\n") != strings.Join(sorted, "\n") {
+			t.Fatalf("%s findings:\n%s\nwant:\n%s\noutput:\n%s", label, strings.Join(got, "\n"), strings.Join(sorted, "\n"), output)
+		}
+		if err == nil || !strings.Contains(output, fmt.Sprintf("bare identifier scan found %d issue(s)\n", len(want))) {
+			t.Fatalf("%s scan did not fail with the count line: err=%v\n%s", label, err, output)
+		}
+		if !strings.HasPrefix(output, bareIdentifierStepHeader+"\n") {
+			t.Fatalf("%s scan omits the step header:\n%s", label, output)
+		}
+	}
+	for _, script := range bareIdentifierScripts() {
+		t.Run(script.name, func(t *testing.T) {
+			tooling := mustRead(t, filepath.Join(root, script.path))
+			write := func(dir string, extra map[string]string) {
+				writeBuildFixture(t, filepath.Join(dir, "build.sh"), tooling, 0o755)
+				for path, body := range files {
+					writeBuildFixture(t, filepath.Join(dir, filepath.FromSlash(path)), []byte(body), 0o644)
+				}
+				for path, body := range extra {
+					writeBuildFixture(t, filepath.Join(dir, filepath.FromSlash(path)), []byte(body), 0o644)
+				}
+			}
+
+			repo := t.TempDir()
+			write(repo, map[string]string{".gitignore": "ignored.md\n", "ignored.md": "AT8 ignored\n"})
+			gitFixture(t, repo, "init", "-q")
+			gitFixture(t, repo, "add", "-A")
+			writeBuildFixture(t, filepath.Join(repo, "notes.md"), []byte("AT9 note\n"), 0o644)
+			out, err := runBareIdentifierScan(t, repo, script)
+			expect(t, "git repository", out, err, append(append([]string{}, shared...), untracked))
+
+			writeBuildFixture(t, filepath.Join(repo, "AGENTS.md"), pointer, 0o644)
+			out, err = runBareIdentifierScan(t, repo, script)
+			expect(t, "child repository", out, err, append(append(append([]string{}, shared...), untracked), child...))
+			if err := os.Remove(filepath.Join(repo, "AGENTS.md")); err != nil {
+				t.Fatal(err)
+			}
+
+			plain := t.TempDir()
+			write(plain, nil)
+			out, err = runBareIdentifierScan(t, plain, script)
+			expect(t, "directory outside Git", out, err, shared)
+
+			clean := map[string]string{
+				"README.md":            "# Widget\n\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, and AC1x hold none.\n",
+				"history.md":           "# History\n",
+				"docs/guide.md":        "# Guide\n\n<!-- Historical: AC12 shipped this -->\n",
+				"govna/ac-template.md": "**AT1** [Automated]\n",
+				"plan.md":              "# Plan\n\n- IE5: Explore a scan.\n",
+				"notes.md":             "A note\n",
+			}
+			for path, body := range clean {
+				writeBuildFixture(t, filepath.Join(repo, filepath.FromSlash(path)), []byte(body), 0o644)
+			}
+			out, err = runBareIdentifierScan(t, repo, script)
+			if err != nil || !strings.Contains(out, bareIdentifierCleanLine+"\n") || len(bareIdentifierFindings(out)) != 0 {
+				t.Fatalf("clean scan: err=%v\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestBareIdentifierScanRunsBeforeFormatting(t *testing.T) {
+	for _, tc := range []struct{ stack, header string }{
+		{stack: "Rust", header: "==> Check Rust formatting"},
+		{stack: "Swift", header: "==> Check Swift formatting"},
+		{stack: "Terraform", header: "==> Check Terraform formatting"},
+	} {
+		t.Run(tc.stack, func(t *testing.T) {
+			files, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: tc.stack})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var script string
+			for _, file := range files {
+				if file.Path == "build.sh" {
+					script = string(file.Content)
+				}
+			}
+			header := "  printf '%s\\n' \"$(yel7 '" + tc.header + "')\"\n"
+			guarded := "  _bare_id_check || return 1\n  printf '\\n'\n" + header
+			if count := strings.Count(script, header); count == 0 || strings.Count(script, guarded) != count {
+				t.Fatalf("%s: %d formatting step(s), %d preceded by the bare identifier scan", tc.stack, count, strings.Count(script, guarded))
+			}
+		})
+	}
+}
+
+func TestPrepStopsOnBareIdentifierBeforeAnyWrite(t *testing.T) {
+	root := repoRoot(t)
+	changelog := "# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n"
+	for _, script := range bareIdentifierScripts() {
+		t.Run(script.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, script.path)), 0o755)
+			writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte(changelog), 0o644)
+			writeBuildFixture(t, filepath.Join(dir, "history.md"), []byte("# History\n\nShipped in AC12.\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
+			gitFixture(t, dir, "init", "-q")
+			gitFixture(t, dir, "add", "-A")
+			gitFixture(t, dir, "-c", "user.email=fixture@example.invalid", "-c", "user.name=Fixture", "commit", "-qm", "fixture")
+			before := string(gitFixtureOutput(t, dir, "status", "--porcelain"))
+			for _, args := range [][]string{{"prep", "v1.0.0", "Fix docs"}, {"prep", "-n", "v1.0.0", "Fix docs"}} {
+				out, err := run(t, dir, "", append([]string{"./build.sh"}, args...)...)
+				if err == nil {
+					t.Fatalf("%v passed with a bare identifier in history.md:\n%s", args, out)
+				}
+				if !strings.Contains(out, bareIdentifierFinding("history.md", 3, "AC12")+"\n") || !strings.Contains(out, "bare identifier scan found 1 issue(s)\n") {
+					t.Fatalf("%v output omits the finding:\n%s", args, out)
+				}
+				if strings.Contains(out, "./build.sh v1.0.0") {
+					t.Fatalf("%v reported a release command after the finding:\n%s", args, out)
+				}
+				if after := string(gitFixtureOutput(t, dir, "status", "--porcelain")); after != before {
+					t.Fatalf("%v changed the repository: before=%q after=%q", args, before, after)
+				}
+			}
+		})
+	}
+}
+
+func TestRenderedProfilesHaveNoBareIdentifiers(t *testing.T) {
+	root := repoRoot(t)
+	configs := []canon.Config{{Flavor: canon.Doc, RepoName: "handbook"}}
+	for _, stack := range canon.Stacks() {
+		config := canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: stack}
+		if stack == "Go" {
+			config.ModulePath = "example.com/widget"
+		}
+		configs = append(configs, config)
+	}
+	for _, config := range configs {
+		name := string(config.Flavor) + "/" + config.Stack
+		t.Run(name, func(t *testing.T) {
+			files, err := canon.Render(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			for _, file := range files {
+				writeBuildFixture(t, filepath.Join(dir, filepath.FromSlash(file.Path)), file.Content, 0o755)
+			}
+			script := bareIdentifierScript{name: name, loader: "source ./build.sh\n"}
+			if config.Stack == "Swift" {
+				script.loader = "eval \"$(sed '/^main \\\"$@\\\"/,$d' ./build.sh)\"\n"
+			}
+			out, err := runBareIdentifierScan(t, dir, script)
+			if err != nil || !strings.Contains(out, bareIdentifierCleanLine+"\n") {
+				t.Fatalf("rendered %s holds bare identifiers: %v\n%s", name, err, out)
+			}
+		})
+	}
+	for _, path := range []string{
+		"internal/canon/assets/overlays/code/files/README.md.tmpl",
+		"internal/canon/assets/overlays/doc/files/README.md.tmpl",
+		"internal/canon/assets/overlays/code/files/arch.md.tmpl",
+		"README.md",
+		"arch.md",
+	} {
+		text := string(mustRead(t, filepath.Join(root, path)))
+		if strings.Contains(text, "Package AC70+AC71") || !strings.Contains(text, "`Package AC<N>+AC<M>`") {
+			t.Errorf("%s does not use the placeholder named-batch example", path)
 		}
 	}
 }

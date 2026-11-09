@@ -2,6 +2,40 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.56.0
+
+Added:
+- Every `build.sh` that Govna renders, and Govna's own, scans Markdown for bare AC, AT, and IE identifiers.
+- CODE builds run the scan before the first formatting step of every full and scoped build.
+- Release prep in every stack runs the scan before any write or dry-run report.
+- The scan fails on each identifier that `AGENTS.md` `### AC Mechanics` does not allow,
+  and names the file, line, and a placeholder fix.
+- In a child repository, which the scan finds by its pointer `AGENTS.md`, no allowance applies.
+- `govna/code-stacks.md` gains `## Markdown Identifier Check`, and DOC `govna/release.md` gains the same rules for prep.
+
+Changed:
+- Canon's `README.md` and `arch.md` show the named-batch example as `Package AC<N>+AC<M>`,
+  because the old example broke the identifier rule.
+- The canon version is v0.92.0.
+
+Deferred:
+- Class, Part, and Round identifiers stay unscanned until canon defines a written form for them.
+- An audit warning for a consumer `arch.md` that keeps the old named-batch example waits in `plan.md`.
+
+Decisions:
+- Prep runs the scan, because Package writes the `history.md` section after the final full build.
+- DOC runs the scan only in prep, because DOC `build.sh` has no build step.
+- The scan skips `testdata/` and `tests/fixtures/`, because test fixtures are not documentation.
+- `govna/release.md` keeps its sentence about no content-validation command,
+  because `govna audit` matches that sentence for DOC adoptions.
+- One helper block, identical in every build script, holds the scan.
+
+Risks:
+- A consumer whose Markdown holds bare identifiers fails its build after adoption until someone rewrites them.
+- A CODE consumer whose `arch.md` keeps the old named-batch example fails its build after adoption.
+- Rust, Swift, and Terraform prep print the scan step twice when prep also runs a build.
+- An identifier directly after a non-ASCII letter counts as bare.
+
 ## v0.55.0
 
 Added:
