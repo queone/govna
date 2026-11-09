@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.92.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.93.0\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -475,6 +475,7 @@ func TestPackageCompletionContract(t *testing.T) {
 		"- State what changed after the Package evidence under `Red-teamed:`.\n" +
 		"- State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.\n\n### Completed Release\n\n" +
 		"- Treat the Director's `shipped` as a completed release.\n" +
+		"- Treat the successful end of a `## Project Rules` step that completes a release as a completed release.\n" +
 		"- Run no git or gh command to confirm a completed release.\n" +
 		"- Acknowledge a completed release in one line.\n" +
 		"- Name the next one to three `plan.md` items after that line.\n" +
@@ -572,7 +573,7 @@ func TestAgentReleaseContract(t *testing.T) {
 		"- Report the failure output and the printed recovery command to the Director.\n" +
 		"- Report Package and the release result in one completion report.\n" +
 		"- Replace `No commit or release command executed.` and `Run below to release:` with the release result in that report.\n" +
-		"- Treat a successful agent-run release as a completed release under `### Completed Release`.\n\n###"
+		"- Treat a successful agent-run release as a completed release under `### Completed Release` unless `## Project Rules` name a later step that completes a release.\n\n###"
 	retired := []string{
 		"No EXCEPTION.",
 		"Never execute release commands.",

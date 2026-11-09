@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.57.0 | AC81 project rules can name the step that completes a release; canon v0.93.0 |
 | 0.56.0 | AC80 builds and prep stop on bare AC, AT, and IE ids; canon v0.92.0 |
 | 0.55.0 | AC79 every agent formats chat replies by one rule set; canon v0.91.0 |
 | 0.54.2 | AC78 the Go build works while go.work names a child; canon v0.90.1 |

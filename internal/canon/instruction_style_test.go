@@ -1641,6 +1641,7 @@ var stateEachRuleOnceRules = map[string][]string{
 		"State what changed after the Package evidence under `Red-teamed:`.",
 		"State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.",
 		"Treat the Director's `shipped` as a completed release.",
+		"Treat the successful end of a `## Project Rules` step that completes a release as a completed release.",
 		"Run no git or gh command to confirm a completed release.",
 		"Acknowledge a completed release in one line.",
 		"Name the next one to three `plan.md` items after that line.",
@@ -1826,7 +1827,7 @@ var agentReleaseRules = map[string][]string{
 		"Report the failure output and the printed recovery command to the Director.",
 		"Report Package and the release result in one completion report.",
 		"Replace `No commit or release command executed.` and `Run below to release:` with the release result in that report.",
-		"Treat a successful agent-run release as a completed release under `### Completed Release`.",
+		"Treat a successful agent-run release as a completed release under `### Completed Release` unless `## Project Rules` name a later step that completes a release.",
 	},
 	"govna/roles.md": {
 		"Execute a release command only under `AGENTS.md` `### Agent Release`.",

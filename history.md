@@ -2,6 +2,26 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.57.0
+
+Added:
+- Canon `### Completed Release` treats the successful end of a `## Project Rules` step that completes a release
+  as a completed release.
+
+Changed:
+- Canon `### Agent Release` treats a successful agent-run release as a completed release
+  only when `## Project Rules` name no later step that completes a release.
+- The canon version is v0.93.0.
+
+Decisions:
+- A repository whose release ends with a later step, such as a production promote,
+  names that step in `## Project Rules`.
+- The next `plan.md` items then follow that later step instead of the agent-run release.
+- A repository without such a step keeps today's behavior.
+
+Risks:
+- A project rule must name its step clearly, or the agent-run release still counts as the completed release.
+
 ## v0.56.0
 
 Added:
