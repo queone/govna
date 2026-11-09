@@ -1897,13 +1897,11 @@ _bare_id_scan() {
       sub(/^\.\//, "", path)
       line = $0
       template = 0
+      plan = 0
       if (!child) {
         line = strip_historical(line)
-        if (path == "plan.md" && line ~ /^[ \t]*[-*][ \t]+IE[0-9]+:/) {
-          k = index(line, "IE")
-          line = substr(line, 1, k - 1) "##" substr(line, k + 2)
-        }
         template = (path == "govna/ac-template.md")
+        plan = (path == "plan.md")
       }
       rest = line
       last = ""
@@ -1915,6 +1913,7 @@ _bare_id_scan() {
         rest = substr(rest, RSTART + RLENGTH)
         if (before ~ /[A-Za-z0-9_]/ || after ~ /[A-Za-z0-9_]/) continue
         if (template && id !~ /^IE/) continue
+        if (plan && id ~ /^IE/) continue
         printf "%s:%d: bare identifier %s; replace it with plain words or a placeholder such as AC<N>, or move it to a place AGENTS.md ### AC Mechanics allows\n", path, FNR, id
       }
     }' "${files[@]}"

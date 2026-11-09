@@ -563,8 +563,8 @@ func TestPlainLanguageContractAndMirrors(t *testing.T) {
 
 func TestPartAndIdeaIdentifiersAllowedInActiveACDocuments(t *testing.T) {
 	const rules = "- Reserve bare Class and Round identifiers for CHANGELOG rows, commit messages, and `Historical:` comments.\n" +
-		"- Reserve bare Part identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, and `Historical:` comments.\n" +
-		"- Reserve bare IE identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, `plan.md`'s own `IE<N>:` bullets, and `Historical:` comments.\n" +
+		"- Reserve bare Part and IE identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, and `Historical:` comments.\n" +
+		"- Allow bare IE identifiers anywhere in `plan.md`.\n" +
 		"- Treat every other Markdown documentation file as out of bounds for bare AC, AT, Class, Part, Round, and IE identifiers.\n"
 	contracts := map[string]string{"AGENTS.md": readSourceForLanguageTest(t, "AGENTS.md")}
 	for name, config := range map[string]Config{

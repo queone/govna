@@ -2,6 +2,23 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.59.0
+
+Changed:
+- The Markdown identifier scan in every `build.sh`, and audit's copy of it,
+  accept bare IE identifiers anywhere in `plan.md`.
+- AC and AT identifiers in `plan.md` still fail, and a child repository still gets no allowance.
+- Canon `### AC Mechanics` merges the Part and IE reservations into one rule.
+- A new canon rule allows bare IE identifiers anywhere in `plan.md`.
+- The canon version is v0.95.0.
+
+Decisions:
+- IE numbers live in `plan.md`, so references between items and priority lines may name them.
+- The earlier scan accepted only each bullet's own label, a narrower reading than the rule's wording.
+- The merged wording keeps the shared restriction in one rule and avoids a near-duplicate rule.
+- The allowance needs no child qualifier,
+  because `### Child Repositories` already denies a child's files every allowance.
+
 ## v0.58.0
 
 Added:

@@ -4426,7 +4426,7 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 		"docs/guide.md":            "# Guide\n\nSupports IE11.\n<!-- Historical: AC12 shipped this -->\n",
 		"govna/ac-template.md":     "**AT1** [Automated]\n\nSee IE2.\n",
 		"govna/ac81-example.md":    "# AC81 Example\n",
-		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3.\n",
+		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3 and IE9.\nNext: IE5.\n",
 		"CHANGELOG.md":             changelog,
 		"internal/x/testdata/g.md": "AC1 fixture\n",
 		"tests/fixtures/f.md":      "AC2 fixture\n",
@@ -4445,6 +4445,8 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 		bareIdentifierFinding("govna/ac81-example.md", 1, "AC81"),
 		bareIdentifierFinding("govna/ac-template.md", 1, "AT1"),
 		bareIdentifierFinding("plan.md", 3, "IE5"),
+		bareIdentifierFinding("plan.md", 3, "IE9"),
+		bareIdentifierFinding("plan.md", 4, "IE5"),
 		bareIdentifierFinding("docs/guide.md", 4, "AC12"),
 	}
 	pointer := mustRead(t, filepath.Join(root, "internal/canon/assets/child/pointer-AGENTS.md.tmpl"))
@@ -4500,7 +4502,7 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 				"history.md":           "# History\n",
 				"docs/guide.md":        "# Guide\n\n<!-- Historical: AC12 shipped this -->\n",
 				"govna/ac-template.md": "**AT1** [Automated]\n",
-				"plan.md":              "# Plan\n\n- IE5: Explore a scan.\n",
+				"plan.md":              "# Plan\n\n- IE5: Explore a scan after IE9.\nNext: IE5.\n",
 				"notes.md":             "A note\n",
 			}
 			for path, body := range clean {

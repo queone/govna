@@ -29,7 +29,6 @@ type IdentifierFinding struct {
 var (
 	identifierPattern    = regexp.MustCompile(`(AC|AT|IE)[0-9]+`)
 	identifierACDocument = regexp.MustCompile(`^govna/ac[0-9]+-[^/]+\.md$`)
-	identifierPlanLabel  = regexp.MustCompile(`^[ \t]*[-*][ \t]+IE[0-9]+:`)
 	identifierHistorical = regexp.MustCompile(`^[ \t]*Historical:`)
 )
 
@@ -219,14 +218,11 @@ func keptText(path string, data []byte, byPath map[string]FileResult) ([]byte, i
 // line numbers counted from first. rel is the path inside its own repository.
 func scanIdentifiers(rel string, text []byte, first int, child bool) []string {
 	template := !child && rel == "govna/ac-template.md"
+	plan := !child && rel == "plan.md"
 	var ids []string
 	for index, line := range strings.Split(string(text), "\n") {
 		if !child {
 			line = stripHistorical(line)
-			if rel == "plan.md" && identifierPlanLabel.MatchString(line) {
-				label := strings.Index(line, "IE")
-				line = line[:label] + "##" + line[label+2:]
-			}
 		}
 		for _, match := range identifierPattern.FindAllStringIndex(line, -1) {
 			if match[0] > 0 && identifierByte(line[match[0]-1]) {
@@ -237,6 +233,9 @@ func scanIdentifiers(rel string, text []byte, first int, child bool) []string {
 			}
 			id := line[match[0]:match[1]]
 			if template && !strings.HasPrefix(id, "IE") {
+				continue
+			}
+			if plan && strings.HasPrefix(id, "IE") {
 				continue
 			}
 			ids = append(ids, strconv.Itoa(first+index)+":"+id)

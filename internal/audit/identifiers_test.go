@@ -26,7 +26,7 @@ func identifierFixtureFiles() map[string]string {
 		"docs/guide.md":            "# Guide\n\nSupports IE11.\n<!-- Historical: AC12 shipped this --> then AT4 <!-- note AC9 -->\n<!-- Historical: AC14 without a close\n",
 		"govna/ac-template.md":     "**AT1** [Automated]\n\nSee IE2.\n",
 		"govna/ac81-example.md":    "# AC81 Example\n",
-		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3.\n* IE6: Another.\n  - IE7: Nested.\n",
+		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3 and IE9.\n* IE6: Another, after IE114.\n  - IE7: Nested.\nNext: IE5 and AT2.\n",
 		"CHANGELOG.md":             "# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | AC12 shipped |\n",
 		"internal/x/testdata/g.md": "AC1 fixture\n",
 		"tests/fixtures/f.md":      "AC2 fixture\n",
@@ -40,14 +40,14 @@ var identifierParentFindings = []string{
 	"history.md:3:AT3",
 	"docs/guide.md:3:IE11", "docs/guide.md:4:AT4", "docs/guide.md:4:AC9", "docs/guide.md:5:AC14",
 	"govna/ac-template.md:3:IE2",
-	"plan.md:3:AC3",
+	"plan.md:3:AC3", "plan.md:6:AT2",
 }
 
 var identifierChildOnlyFindings = []string{
 	"CHANGELOG.md:6:AC12",
 	"govna/ac81-example.md:1:AC81",
 	"govna/ac-template.md:1:AT1",
-	"plan.md:3:IE5", "plan.md:4:IE6", "plan.md:5:IE7",
+	"plan.md:3:IE5", "plan.md:3:IE9", "plan.md:4:IE6", "plan.md:4:IE114", "plan.md:5:IE7", "plan.md:6:IE5",
 	"docs/guide.md:4:AC12",
 }
 
