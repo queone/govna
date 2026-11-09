@@ -2,6 +2,27 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.60.0
+
+Added:
+- When `govna audit` writes an adoption AC, it replaces an unedited adoption AC
+  that an earlier audit wrote for an older canon version.
+- The new AC keeps the old AC's number, and audit deletes the old file after writing and reports the replacement.
+- The JSON report's `emitted` object gains a `replaced` array.
+
+Changed:
+- Canon `govna/audit.md` `## Emitted AC stub` describes the replacement.
+- The canon version is v0.96.0.
+
+Decisions:
+- The fix lives in `govna audit` instead of a new agent rule, because the hash guard proves an old AC is unedited.
+- An edited old AC, or several old ACs without a current one, stops audit before it writes anything.
+- Check mode, clean results, and version-only updates leave an old AC alone.
+- `govna rm` removal ACs keep their current handling.
+
+Risks:
+- A clean or version-only audit leaves a stale adoption AC in place until someone deletes it.
+
 ## v0.59.0
 
 Changed:

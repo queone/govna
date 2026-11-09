@@ -30,7 +30,7 @@ func TestAuditGuard(t *testing.T) {
 	d := t.TempDir()
 	os.Mkdir(filepath.Join(d, "govna"), 0755)
 	cmd := func(string, ...string) ([]byte, error) { return nil, nil }
-	path, reused, err := AuditPath(d, "v0.29.0", cmd)
+	path, reused, _, err := AuditPath(d, "v0.29.0", cmd)
 	if err != nil || reused || path != "govna/ac1-audit-v0.29.0.md" {
 		t.Fatalf("path=%q reused=%v err=%v", path, reused, err)
 	}
@@ -42,7 +42,7 @@ func TestAuditGuard(t *testing.T) {
 		t.Fatalf("unexpected audit marker: %s", body)
 	}
 	os.WriteFile(filepath.Join(d, filepath.FromSlash(path)), body, 0644)
-	got, reused, err := AuditPath(d, "v0.29.0", cmd)
+	got, reused, _, err := AuditPath(d, "v0.29.0", cmd)
 	if err != nil || !reused || got != path {
 		t.Fatalf("path=%q reused=%v err=%v", got, reused, err)
 	}
@@ -82,7 +82,7 @@ func TestAuditGuardReportsEveryDuplicate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, _, err := AuditPath(d, "v0.29.0", nil)
+	_, _, _, err := AuditPath(d, "v0.29.0", nil)
 	want := "Govna found more than one generated audit AC for canon v0.29.0: [govna/ac1-audit-v0.29.0.md govna/ac2-audit-v0.29.0.md]. Rename extra files so only one matches before retrying"
 	if err == nil || err.Error() != want {
 		t.Fatalf("err=%v", err)
@@ -100,4 +100,47 @@ func TestLegacyGuardedBodiesRemainValid(t *testing.T) {
 			t.Errorf("edited legacy body accepted for %q", prefix)
 		}
 	}
+}
+
+func TestAuditPathKeepsSupersededNumber(t *testing.T) {
+	cmd := func(string, ...string) ([]byte, error) { return nil, nil }
+	write := func(t *testing.T, d string, names ...string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(d, "govna"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range names {
+			if err := os.WriteFile(filepath.Join(d, "govna", name), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	t.Run("sole superseded stub", func(t *testing.T) {
+		d := t.TempDir()
+		write(t, d, "ac7-audit-v0.28.0.md", "ac9-govna-rm-v0.28.0.md")
+		path, reused, superseded, err := AuditPath(d, "v0.29.0", cmd)
+		if err != nil || reused || path != "govna/ac7-audit-v0.29.0.md" || strings.Join(superseded, ",") != "govna/ac7-audit-v0.28.0.md" {
+			t.Fatalf("path=%q reused=%v superseded=%v err=%v", path, reused, superseded, err)
+		}
+		if got := AuditStubVersion(superseded[0]); got != "v0.28.0" {
+			t.Fatalf("version=%q", got)
+		}
+	})
+	t.Run("current stub wins", func(t *testing.T) {
+		d := t.TempDir()
+		write(t, d, "ac7-audit-v0.28.0.md", "ac9-audit-v0.29.0.md")
+		path, reused, superseded, err := AuditPath(d, "v0.29.0", cmd)
+		if err != nil || !reused || path != "govna/ac9-audit-v0.29.0.md" || strings.Join(superseded, ",") != "govna/ac7-audit-v0.28.0.md" {
+			t.Fatalf("path=%q reused=%v superseded=%v err=%v", path, reused, superseded, err)
+		}
+	})
+	t.Run("several superseded stubs", func(t *testing.T) {
+		d := t.TempDir()
+		write(t, d, "ac7-audit-v0.28.0.md", "ac8-audit-v0.27.0.md")
+		_, _, _, err := AuditPath(d, "v0.29.0", cmd)
+		want := "Govna found more than one generated audit AC for an older canon version: [govna/ac7-audit-v0.28.0.md govna/ac8-audit-v0.27.0.md]. Keep one, delete the others or rename them off the audit slug, and retry"
+		if err == nil || err.Error() != want {
+			t.Fatalf("err=%v", err)
+		}
+	})
 }

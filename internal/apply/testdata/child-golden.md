@@ -2,7 +2,7 @@
 
 ## Summary
 
-Govna executable v9.8.7 added its embedded child files (canon v0.95.0) for the Go child repository `../engine` and listed it in `govna/children.txt`. The list below records whether each file was written, replaced, or kept. The parent's full `./build.sh` builds `../engine` first and fails until the child's own `./build.sh` passes.
+Govna executable v9.8.7 added its embedded child files (canon v0.96.0) for the Go child repository `../engine` and listed it in `govna/children.txt`. The list below records whether each file was written, replaced, or kept. The parent's full `./build.sh` builds `../engine` first and fails until the child's own `./build.sh` passes.
 
 ## In Scope
 

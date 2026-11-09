@@ -71,6 +71,8 @@ type Header struct {
 
 type Emitted struct {
 	ACStub string `json:"ac_stub"`
+	// Replaced lists the superseded adoption ACs that audit deleted after writing ACStub.
+	Replaced []string `json:"replaced,omitempty"`
 }
 type Report struct {
 	Header      Header       `json:"header"`
@@ -203,7 +205,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		hints.Close()
 	}
 	if !clean && !cfg.Check && !report.VersionOnly {
-		path, reused, err := emission.AuditPath(cwd, "v"+canon.Version, nil)
+		path, reused, superseded, err := emission.AuditPath(cwd, "v"+canon.Version, nil)
 		if err != nil {
 			fmt.Fprintf(stderr, "audit: %v\n", err)
 			return 1
@@ -221,6 +223,13 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 				return 1
 			}
 		}
+		for _, old := range superseded {
+			data, err := access.ReadFile(old)
+			if err != nil || !emission.VerifyAuditBody(data) {
+				fmt.Fprintf(stderr, "audit: %s, an adoption AC for older canon %s, has been edited since its emission — to re-run, commit or move the edits, then delete the file or rename it off the audit slug, and retry\n", old, emission.AuditStubVersion(old))
+				return 1
+			}
+		}
 		findings, err := identifierFindings(access, report)
 		if err != nil {
 			fmt.Fprintf(stderr, "audit: %v\n", err)
@@ -232,7 +241,13 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 			fmt.Fprintf(stderr, "audit: write %s: %v\n", path, err)
 			return 1
 		}
-		report.Emitted = &Emitted{ACStub: path}
+		for _, old := range superseded {
+			if err := access.Remove(old); err != nil {
+				fmt.Fprintf(stderr, "audit: wrote %s but could not delete the superseded %s: %v; delete it by hand\n", path, old, err)
+				return 1
+			}
+		}
+		report.Emitted = &Emitted{ACStub: path, Replaced: superseded}
 	}
 	if cfg.JSON {
 		enc := json.NewEncoder(stdout)
@@ -250,6 +265,9 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		fmt.Fprintf(stdout, "Govna updates or Director choices found (%s). Run govna audit without --check to write the review AC.\n", plainTally(report.Files))
 	} else {
 		fmt.Fprintf(stdout, "Wrote %s for review (%s).\n", report.Emitted.ACStub, plainTally(report.Files))
+		for _, old := range report.Emitted.Replaced {
+			fmt.Fprintf(stdout, "Replaced %s, which targeted canon %s.\n", old, emission.AuditStubVersion(old))
+		}
 	}
 	if cfg.Check && !clean && !report.VersionOnly {
 		return 3

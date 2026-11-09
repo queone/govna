@@ -22,16 +22,8 @@ const RemovalMarkerPrefix = "<!-- govna-rm: emitted-by govna "
 
 // GuardedPath allocates or reuses the sole stem-and-version-keyed AC stub.
 func GuardedPath(root, stem, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
-	dir := filepath.Join(root, "govna")
 	pattern := regexp.MustCompile(`^ac[0-9]+-` + regexp.QuoteMeta(stem) + `-` + regexp.QuoteMeta(version) + `\.md$`)
-	var matches []string
-	entries, _ := os.ReadDir(dir)
-	for _, entry := range entries {
-		if !entry.IsDir() && pattern.MatchString(entry.Name()) {
-			matches = append(matches, filepath.ToSlash(filepath.Join("govna", entry.Name())))
-		}
-	}
-	sort.Strings(matches)
+	matches := stubPaths(root, func(name string) bool { return pattern.MatchString(name) })
 	if len(matches) > 1 {
 		return "", false, usererr.Errorf("Govna found more than one generated %s AC for canon %s: %v. Rename extra files so only one matches before retrying", stem, version, matches)
 	}
@@ -45,9 +37,58 @@ func GuardedPath(root, stem, version string, command func(string, ...string) ([]
 	return fmt.Sprintf("govna/ac%d-%s-%s.md", n, stem, version), false, nil
 }
 
-// AuditPath allocates or reuses the sole canon-version-keyed audit stub.
-func AuditPath(root, version string, command func(string, ...string) ([]byte, error)) (string, bool, error) {
-	return GuardedPath(root, "audit", version, command)
+// stubPaths lists the govna/ files whose names match, in byte order.
+func stubPaths(root string, match func(string) bool) []string {
+	var matches []string
+	entries, _ := os.ReadDir(filepath.Join(root, "govna"))
+	for _, entry := range entries {
+		if !entry.IsDir() && match(entry.Name()) {
+			matches = append(matches, filepath.ToSlash(filepath.Join("govna", entry.Name())))
+		}
+	}
+	sort.Strings(matches)
+	return matches
+}
+
+// auditStubPattern matches a generated audit stub name and captures its AC
+// number and canon version.
+var auditStubPattern = regexp.MustCompile(`^ac([0-9]+)-audit-(v[^/]+)\.md$`)
+
+// AuditStubVersion returns the canon version in an audit stub path, or "".
+func AuditStubVersion(path string) string {
+	if m := auditStubPattern.FindStringSubmatch(filepath.Base(path)); m != nil {
+		return m[2]
+	}
+	return ""
+}
+
+// AuditPath allocates or reuses the sole canon-version-keyed audit stub. It
+// also returns each superseded stub, which an earlier audit wrote for another
+// canon version. Without a stub for version, the new stub keeps the AC number
+// of a sole superseded stub.
+func AuditPath(root, version string, command func(string, ...string) ([]byte, error)) (string, bool, []string, error) {
+	superseded := stubPaths(root, func(name string) bool {
+		m := auditStubPattern.FindStringSubmatch(name)
+		return m != nil && m[2] != version
+	})
+	current := stubPaths(root, func(name string) bool {
+		m := auditStubPattern.FindStringSubmatch(name)
+		return m != nil && m[2] == version
+	})
+	if len(current) > 0 {
+		path, reused, err := GuardedPath(root, "audit", version, command)
+		return path, reused, superseded, err
+	}
+	switch len(superseded) {
+	case 0:
+		path, reused, err := GuardedPath(root, "audit", version, command)
+		return path, reused, nil, err
+	case 1:
+		m := auditStubPattern.FindStringSubmatch(filepath.Base(superseded[0]))
+		return fmt.Sprintf("govna/ac%s-audit-%s.md", m[1], version), false, superseded, nil
+	default:
+		return "", false, nil, usererr.Errorf("Govna found more than one generated audit AC for an older canon version: %v. Keep one, delete the others or rename them off the audit slug, and retry", superseded)
+	}
 }
 
 // GuardedBody wraps body with deterministic executable and canon provenance.
