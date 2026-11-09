@@ -153,6 +153,20 @@ Audit does not flag arbitrary consumer-owned governance documents that have none
 
 `govna/metadata.txt` or `govna/canon-baseline.txt` absent from an otherwise govna-adopted target classifies as `migration-required`. Every emitted AC includes `## Migration findings` after `## Out Of Scope`: it lists each migration path and completion action, or `None` when no migration exists. Migration paths also remain under `## In Scope`.
 
+## Markdown identifiers
+
+- Apply these rules only when audit writes an adoption AC for another reason.
+- Check the Markdown text that the repository keeps after the adoption AC with the rules of the Markdown identifier scan.
+- Treat the text from the boundary heading to the end of the file as the kept text of a file that the AC updates from canon.
+- Skip a file that the AC replaces whole with canon or deletes.
+- Attach each finding to its file without changing the file's classification.
+- List each file with findings under `### Bare identifiers to fix`, with each line number and identifier.
+- Add one acceptance test per listed file.
+- Treat the findings of a file that needs a Director choice as actionable only when its resolved action keeps the current text in place.
+- Write no adoption AC for findings alone, for an up-to-date clean result or a version-only update.
+
+Note: a repository that keeps its own `build.sh` runs no Markdown identifier scan, so its clean and version-only audit results stay silent about bare identifiers.
+
 ## Retired link
 
 Govna used to create `CLAUDE.md` as a symbolic link to `AGENTS.md`. Claude Code v2.1.277 or later reads `AGENTS.md` directly, so audit retires that link.

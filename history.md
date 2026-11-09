@@ -2,6 +2,34 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.58.0
+
+Added:
+- When `govna audit` writes an adoption AC, it lists each bare AC, AT, or IE identifier
+  in the Markdown text that the repository keeps.
+- Audit checks that text with the same rules as the Markdown identifier scan in `build.sh`.
+- The adoption AC lists each file under `### Bare identifiers to fix`,
+  with pre-adoption line numbers and one acceptance test per file.
+- The JSON report gains `identifier_findings`, with a `conditional` flag for findings that wait on a Director choice.
+- Canon `govna/audit.md` gains `## Markdown identifiers`.
+
+Changed:
+- The canon version is v0.94.0.
+
+Decisions:
+- Findings appear only in an adoption AC that audit writes for another reason,
+  so clean and version-only results stay quiet.
+- Findings attach to their file and never change its classification.
+- Audit skips text that adoption replaces or deletes, and checks the local section of a boundary file.
+- A symbolic link keeps what its target keeps.
+- Findings that wait on a Director choice count only when that choice keeps the text.
+- Requiring the scan in a kept `build.sh` stays a separate scope decision.
+
+Risks:
+- A repository that keeps its own `build.sh` runs no scan,
+  and its clean and version-only audits stay silent about bare identifiers.
+- The scan rules exist in Go and in shell, and a shared agreement test guards them against drift.
+
 ## v0.57.0
 
 Added:

@@ -73,12 +73,14 @@ type Emitted struct {
 	ACStub string `json:"ac_stub"`
 }
 type Report struct {
-	Header        Header       `json:"header"`
-	Files         []FileResult `json:"files"`
-	Emitted       *Emitted     `json:"emitted"`
-	VersionOnly   bool         `json:"version_only"`
-	selectedStack string
-	repoCheck     string
+	Header      Header       `json:"header"`
+	Files       []FileResult `json:"files"`
+	Emitted     *Emitted     `json:"emitted"`
+	VersionOnly bool         `json:"version_only"`
+	// IdentifierFindings lists bare identifiers only when audit writes an adoption AC.
+	IdentifierFindings []IdentifierFinding `json:"identifier_findings,omitempty"`
+	selectedStack      string
+	repoCheck          string
 }
 
 type validationOutcomeKind uint8
@@ -219,6 +221,12 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 				return 1
 			}
 		}
+		findings, err := identifierFindings(access, report)
+		if err != nil {
+			fmt.Fprintf(stderr, "audit: %v\n", err)
+			return 1
+		}
+		report.IdentifierFindings = findings
 		body := emission.AuditBody(programVersion, canon.Version, []byte(buildAC(report, path, validationDisposition(cwd, report))))
 		if err := access.WriteFile(path, body, 0o644); err != nil {
 			fmt.Fprintf(stderr, "audit: write %s: %v\n", path, err)
@@ -1350,6 +1358,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	if len(manual) > 0 {
 		fmt.Fprintf(&b, "Govna also found %s.\n\n", countPhrase(len(manual), "child file needing a manual fix", "child files needing a manual fix"))
 	}
+	if len(report.IdentifierFindings) > 0 {
+		fmt.Fprintf(&b, "Govna also found %s.\n\n", countPhrase(len(report.IdentifierFindings), "file with bare identifiers to fix", "files with bare identifiers to fix"))
+	}
 	b.WriteString("## In Scope\n\n")
 	writeGroup := func(title string, files []FileResult) {
 		fmt.Fprintf(&b, "### %s\n\n", title)
@@ -1375,6 +1386,17 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	}
 	if len(retired) > 0 {
 		b.WriteString("### Retired Govna link\n\n- `CLAUDE.md` — delete the retired Govna link; Claude Code v2.1.277 or later reads `AGENTS.md` directly.\n\n")
+	}
+	if len(report.IdentifierFindings) > 0 {
+		b.WriteString("### Bare identifiers to fix\n\nRewrite each bare identifier below in plain words or a placeholder such as `AC<N>`. Each pre-adoption line number locates the identifier in the file as it is before this AC's file updates.\n\n")
+		for _, f := range report.IdentifierFindings {
+			fmt.Fprintf(&b, "- `%s` — %s", f.Path, identifierLines(f.Identifiers))
+			if f.Conditional {
+				b.WriteString("; fix these only when the resolved action keeps this file's current text in place")
+			}
+			b.WriteString(".\n")
+		}
+		b.WriteString("\n")
 	}
 	writeAuditReview(&b, report.selectedStack, sync, migrate, review)
 	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
@@ -1482,6 +1504,13 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	}
 	for _, f := range manual {
 		writeAT(&b, &at, "Verify `%s` keeps every row and passes the canonical CHANGELOG heading and two-column table shape.", f.Path)
+	}
+	for _, f := range report.IdentifierFindings {
+		if f.Conditional {
+			writeAT(&b, &at, "Verify `%s` holds no bare AC, AT, or IE identifier that the Markdown identifier scan rejects when its resolved action keeps its current text in place.", f.Path)
+			continue
+		}
+		writeAT(&b, &at, "Verify `%s`, if it remains, holds no bare AC, AT, or IE identifier that the Markdown identifier scan rejects.", f.Path)
 	}
 	if len(retired) > 0 {
 		writeAT(&b, &at, "Verify CLAUDE.md no longer exists.")
