@@ -2496,7 +2496,6 @@ var movedPlanRules = []string{
 	"- Write an AC-pointer IE as `- IE<N>: <one-liner> → govna/ac<N>-<slug>.md`.\n",
 	"- Convert an idea IE to an AC-pointer IE when the Director sends it to Draft.\n",
 	"- Keep the IE number through that conversion.\n",
-	"- Keep historical records out of `plan.md`.\n",
 }
 
 // TestRenderedIESpacingRuleLivesInSyncedFiles checks that every profile keeps
@@ -2530,6 +2529,9 @@ func TestRenderedIESpacingRuleLivesInSyncedFiles(t *testing.T) {
 			if count := strings.Count(cycleText, bullet); count != 1 || !strings.Contains(notes, bullet) {
 				t.Errorf("%v %s %s holds %q %d times, want once under ## Notes", config.Flavor, config.Stack, cycle, bullet, count)
 			}
+		}
+		if strings.Contains(cycleText, "Keep historical records out of") {
+			t.Errorf("%v %s %s still bans historical records in plan.md", config.Flavor, config.Stack, cycle)
 		}
 		plan := fileText(t, files, "plan.md")
 		for _, gone := range []string{"one blank line separates items", "sequential N", "Two kinds", "**idea IE**", "**AC-pointer**", "converts to an AC-pointer", "Remove entries", "Not a historical record"} {

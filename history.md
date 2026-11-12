@@ -2,6 +2,18 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.63.1
+
+Removed:
+- The cycle document's `## Notes` bullet "Keep historical records out of `plan.md`."
+
+Changed:
+- The canon version is v0.99.1.
+
+Decisions:
+- The old stub sentence "Not a historical record." described the list; the v0.99.0 bullet read as a ban on any dated text.
+- The removal bullet already keeps shipped and rejected IEs out, so nothing replaces the dropped bullet.
+
 ## v0.63.0
 
 Added:

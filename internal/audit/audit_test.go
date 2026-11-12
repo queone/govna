@@ -2805,7 +2805,6 @@ var movedPlanRules = []string{
 	"- Write an AC-pointer IE as `- IE<N>: <one-liner> → govna/ac<N>-<slug>.md`.\n",
 	"- Convert an idea IE to an AC-pointer IE when the Director sends it to Draft.\n",
 	"- Keep the IE number through that conversion.\n",
-	"- Keep historical records out of `plan.md`.\n",
 }
 
 func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
