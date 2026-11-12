@@ -3519,3 +3519,94 @@ func mustReadAudit(t *testing.T, root, rel string) []byte {
 	}
 	return data
 }
+
+// TestAuditFlagsCompactPlanIdeas checks that a compact plan.md IE list makes
+// audit report work on its own or beside other work, that the emitted AC lists
+// the spacing with a check that passes only after spacing, and that an
+// already-spaced list keeps the result clean.
+func TestAuditFlagsCompactPlanIdeas(t *testing.T) {
+	const head = "# widget Plan\n\n## Ideas To Explore\n\nIdeas captured for future reference.\n\n"
+	const compact = head + "- IE1: One.\n- IE2: Two.\n- IE3: Three.\n- IE4: Four.\n- IE5: Five.\n"
+	const spaced = head + "- IE1: One.\n\n- IE2: Two.\n\n- IE3: Three.\n\n- IE4: Four.\n\n- IE5: Five.\n"
+	setup := func(t *testing.T, plan string, stale bool) string {
+		root := fixture(t)
+		writeAuditFile(t, filepath.Join(root, "plan.md"), []byte(plan))
+		git(t, root, "add", "plan.md")
+		git(t, root, "commit", "-qm", "plan")
+		if stale {
+			makeBaselineStale(t, root)
+		}
+		return root
+	}
+	t.Run("spaced list stays clean", func(t *testing.T) {
+		root := setup(t, spaced, false)
+		var stdout, stderr bytes.Buffer
+		if code := Run([]string{"--check"}, &stdout, &stderr, root, testProgramVersion); code != 0 || !strings.HasPrefix(stdout.String(), "No Govna updates or Director choices found") {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+		}
+	})
+	for _, tc := range []struct {
+		name  string
+		stale bool
+	}{{"compact list alone", false}, {"compact list with other work", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := setup(t, compact, tc.stale)
+			var stdout, stderr bytes.Buffer
+			if code := Run([]string{"--check"}, &stdout, &stderr, root, testProgramVersion); code != 3 || !strings.Contains(stdout.String(), "IE items to space in plan.md") {
+				t.Fatalf("check code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+			report, ac := runAuditFixture(t, root, []string{"--json"})
+			plan := reportFile(t, report, "plan.md")
+			if !plan.IdeaSpacing || plan.Classification != "expected-divergence" {
+				t.Fatalf("plan.md result = %+v", plan)
+			}
+			if ac == "" {
+				t.Fatal("audit wrote no adoption AC")
+			}
+			for _, want := range []string{
+				"Govna also found IE items to space in `plan.md`.\n",
+				"### IE items to space\n\n- `plan.md` — put exactly one blank line between each pair of adjacent IE items",
+				"- Space the IE items in `plan.md` as listed under `### IE items to space`.\n",
+			} {
+				if !strings.Contains(ac, want) {
+					t.Errorf("adoption AC omits %q:\n%s", want, ac)
+				}
+			}
+			outOfScope, _, _ := strings.Cut(ac[strings.Index(ac, "## Out Of Scope"):], "## Migration findings")
+			if strings.Contains(outOfScope, "`plan.md`") {
+				t.Errorf("Out Of Scope still lists plan.md:\n%s", outOfScope)
+			}
+			if tc.stale && !strings.Contains(ac, "- `govna/canon-baseline.txt` — `clear-sync`") {
+				t.Errorf("adoption AC omits the other work:\n%s", ac)
+			}
+			at := lineContaining(t, ac, "has exactly one blank line between each pair of adjacent IE items")
+			_, rest, _ := strings.Cut(at, "(`")
+			keep, rest, _ := strings.Cut(rest, "` prints nothing)")
+			_, rest, _ = strings.Cut(rest, "(`")
+			spacing, _, _ := strings.Cut(rest, "` exits `0`)")
+			check := func(command string) error {
+				cmd := exec.Command("bash", "-c", command)
+				cmd.Dir = root
+				out, err := cmd.CombinedOutput()
+				if err == nil && len(out) > 0 {
+					return fmt.Errorf("printed %q", out)
+				}
+				return err
+			}
+			if check(spacing) == nil {
+				t.Fatalf("spacing check passes on the compact list: %s", spacing)
+			}
+			got, changed := canon.SpaceIdeas([]byte(compact))
+			if !changed || string(got) != spaced {
+				t.Fatalf("SpaceIdeas = %q, %v", got, changed)
+			}
+			writeAuditFile(t, filepath.Join(root, "plan.md"), got)
+			if err := check(keep); err != nil {
+				t.Errorf("line-order check fails after spacing: %v: %s", err, keep)
+			}
+			if err := check(spacing); err != nil {
+				t.Errorf("spacing check fails after spacing: %v: %s", err, spacing)
+			}
+		})
+	}
+}

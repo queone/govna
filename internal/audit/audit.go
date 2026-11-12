@@ -47,6 +47,7 @@ type FileResult struct {
 	CanonReference          string   `json:"canon_ref,omitempty"`
 	CompareCommand          string   `json:"compare_command,omitempty"`
 	Boundary                string   `json:"boundary,omitempty"`
+	IdeaSpacing             bool     `json:"ie_spacing,omitempty"`
 	protectedHash           string
 	forceSync               bool
 	legacyOnly              bool
@@ -300,6 +301,9 @@ func versionOnly(files []FileResult, recordedVersion string, recorded, rendered 
 	}
 	stamps := 0
 	for _, file := range files {
+		if file.IdeaSpacing {
+			return false
+		}
 		if !actionable(file.Classification) && !file.forceSync {
 			continue
 		}
@@ -507,6 +511,13 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 				}
 			}
 		}
+		if path == "plan.md" && fr.Classification == "expected-divergence" {
+			plan, err := access.ReadFile(path)
+			if err != nil {
+				return report, false, inspectError(path, err)
+			}
+			_, fr.IdeaSpacing = canon.SpaceIdeas(plan)
+		}
 		formatNeedsSync := (path == "AGENTS.md" || path == "govna/ac-template.md") && fr.Classification != "match" && fr.Classification != "expected-divergence"
 		if markers := legacy[path]; len(markers) > 0 {
 			fr.LegacyPreserveMarkers = markers
@@ -600,7 +611,7 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	sort.Slice(report.Files, func(i, j int) bool { return report.Files[i].Path < report.Files[j].Path })
 	clean := true
 	for _, file := range report.Files {
-		if actionable(file.Classification) || file.forceSync {
+		if actionable(file.Classification) || file.forceSync || file.IdeaSpacing {
 			clean = false
 		}
 	}
@@ -1239,6 +1250,11 @@ func plainTally(files []FileResult) string {
 		}
 		parts = append(parts, fmt.Sprintf("%d %s", value, label))
 	}
+	for _, file := range files {
+		if file.IdeaSpacing {
+			parts = append(parts, "IE items to space in "+file.Path)
+		}
+	}
 	if len(parts) == 0 {
 		return "0 files"
 	}
@@ -1345,8 +1361,12 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	if m := regexp.MustCompile(`^ac([0-9]+)-`).FindStringSubmatch(base); m != nil {
 		number = m[1]
 	}
-	var sync, migrate, preserve, review, retired, manual []FileResult
+	var sync, migrate, preserve, review, retired, manual, spacing []FileResult
 	for _, f := range report.Files {
+		if f.IdeaSpacing {
+			spacing = append(spacing, f)
+			continue
+		}
 		if f.forceSync {
 			sync = append(sync, f)
 			continue
@@ -1378,6 +1398,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	}
 	if len(report.IdentifierFindings) > 0 {
 		fmt.Fprintf(&b, "Govna also found %s.\n\n", countPhrase(len(report.IdentifierFindings), "file with bare identifiers to fix", "files with bare identifiers to fix"))
+	}
+	for _, f := range spacing {
+		fmt.Fprintf(&b, "Govna also found IE items to space in `%s`.\n\n", f.Path)
 	}
 	b.WriteString("## In Scope\n\n")
 	writeGroup := func(title string, files []FileResult) {
@@ -1416,6 +1439,13 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 		b.WriteString("\n")
 	}
+	if len(spacing) > 0 {
+		b.WriteString("### IE items to space\n\n")
+		for _, f := range spacing {
+			fmt.Fprintf(&b, "- `%s` — put exactly one blank line between each pair of adjacent IE items; keep every other line, each item's text, and their order. The file otherwise stays the repository's own (`%s`).\n", f.Path, f.Classification)
+		}
+		b.WriteString("\n")
+	}
 	writeAuditReview(&b, report.selectedStack, sync, migrate, review)
 	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
 	if hasChildFile(sync, review) {
@@ -1427,7 +1457,11 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	} else if report.Header.Flavor == "code" {
 		b.WriteString("- Confirm each file selected for update exists in the selected CODE render.\n")
 	}
-	b.WriteString("- Apply each Director choice only to its authorized file region.\n- Write `govna/canon-baseline.txt` as the final file update.\n")
+	b.WriteString("- Apply each Director choice only to its authorized file region.\n")
+	for _, f := range spacing {
+		fmt.Fprintf(&b, "- Space the IE items in `%s` as listed under `### IE items to space`.\n", f.Path)
+	}
+	b.WriteString("- Write `govna/canon-baseline.txt` as the final file update.\n")
 	for _, f := range sync {
 		if len(f.LegacyPreserveMarkers) == 0 {
 			continue
@@ -1530,6 +1564,9 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 		writeAT(&b, &at, "Verify `%s`, if it remains, holds no bare AC, AT, or IE identifier that the Markdown identifier scan rejects.", f.Path)
 	}
+	for _, f := range spacing {
+		writeAT(&b, &at, "Verify `%s` keeps every non-blank line in order (`diff <(git show HEAD:%s | tr -d '\\r' | grep -v '^$') <(tr -d '\\r' <%s | grep -v '^$')` prints nothing) and has exactly one blank line between each pair of adjacent IE items (`%s %s` exits `0`).", f.Path, f.Path, f.Path, ideaSpacingCheck, f.Path)
+	}
 	if len(retired) > 0 {
 		writeAT(&b, &at, "Verify CLAUDE.md no longer exists.")
 	}
@@ -1555,6 +1592,10 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.\n\n## Status\n\n`PENDING` — immutable audit emission; workflow state is tracked in the active session.\n", at)
 	return b.String()
 }
+
+// ideaSpacingCheck is the awk program that exits 0 only when exactly one
+// blank line separates each pair of adjacent plan.md IE items.
+const ideaSpacingCheck = `awk '{ sub(/\r$/, "") } /^- IE[0-9]+: / { if (item && blanks != 1) bad = 1; item = 1; blanks = 0; next } /^$/ { if (item) blanks++; next } /^[ \t]/ { if (item && !blanks) next } { item = 0; blanks = 0 } END { exit bad }'`
 
 func writeAuditReview(b *strings.Builder, stack string, groups ...[]FileResult) {
 	b.WriteString("### Audit Review\n\n")

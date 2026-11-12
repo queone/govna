@@ -2478,9 +2478,11 @@ func TestGoWorkspaceRecipeSetsTheGoModGoLine(t *testing.T) {
 	}
 }
 
-// TestRenderedPlanSeparatesIEsWithOneBlankLine checks that every profile's
-// plan.md tells the reader to keep one blank line between IE items.
-func TestRenderedPlanSeparatesIEsWithOneBlankLine(t *testing.T) {
+// TestRenderedIESpacingRuleLivesInSyncedFiles checks that every profile keeps
+// the IE spacing rule in its synced cycle document instead of the plan.md stub,
+// commits to keeping rules out of the stubs, and documents audit's IE spacing.
+func TestRenderedIESpacingRuleLivesInSyncedFiles(t *testing.T) {
+	const rule = "- Separate `plan.md` IE items with one blank line.\n"
 	configs := []Config{{Flavor: Doc, RepoName: "handbook"}}
 	for _, stack := range Stacks() {
 		config := Config{Flavor: Code, RepoName: "widget", Stack: stack}
@@ -2494,18 +2496,26 @@ func TestRenderedPlanSeparatesIEsWithOneBlankLine(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		found := false
-		for _, file := range files {
-			if file.Path != "plan.md" {
-				continue
-			}
-			found = true
-			if !strings.Contains(string(file.Content), "one blank line separates items") {
-				t.Errorf("%v %s plan.md omits the spacing sentence", config.Flavor, config.Stack)
-			}
+		cycle := "govna/development-cycle.md"
+		if config.Flavor == Doc {
+			cycle = "govna/editing-cycle.md"
 		}
-		if !found {
-			t.Errorf("%v %s render omits plan.md", config.Flavor, config.Stack)
+		notes := sectionText(t, fileText(t, files, cycle), "## Notes\n")
+		if count := strings.Count(fileText(t, files, cycle), rule); count != 1 || !strings.Contains(notes, rule) {
+			t.Errorf("%v %s %s holds the spacing rule %d times, want once under ## Notes", config.Flavor, config.Stack, cycle, count)
+		}
+		if strings.Contains(fileText(t, files, "plan.md"), "one blank line separates items") {
+			t.Errorf("%v %s plan.md stub still states the spacing rule", config.Flavor, config.Stack)
+		}
+		const commitment = "5. **Stub rules.**\n   - Keep rules out of the `plan.md` and `arch.md` stubs.\n   - Place each such rule in a synced canon file.\n"
+		if count := strings.Count(fileText(t, files, "govna/canon-cycle.md"), commitment); count != 1 {
+			t.Errorf("%v %s canon-cycle.md holds the stub-rules commitment %d times, want 1", config.Flavor, config.Stack, count)
+		}
+		audit := fileText(t, files, "govna/audit.md")
+		for _, want := range []string{"\n## IE spacing\n", "`## IE spacing` names the one exception for `plan.md`.", "- Put exactly one blank line between each pair of adjacent IE items in a `plan.md` listed under `### IE items to space`.\n"} {
+			if count := strings.Count(audit, want); count != 1 {
+				t.Errorf("%v %s audit.md holds %q %d times, want 1", config.Flavor, config.Stack, want, count)
+			}
 		}
 	}
 }

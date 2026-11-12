@@ -1050,3 +1050,41 @@ func agentsOf(files []canon.File) []byte {
 	}
 	return nil
 }
+
+// TestApplySpacesCompactPlanIdeas checks that apply spaces a compact plan.md
+// IE list in an existing repository, keeping each item's text, order, and the
+// file mode, and keeps an already-spaced plan.md byte-identical.
+func TestApplySpacesCompactPlanIdeas(t *testing.T) {
+	const head = "# Plan\n\n## Ideas To Explore\n\nIdeas captured for future reference.\n\n"
+	const compact = head + "- IE1: One.\n- IE2: Two.\n- IE3: Three.\n- IE4: Four.\n- IE5: Five.\n"
+	const spaced = head + "- IE1: One.\n\n- IE2: Two.\n\n- IE3: Three.\n\n- IE4: Four.\n\n- IE5: Five.\n"
+	for _, tc := range []struct {
+		name, plan, want, stdout, label string
+	}{
+		{"compact list", compact, spaced, "spaced plan.md (existing file; one blank line between IE items)\n", "spaced IE items in existing file"},
+		{"spaced list", spaced, spaced, "kept plan.md (existing file)\n", "kept existing file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := filepath.Join(t.TempDir(), "widget")
+			if err := os.Mkdir(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeMode(t, filepath.Join(d, "plan.md"), tc.plan, 0o600)
+			out, stderr, code := runAt(t, d, "-f", "code", "-s", "rust")
+			if code != 0 {
+				t.Fatal(stderr)
+			}
+			assertFile(t, filepath.Join(d, "plan.md"), tc.want, 0o600)
+			if !strings.Contains(out, tc.stdout) {
+				t.Errorf("stdout omits %q: %s", tc.stdout, out)
+			}
+			ac, err := os.ReadFile(filepath.Join(d, "govna", "ac1-govna-apply.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(ac), "- `plan.md` ("+tc.label+")\n") {
+				t.Errorf("adoption AC omits plan.md (%s):\n%s", tc.label, ac)
+			}
+		})
+	}
+}

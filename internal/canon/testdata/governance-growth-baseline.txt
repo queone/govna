@@ -8,11 +8,11 @@ overlays/code/files/README.md.tmpl	23	0
 overlays/code/files/arch.md.tmpl	50	16
 overlays/code/files/govna/README.md.tmpl	16	4
 overlays/code/files/govna/ac-template.md.tmpl	50	0
-overlays/code/files/govna/audit.md.tmpl	333	139
+overlays/code/files/govna/audit.md.tmpl	350	153
 overlays/code/files/govna/build-release.md.tmpl	174	72
-overlays/code/files/govna/canon-cycle.md.tmpl	116	60
+overlays/code/files/govna/canon-cycle.md.tmpl	119	60
 overlays/code/files/govna/code-stacks.md.tmpl	170	144
-overlays/code/files/govna/development-cycle.md.tmpl	69	44
+overlays/code/files/govna/development-cycle.md.tmpl	70	45
 overlays/code/files/govna/development-guidelines.md.tmpl	113	76
 overlays/code/files/govna/metadata.txt	4	0
 overlays/code/files/govna/operator-contract-rationale.md.tmpl	61	0
@@ -31,9 +31,9 @@ overlays/doc/files/README.md.tmpl	23	0
 overlays/doc/files/build.sh.tmpl	673	0
 overlays/doc/files/govna/README.md.tmpl	15	5
 overlays/doc/files/govna/ac-template.md.tmpl	50	0
-overlays/doc/files/govna/audit.md.tmpl	306	125
-overlays/doc/files/govna/canon-cycle.md.tmpl	116	60
-overlays/doc/files/govna/editing-cycle.md.tmpl	53	31
+overlays/doc/files/govna/audit.md.tmpl	323	139
+overlays/doc/files/govna/canon-cycle.md.tmpl	119	60
+overlays/doc/files/govna/editing-cycle.md.tmpl	54	32
 overlays/doc/files/govna/editing-guidelines.md.tmpl	48	26
 overlays/doc/files/govna/metadata.txt	3	0
 overlays/doc/files/govna/operator-contract-rationale.md.tmpl	61	0

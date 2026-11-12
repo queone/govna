@@ -23,6 +23,9 @@ type Outcome struct{ Path, Label string }
 // labelWritten marks a file that apply wrote whole from canon.
 const labelWritten = "written"
 
+// labelSpacedIdeas marks an existing plan.md whose IE items apply spaced.
+const labelSpacedIdeas = "spaced IE items in existing file"
+
 type Command func(string, ...string) ([]byte, error)
 type assessment struct {
 	shape, risk       string
@@ -129,6 +132,27 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 					}
 					fmt.Fprintf(stdout, "replaced %s (child pointer or orphan note)\n", file.Path)
 					outcomes = append(outcomes, Outcome{file.Path, "replaced the child pointer or orphan note with the full Govna file"})
+					continue
+				}
+			}
+			if file.Path == "plan.md" {
+				old, e := access.ReadFile(file.Path)
+				if e != nil {
+					fmt.Fprintf(stderr, "apply: read %s: %v\n", file.Path, e)
+					return 1
+				}
+				if spaced, changed := canon.SpaceIdeas(old); changed {
+					info, err := access.Lstat(file.Path)
+					if err != nil {
+						fmt.Fprintf(stderr, "apply: inspect %s: %v\n", file.Path, err)
+						return 1
+					}
+					if err := access.WriteFile(file.Path, spaced, info.Mode().Perm()); err != nil {
+						fmt.Fprintf(stderr, "apply: write %s: %v\n", file.Path, err)
+						return 1
+					}
+					fmt.Fprintf(stdout, "spaced %s (existing file; one blank line between IE items)\n", file.Path)
+					outcomes = append(outcomes, Outcome{file.Path, labelSpacedIdeas})
 					continue
 				}
 			}

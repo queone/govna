@@ -2,6 +2,31 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.62.0
+
+Added:
+- `govna apply` puts one blank line between adjacent IE items in an existing `plan.md`,
+  and it keeps each item's text, order, and the file mode.
+- `govna audit` flags a compact `plan.md` IE list as adoption work, even when nothing else needs work.
+- The emitted adoption AC lists the file under `### IE items to space`, with one spacing step and one check.
+- The JSON report sets `ie_spacing` on a flagged `plan.md`.
+- Canon `govna/canon-cycle.md` adds commitment 5: keep rules out of the `plan.md` and `arch.md` stubs.
+
+Changed:
+- The IE spacing rule moves from the `plan.md` stub to `## Notes` in the synced cycle document.
+- `plan.md` stays an expected local difference; IE spacing is its one audit exception.
+- The canon version is v0.98.0.
+
+Decisions:
+- Audit never reviews the `plan.md` and `arch.md` stubs, so a rule only in a stub misses repos that already use Govna.
+- Both adoption paths share one spacing function, so they cannot disagree.
+- A compact list alone makes audit write an AC and makes `--check` exit `3`.
+- Spacing reduces two or more blank lines between adjacent IEs to one.
+
+Risks:
+- The emitted line-order check reads `git show HEAD:plan.md`, so it needs a committed `plan.md`.
+- A line of only spaces between two IEs counts as other text, so spacing leaves that pair alone.
+
 ## v0.61.0
 
 Added:
