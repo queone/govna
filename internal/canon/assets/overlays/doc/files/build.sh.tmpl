@@ -407,14 +407,20 @@ _prep_apply_changelog_insert() {
   rm -f "$tmp"
 }
 
+# Drops each listed plan.md line. When a blank line (or nothing) precedes the
+# dropped line, the blank line after it goes too, so a list with one blank
+# line between items keeps exactly one.
 _prep_remove_ie_lines() {
   local root="$1" lines="$2" tmp
   [ -n "$lines" ] || return 0
   tmp=$(mktemp "${TMPDIR:-/tmp}/prep-plan.XXXXXX")
   _prep_ie_err=''
   if ! drop="$lines" awk '
-    BEGIN { n=split(ENVIRON["drop"], a, "\n"); for (i=1; i<=n; i++) if (a[i] != "") d[a[i]]=1 }
-    { if (!($0 in d)) print }
+    BEGIN { n=split(ENVIRON["drop"], a, "\n"); for (i=1; i<=n; i++) if (a[i] != "") d[a[i]]=1; blank=1 }
+    { if (skip && $0 == "") { skip=0; next }
+      skip=0
+      if ($0 in d) { skip=blank; next }
+      print; blank=($0 == "") }
   ' "$root/plan.md" >"$tmp"; then
     rm -f "$tmp"; _prep_ie_err='awk failed on plan.md'; return 1
   fi

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.61.0 | AC85+AC86+AC87 spaced plan IEs, leaner ACs, cheaper canon bumps; canon v0.97.0 |
 | 0.60.0 | AC84 audit replaces its stale unedited adoption AC; canon v0.96.0 |
 | 0.59.0 | AC83 IE numbers may appear anywhere in plan.md; canon v0.95.0 |
 | 0.58.0 | AC82 audit lists bare AC, AT, and IE ids to fix in adoption ACs; canon v0.94.0 |

@@ -9,14 +9,17 @@ import (
 
 	"github.com/queone/govna/internal/apply"
 	"github.com/queone/govna/internal/audit"
+	"github.com/queone/govna/internal/canon"
 	"github.com/queone/govna/internal/help"
 	"github.com/queone/govna/internal/remove"
 	"github.com/queone/govna/internal/render"
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.60.0"
-const canonVersion = "0.96.0"
+const programVersion = "0.61.0"
+
+// canonVersion is the embedded canon version, owned by internal/canon.
+const canonVersion = canon.Version
 
 // modulePath is the module the update check asks the proxy about, and
 // installPath is the package its upgrade command installs.

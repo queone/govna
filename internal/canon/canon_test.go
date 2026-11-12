@@ -117,7 +117,7 @@ func assertFiles(t *testing.T, files []File, flavor, stack string) {
 		text := string(file.Content)
 		if file.Path == "govna/canon-baseline.txt" {
 			foundBaseline = true
-			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = v0.96.0\n") {
+			if !strings.HasPrefix(text, "govna-canon-baseline-v1\ncanon_version = "+"v"+Version+"\n") {
 				t.Fatalf("bad baseline: %s", text)
 			}
 			if strings.Contains(text, "govna/canon-baseline.txt\t") {
@@ -2475,5 +2475,37 @@ func TestGoWorkspaceRecipeSetsTheGoModGoLine(t *testing.T) {
 	}
 	if count := strings.Count(fileText(t, files, "govna/code-stacks.md"), recipe); count != 1 {
 		t.Fatalf("code-stacks.md Go workspace recipe count=%d, want 1", count)
+	}
+}
+
+// TestRenderedPlanSeparatesIEsWithOneBlankLine checks that every profile's
+// plan.md tells the reader to keep one blank line between IE items.
+func TestRenderedPlanSeparatesIEsWithOneBlankLine(t *testing.T) {
+	configs := []Config{{Flavor: Doc, RepoName: "handbook"}}
+	for _, stack := range Stacks() {
+		config := Config{Flavor: Code, RepoName: "widget", Stack: stack}
+		if stack == "Go" {
+			config.ModulePath = "example.com/widget"
+		}
+		configs = append(configs, config)
+	}
+	for _, config := range configs {
+		files, err := Render(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, file := range files {
+			if file.Path != "plan.md" {
+				continue
+			}
+			found = true
+			if !strings.Contains(string(file.Content), "one blank line separates items") {
+				t.Errorf("%v %s plan.md omits the spacing sentence", config.Flavor, config.Stack)
+			}
+		}
+		if !found {
+			t.Errorf("%v %s render omits plan.md", config.Flavor, config.Stack)
+		}
 	}
 }

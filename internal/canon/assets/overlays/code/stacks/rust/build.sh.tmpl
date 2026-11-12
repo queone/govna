@@ -1235,19 +1235,29 @@ _matching_ac_files() {
   done | LC_ALL=C sort
 }
 
+# Removes each AC-pointer line for the released refs. When a blank line (or
+# nothing) precedes the removed line, the blank line after it goes too, so a
+# list with one blank line between items keeps exactly one.
 _remove_plan_pointers() {
-  local refs="$1" tmp line number
+  local refs="$1" tmp line number blank=1 skip=0
   [ -f plan.md ] || return 0
   [ -n "$refs" ] || return 0
   tmp=$(mktemp "${TMPDIR:-/tmp}/plan.XXXXXX")
   while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$skip" -eq 1 ] && [ -z "$line" ]; then
+      skip=0
+      continue
+    fi
+    skip=0
     number=$(printf '%s' "$line" |
       sed -nE 's/.*→[[:space:]]+govna\/ac([0-9]+)-.*/\1/p')
     if [ -n "$number" ] && printf '%s\n' "$refs" | grep -qx "$number"; then
       printf '%s %s\n' "$(yel7 'prep: removed plan.md IE line:')" "$(_trim "$line")"
+      skip="$blank"
       continue
     fi
     printf '%s\n' "$line" >>"$tmp"
+    if [ -z "$line" ]; then blank=1; else blank=0; fi
   done <plan.md
   cat "$tmp" >plan.md
   rm -f "$tmp"

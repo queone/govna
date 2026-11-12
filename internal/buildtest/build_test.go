@@ -1366,20 +1366,129 @@ const goPrepPlanPointer = "- IE-1: release → govna/ac29-fixture.md"
 // the fixture AC file, and returns the module directory.
 func writeGoPrepBookkeepingFixture(t *testing.T) string {
 	t.Helper()
+	return writeGoPrepFixtureWithPlan(t, goPrepPlanPointer+"\n- keep\n", "ac29-fixture.md")
+}
+
+// writeGoPrepFixtureWithPlan stages the same committed Go module with the
+// given plan.md and one fixture document per named AC file under govna/.
+func writeGoPrepFixtureWithPlan(t *testing.T, plan string, acFiles ...string) string {
+	t.Helper()
 	root := repoRoot(t)
 	dir := t.TempDir()
 	writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl")), 0o755)
 	writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "cmd/widget/main.go"), []byte("package main\nconst programVersion = \"1.0.0\"\nfunc main() {}\n"), 0o644)
 	writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | earlier |\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "govna/ac29-fixture.md"), []byte("fixture\n"), 0o644)
-	writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte(goPrepPlanPointer+"\n- keep\n"), 0o644)
+	for _, name := range acFiles {
+		writeBuildFixture(t, filepath.Join(dir, "govna", name), []byte("fixture\n"), 0o644)
+	}
+	writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte(plan), 0o644)
 	gitFixture(t, dir, "init", "-q")
 	gitFixture(t, dir, "config", "user.name", "Fixture")
 	gitFixture(t, dir, "config", "user.email", "fixture@example.com")
 	gitFixture(t, dir, "add", ".")
 	gitFixture(t, dir, "commit", "-qm", "baseline")
 	return dir
+}
+
+// TestGoPrepSweepsAdjacentPointersFromSpacedPlan releases two ACs whose
+// AC-pointer lines sit next to each other in a blank-line-separated plan.md
+// and checks that prep leaves one blank line where they stood.
+func TestGoPrepSweepsAdjacentPointersFromSpacedPlan(t *testing.T) {
+	const second = "- IE2: second → govna/ac30-second.md"
+	plan := "# Plan\n\n- IE0: keep\n\n" + goPrepPlanPointer + "\n\n" + second + "\n\n- IE3: keep\n"
+	dir := writeGoPrepFixtureWithPlan(t, plan, "ac29-fixture.md", "ac30-second.md")
+	out, err := run(t, dir, "", "./build.sh", "prep", "v1.2.3", "AC29+AC30 spaced sweep")
+	if err != nil {
+		t.Fatalf("Go prep: %v:\n%s", err, out)
+	}
+	for _, pointer := range []string{goPrepPlanPointer, second} {
+		if !strings.Contains(out, "prep: removed plan.md IE line: "+pointer+"\n") {
+			t.Fatalf("prep did not report %q:\n%s", pointer, out)
+		}
+	}
+	if got := string(mustRead(t, filepath.Join(dir, "plan.md"))); got != "# Plan\n\n- IE0: keep\n\n- IE3: keep\n" {
+		t.Fatalf("prepared plan=%q", got)
+	}
+	for _, name := range []string{"ac29-fixture.md", "ac30-second.md"} {
+		if _, err := os.Stat(filepath.Join(dir, "govna", name)); !os.IsNotExist(err) {
+			t.Fatalf("released AC %s remains: %v", name, err)
+		}
+	}
+}
+
+// TestRenderedSweepKeepsOneBlankLineBetweenIEs runs every stack's plan.md
+// sweep on blank-line-separated and compact lists. A removed pointer takes the
+// blank line after it only when a blank line (or nothing) precedes it, so one
+// blank line stays between the neighbours and a compact list loses only the
+// pointer lines. The sweep reports pointer lines, never a blank line.
+func TestRenderedSweepKeepsOneBlankLineBetweenIEs(t *testing.T) {
+	root := repoRoot(t)
+	const (
+		first  = "- IE1: first → govna/ac70-first.md"
+		second = "- IE2: second → govna/ac71-second.md"
+		head   = "# Plan\n\n## Ideas To Explore\n\nIdeas captured for future reference.\n\n"
+	)
+	cases := []struct {
+		name, plan, want string
+	}{
+		{"middle item", head + "- IE0: keep\n\n" + first + "\n\n- IE3: keep\n", head + "- IE0: keep\n\n- IE3: keep\n"},
+		{"last item before heading", head + "- IE0: keep\n\n" + first + "\n\n## Next\n", head + "- IE0: keep\n\n## Next\n"},
+		{"first item after paragraph", head + first + "\n\n- IE3: keep\n", head + "- IE3: keep\n"},
+		{"adjacent pointers", head + "- IE0: keep\n\n" + first + "\n\n" + second + "\n\n- IE3: keep\n", head + "- IE0: keep\n\n- IE3: keep\n"},
+		{"compact list", head + "- IE0: keep\n" + first + "\n" + second + "\n- IE3: keep\n\n## Next\n", head + "- IE0: keep\n- IE3: keep\n\n## Next\n"},
+		{"compact last items", head + "- IE0: keep\n" + first + "\n" + second + "\n\n## Next\n", head + "- IE0: keep\n\n## Next\n"},
+	}
+	stacks := []struct {
+		name, path, sweep string
+		stripMain         bool
+	}{
+		{"Go", "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl", `_prep_remove_ie_lines "$PWD" "$lines"`, false},
+		{"Terraform", "internal/canon/assets/overlays/code/stacks/terraform/build.sh.tmpl", `_prep_remove_ie_lines "$PWD" "$lines"`, false},
+		{"DOC", "internal/canon/assets/overlays/doc/files/build.sh.tmpl", `_prep_remove_ie_lines "$PWD" "$lines"`, false},
+		{"Rust", "internal/canon/assets/overlays/code/stacks/rust/build.sh.tmpl", `_color_init && _remove_plan_pointers "$refs"`, false},
+		{"Swift", "internal/canon/assets/overlays/code/stacks/swift/build.sh.tmpl", `_prep_remove_plan_pointers AC70 && _prep_remove_plan_pointers AC71`, true},
+	}
+	for _, stack := range stacks {
+		t.Run(stack.name, func(t *testing.T) {
+			script := string(mustRead(t, filepath.Join(root, stack.path)))
+			if stack.stripMain {
+				body, ok := strings.CutSuffix(script, "main \"$@\"\n")
+				if !ok {
+					t.Fatalf("%s template does not end with its main call", stack.name)
+				}
+				script = body
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					dir := t.TempDir()
+					writeBuildFixture(t, filepath.Join(dir, "build.sh"), []byte(script), 0o755)
+					writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte(tc.plan), 0o644)
+					command := "source ./build.sh\nlines='" + first + "\n" + second + "'\nrefs=$'70\\n71'\n" + stack.sweep + "\n"
+					out, err := run(t, dir, "", "-c", command)
+					if err != nil {
+						t.Fatalf("sweep: %v: %s", err, out)
+					}
+					if got := string(mustRead(t, filepath.Join(dir, "plan.md"))); got != tc.want {
+						t.Fatalf("plan after sweep=%q want %q", got, tc.want)
+					}
+					for line := range strings.SplitSeq(out, "\n") {
+						if rest, ok := strings.CutPrefix(line, "prep: removed plan.md IE line:"); ok && strings.TrimSpace(rest) == "" {
+							t.Fatalf("sweep reported a blank line:\n%s", out)
+						}
+					}
+					if stack.name != "Rust" {
+						return
+					}
+					for _, pointer := range []string{first, second} {
+						if strings.Contains(tc.plan, pointer) != strings.Contains(out, "prep: removed plan.md IE line: "+pointer+"\n") {
+							t.Fatalf("Rust sweep report for %q:\n%s", pointer, out)
+						}
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestChangelogShapeAcceptsEscapedPipesInHistory(t *testing.T) {
@@ -2058,7 +2167,6 @@ func TestCanonAssetChangesRequireVersionIncrease(t *testing.T) {
 	for path, content := range map[string]string{
 		"build.sh":                    string(mustRead(t, filepath.Join(root, "build.sh"))),
 		"internal/canon/canon.go":     "package canon\nconst Version = \"1.0.0\"\n",
-		"cmd/govna/main.go":           "package main\nconst canonVersion = \"1.0.0\"\n",
 		"internal/canon/assets/a.txt": "one\n",
 	} {
 		full := filepath.Join(dir, filepath.FromSlash(path))
@@ -2083,9 +2191,6 @@ func TestCanonAssetChangesRequireVersionIncrease(t *testing.T) {
 		t.Fatalf("unchanged version accepted: %v: %s", err, out)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "internal/canon/canon.go"), []byte("package canon\nconst Version = \"1.1.0\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "cmd/govna/main.go"), []byte("package main\nconst canonVersion = \"1.1.0\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := run(t, dir, "", "-c", "source ./build.sh; _color_init; _validate_root_canon_version"); err != nil {

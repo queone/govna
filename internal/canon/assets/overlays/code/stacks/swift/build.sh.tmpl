@@ -781,6 +781,23 @@ _prep_validate_resolution() {
   fi
 }
 
+# Removes each plan.md line that points at the released AC. When a blank line
+# (or nothing) precedes the removed line, the blank line after it goes too, so
+# a list with one blank line between items keeps exactly one.
+_prep_remove_plan_pointers() { # $1=AC<number>
+  local tmp
+  [ -f plan.md ] || return 0
+  tmp=$(mktemp "${TMPDIR:-/tmp}/swift-plan.XXXXXX")
+  pointer="→ govna/$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')-" awk '
+    BEGIN { blank = 1 }
+    { if (skip && $0 == "") { skip = 0; next }
+      skip = 0
+      if (index($0, ENVIRON["pointer"]) > 0) { skip = blank; next }
+      print; blank = ($0 == "") }
+  ' plan.md >"$tmp" || { rm -f "$tmp"; _fail 'prep: plan.md sweep failed'; return 1; }
+  mv "$tmp" plan.md
+}
+
 _prep_apply() {
   local version="$1" message="$2" stripped="${1#v}" refs ref file tmp
   [ -f CHANGELOG.md ] || { _fail 'prep: CHANGELOG.md is missing'; return 1; }
@@ -799,11 +816,7 @@ _prep_apply() {
     for file in govna/"$(printf '%s' "$ref" | tr '[:upper:]' '[:lower:]')"-*.md; do
       [ -f "$file" ] && rm -f "$file"
     done
-    if [ -f plan.md ]; then
-      tmp=$(mktemp "${TMPDIR:-/tmp}/swift-plan.XXXXXX")
-      grep -v "→ govna/$(printf '%s' "$ref" | tr '[:upper:]' '[:lower:]')-" plan.md >"$tmp" || true
-      mv "$tmp" plan.md
-    fi
+    _prep_remove_plan_pointers "$ref" || return 1
   done <<EOF
 $refs
 EOF

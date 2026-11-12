@@ -1,10 +1,10 @@
 # AC2 Review Files Added by Govna
 
-Govna executable v9.8.7 added its embedded governance files (canon v0.96.0) for the CODE repository widget.
+Govna executable v9.8.7 added its embedded governance files (canon {{CANON_VERSION}}) for the CODE repository widget.
 
 ## Summary
 
-Govna executable v9.8.7 added its embedded governance files (canon v0.96.0). The list below records whether each file was written, merged, or preserved.
+Govna executable v9.8.7 added its embedded governance files (canon {{CANON_VERSION}}). The list below records whether each file was written, merged, or preserved.
 
 ## In Scope
 

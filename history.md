@@ -2,6 +2,44 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.61.0
+
+Added:
+- Every rendered `plan.md` says one blank line separates IE items.
+- Every stack's prep sweep drops the blank line after a removed AC-pointer
+  when a blank line or nothing precedes it, so one blank line stays.
+- Every Audit challenges restated or oversized AC text as a finding.
+- The upgrade test builds the latest release tag's `govna` and derives expected updates by comparing renders.
+
+Changed:
+- The AC template tells the drafter to size each section to the change and state each requirement once.
+- The template drops guidance that `AGENTS.md` already states, such as effective implementation scope.
+- A hand-drafted AC drops `## Migration findings` when audit emitted no migration item.
+- Canon `### AC-First Workflow` points AC sizing at the template, with no new rule.
+- Swift prep sweeps `plan.md` through a named function instead of an inline `grep -v`.
+- `cmd/govna` reads the canon version from `internal/canon`, so one constant holds it.
+- Tests and goldens read the canon version instead of spelling it out.
+- Canon `govna/canon-cycle.md` commitment 4 replaces fixture rotation with the tag-built prior canon.
+- The canon version is v0.97.0.
+
+Removed:
+- The committed prior-canon audit fixture.
+- The build check that compared the two canon version constants.
+
+Decisions:
+- One blank line between IEs is a canon default, so the sweep must not leave double blank lines.
+- A compact IE list sweeps as before, so existing consumer plans keep working.
+- The leaner AC contract replaces wording instead of adding rules, so the contract shrinks by 1564 bytes.
+- A trial rewrite of six recent ACs from govna, mud, and gkit cut them by 33.5% with no lost requirement.
+- The upgrade test fails, with a fetch-tags hint, in a clone without release tags,
+  so the prior-canon check is never skipped.
+- A canon version bump now touches `canon.go`, the render golden, and this repo's metadata and baseline.
+
+Risks:
+- A whitespace-only line after a swept pointer is not treated as blank and stays.
+- Swift and Rust sweeps were checked by sourcing their templates, not by a full prep on those toolchains.
+- Whether Audits catch AC bloat depends on agents applying the new Audit wording.
+
 ## v0.60.0
 
 Added:
