@@ -2794,6 +2794,20 @@ func TestAuditCheckModeReportsWithoutWriting(t *testing.T) {
 // the govna of the latest release tag, audits that render against the current
 // canon, and expects exactly the files whose bytes differ to be safe updates.
 // A canon version bump therefore rotates no committed fixture.
+// movedPlanRules lists the plan.md IE rules that the cycle document's ## Notes
+// delivers to repositories that already use Govna.
+var movedPlanRules = []string{
+	"- Separate `plan.md` IE items with one blank line.\n",
+	"- Start each IE item with `- IE<N>: `.\n",
+	"- Number IE items sequentially.\n",
+	"- Write an idea IE as `- IE<N>: <one-liner>`.\n",
+	"- Hold an idea IE for Director discussion and the AC-ceremony evaluation in `AGENTS.md` `### AC-First Workflow`.\n",
+	"- Write an AC-pointer IE as `- IE<N>: <one-liner> → govna/ac<N>-<slug>.md`.\n",
+	"- Convert an idea IE to an AC-pointer IE when the Director sends it to Draft.\n",
+	"- Keep the IE number through that conversion.\n",
+	"- Keep historical records out of `plan.md`.\n",
+}
+
 func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 	top, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
@@ -2898,6 +2912,34 @@ func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 				switch file.Classification {
 				case "ambiguity", "target-has-no-canon", "migration-required":
 					t.Errorf("%s needs a Director choice after a clean %s adoption: %s", file.Path, tag, file.Classification)
+				}
+			}
+			cycle := "govna/development-cycle.md"
+			if profile.flavor == canon.Doc {
+				cycle = "govna/editing-cycle.md"
+			}
+			prior, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(cycle)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var current string
+			for _, file := range files {
+				if file.Path == cycle {
+					current = string(file.Content)
+				}
+			}
+			for _, rule := range movedPlanRules {
+				if !strings.Contains(current, rule) {
+					t.Errorf("current %s omits %q", cycle, rule)
+				}
+				if strings.Contains(string(prior), rule) {
+					continue
+				}
+				if file := results[cycle]; file.Classification != "clear-sync" {
+					t.Errorf("%s lacks %q but audit classifies it %q, want clear-sync", cycle, rule, file.Classification)
+				}
+				if !strings.Contains(body, "`"+cycle+"`") {
+					t.Errorf("emitted AC omits %s, which lacks %q", cycle, rule)
 				}
 			}
 		})

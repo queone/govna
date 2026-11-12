@@ -2,6 +2,25 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.63.0
+
+Added:
+- The cycle document's `## Notes` holds every shared `plan.md` IE rule: the line format,
+  sequential numbers, the two kinds, the Draft conversion, and no history.
+- The upgrade test checks that audit syncs the cycle document to a repo whose copy lacks a moved rule.
+
+Changed:
+- The `plan.md` stub preamble only describes the section and links to the cycle document that owns the rules.
+- The canon version is v0.99.0.
+
+Removed:
+- The stub's removal rule, which repeated the cycle document's removal bullet.
+- The stub's claim that an AC-pointer points at an AC not yet through critique.
+
+Decisions:
+- Audit never syncs the `plan.md` stub, so rules there reached new adopters only.
+- An AC-pointer stays valid after Audit; the conversion and removal rules define its life, so no retention rule was added.
+
 ## v0.62.0
 
 Added:

@@ -188,7 +188,10 @@ func TestSelfHostedGoBaseline(t *testing.T) {
 	}
 }
 
-func TestRenderedPlanNamesTheCeremonyEvaluation(t *testing.T) {
+// TestRenderedIdeaRulesNameTheCeremonyEvaluation checks that the cycle
+// document's IE rules point idea entries at the AC-First Workflow section and
+// that plan.md names no undefined rubric.
+func TestRenderedIdeaRulesNameTheCeremonyEvaluation(t *testing.T) {
 	profiles := map[string]Config{"DOC": {Flavor: Doc, RepoName: "handbook"}}
 	for _, stack := range Stacks() {
 		module := ""
@@ -203,10 +206,14 @@ func TestRenderedPlanNamesTheCeremonyEvaluation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan := fileText(t, files, "plan.md")
-			if !strings.Contains(plan, "`AGENTS.md` `### AC-First Workflow`") {
-				t.Error("plan.md does not point idea entries at the AC-First Workflow section")
+			cycle := "govna/development-cycle.md"
+			if config.Flavor == Doc {
+				cycle = "govna/editing-cycle.md"
 			}
+			if !strings.Contains(sectionText(t, fileText(t, files, cycle), "## Notes\n"), "`AGENTS.md` `### AC-First Workflow`") {
+				t.Errorf("%s ## Notes does not point idea entries at the AC-First Workflow section", cycle)
+			}
+			plan := fileText(t, files, "plan.md")
 			if strings.Contains(strings.ToLower(plan), "rubric") {
 				t.Error("plan.md names a rubric that AGENTS.md does not define")
 			}
@@ -2478,6 +2485,20 @@ func TestGoWorkspaceRecipeSetsTheGoModGoLine(t *testing.T) {
 	}
 }
 
+// movedPlanRules lists the plan.md IE rules that live in the cycle
+// document's ## Notes instead of the plan.md stub.
+var movedPlanRules = []string{
+	"- Separate `plan.md` IE items with one blank line.\n",
+	"- Start each IE item with `- IE<N>: `.\n",
+	"- Number IE items sequentially.\n",
+	"- Write an idea IE as `- IE<N>: <one-liner>`.\n",
+	"- Hold an idea IE for Director discussion and the AC-ceremony evaluation in `AGENTS.md` `### AC-First Workflow`.\n",
+	"- Write an AC-pointer IE as `- IE<N>: <one-liner> → govna/ac<N>-<slug>.md`.\n",
+	"- Convert an idea IE to an AC-pointer IE when the Director sends it to Draft.\n",
+	"- Keep the IE number through that conversion.\n",
+	"- Keep historical records out of `plan.md`.\n",
+}
+
 // TestRenderedIESpacingRuleLivesInSyncedFiles checks that every profile keeps
 // the IE spacing rule in its synced cycle document instead of the plan.md stub,
 // commits to keeping rules out of the stubs, and documents audit's IE spacing.
@@ -2504,8 +2525,21 @@ func TestRenderedIESpacingRuleLivesInSyncedFiles(t *testing.T) {
 		if count := strings.Count(fileText(t, files, cycle), rule); count != 1 || !strings.Contains(notes, rule) {
 			t.Errorf("%v %s %s holds the spacing rule %d times, want once under ## Notes", config.Flavor, config.Stack, cycle, count)
 		}
-		if strings.Contains(fileText(t, files, "plan.md"), "one blank line separates items") {
-			t.Errorf("%v %s plan.md stub still states the spacing rule", config.Flavor, config.Stack)
+		cycleText := fileText(t, files, cycle)
+		for _, bullet := range append(append([]string{}, movedPlanRules...), "- Remove an IE when rejected, retired, or shipped through its AC pointer.\n") {
+			if count := strings.Count(cycleText, bullet); count != 1 || !strings.Contains(notes, bullet) {
+				t.Errorf("%v %s %s holds %q %d times, want once under ## Notes", config.Flavor, config.Stack, cycle, bullet, count)
+			}
+		}
+		plan := fileText(t, files, "plan.md")
+		for _, gone := range []string{"one blank line separates items", "sequential N", "Two kinds", "**idea IE**", "**AC-pointer**", "converts to an AC-pointer", "Remove entries", "Not a historical record"} {
+			if strings.Contains(plan, gone) {
+				t.Errorf("%v %s plan.md stub still holds %q", config.Flavor, config.Stack, gone)
+			}
+		}
+		preamble := "\n## Ideas To Explore\n\nIdeas captured for future reference. [`" + cycle + "`](" + cycle + ") `## Notes` holds the rules for these items.\n"
+		if !strings.Contains(plan, preamble) {
+			t.Errorf("%v %s plan.md lacks the linked preamble %q", config.Flavor, config.Stack, preamble)
 		}
 		const commitment = "5. **Stub rules.**\n   - Keep rules out of the `plan.md` and `arch.md` stubs.\n   - Place each such rule in a synced canon file.\n"
 		if count := strings.Count(fileText(t, files, "govna/canon-cycle.md"), commitment); count != 1 {
