@@ -2,6 +2,34 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.65.0
+
+Added:
+- Canon `AGENTS.md` treats a Director request that differs from the recommendation as the decision.
+- The agent accepts that request without override language.
+- The agent looks for a way to honor that request.
+- The agent raises a factual correction or technical concern while honoring that request.
+- The agent reopens that decision only with material new evidence.
+- The agent declines that request only for a serious problem, such as data loss or a security risk.
+- The agent asks whether direct handling or an AC fits a small, bounded, low-risk governance edit,
+  unless the Director has already chosen.
+
+Changed:
+- The canon version is v0.101.0.
+
+Decisions:
+- A consumer agent recommended a new AC for two stale Project Rules lines,
+  and buried the Director's override as an alternative.
+- The rules avoid the word "explicit", so an agent cannot demand override wording before it honors a request.
+- No one-line cap on a concern: a technical concern may need more room for an informed decision.
+- The rules remove the need for override wording only; authorization, scope, and phase rules still apply.
+- The pre-existing "explicitly overrides" AC-First line stays, since the new lines make override wording unnecessary.
+- No further rules until a real consumer task shows whether the agent stops asking again.
+
+Risks:
+- The six Session Entry lines apply to any Director request, with the serious-problem line as the only brake.
+- Only live consumer sessions can show whether the agent stops recommending a second AC.
+
 ## v0.64.0
 
 Added:

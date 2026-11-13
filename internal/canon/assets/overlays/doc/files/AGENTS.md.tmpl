@@ -121,6 +121,12 @@ Note: an agent cannot see the terminal width, so a terminal narrower than 120 co
 - Check each changed AC section for stale or repeated wording in the same pass.
 - Resolve instruction conflicts in this order: user instruction within authorized scope, then AGENTS.md, then referenced govna docs, then model defaults.
 - Follow an explicit Director workflow override without requiring contract-amendment language.
+- Treat a Director request that differs from the recommendation as the decision.
+- Accept that request without override language.
+- Look for a way to honor that request.
+- Raise a factual correction or technical concern while honoring that request.
+- Reopen that decision only with material new evidence.
+- Decline that request only for a serious problem, such as data loss or a security risk.
 - Stop when a request lacks authorization, scope, or required context.
 - Ask for the missing authorization, scope, or context.
 
@@ -257,6 +263,7 @@ Note: this rule does not prohibit batching independent commands.
 - Exclude documentation, generated outputs, fixtures, lockfiles, and governance templates from the count.
 - Treat changes exceeding eight counted files as presumptively AC-worthy.
 - Require an AC for architecture, schema, dependency, security, migration, external-integration, destructive, governance, or release decisions regardless of file count.
+- Ask the Director whether direct handling or an AC fits a small, bounded, low-risk governance edit when the Director has not already chosen.
 - Preserve explicit authorization, scope, documentation, and same-pass test requirements for direct handling.
 - Treat every non-trivial change outside a content entry as AC-first work unless the Director explicitly overrides it.
 - Keep related straightforward changes together in one AC.
