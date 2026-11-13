@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.64.0 | AC91 ACs stay lean while they are written; canon v0.100.0 |
 | 0.63.1 | AC90 plan IE rules stop banning dated notes in live ideas; canon v0.99.1 |
 | 0.63.0 | AC89 plan IE rules move from the plan stub to the cycle doc; canon v0.99.0 |
 | 0.62.0 | AC88 adoption spaces compact plan.md IE lists; canon v0.98.0 |

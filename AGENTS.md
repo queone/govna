@@ -118,6 +118,7 @@ Note: an agent cannot see the terminal width, so a terminal narrower than 120 co
 - Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits outside `### Agent Release`.
 - Route ancillary-repository and path changes through `### Primary And Ancillary Scope`.
 - Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.
+- Check each changed AC section for stale or repeated wording in the same pass.
 - Resolve instruction conflicts in this order: user instruction within authorized scope, then AGENTS.md, then referenced govna docs, then model defaults.
 - Follow an explicit Director workflow override without requiring contract-amendment language.
 - Treat each recorded `history.md` decision as settled until the Director reopens it.
@@ -536,6 +537,7 @@ Note: this rule does not prohibit batching independent commands.
 - Keep completions terse with flat bullets and a final `Awaiting <specific Director-initiated next>.` line.
 - Summarize the settled AC scope in at most one line of an Implement completion report.
 - Report every change that differs from or adds to the settled AC.
+- Report the AC word count in each Draft or Refine completion that changed the AC.
 - Focus completion summaries on changed behavior, material verification, findings, corrections, residual risks, and Director decisions.
 - Suppress routine repository labels, phase labels, phase mechanics, expected skips, duplicated status, and expected no-action confirmations.
 - Report suppressed workflow details only when exceptional or actionable.

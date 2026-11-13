@@ -16,7 +16,7 @@ import (
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.63.1"
+const programVersion = "0.64.0"
 
 // canonVersion is the embedded canon version, owned by internal/canon.
 const canonVersion = canon.Version

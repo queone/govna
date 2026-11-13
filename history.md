@@ -2,6 +2,29 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.64.0
+
+Added:
+- The AC template tells the writer to replace wording a change makes obsolete in every section that carries it.
+- The AC template keeps a reason only where it explains a constraint, a rejected alternative, or a non-obvious test.
+- The AC template leaves discussion history out.
+- Every change pass that edits only an AC checks each changed section for stale or repeated wording.
+- Every Draft or Refine completion that changed the AC reports its word count.
+
+Changed:
+- The canon version is v0.100.0.
+
+Decisions:
+- A 2,000-word consumer AC passed every gate and lost 35% to an outside cut, the risk v0.61.0 recorded.
+- No word ceiling: two shipped ACs are too little data to justify a number.
+- No trim pass: it costs one reread per Refine, while a check at the edit costs nothing.
+- Essential reasons stay in an AC because `history.md` is written at Package, after earlier sessions need them.
+- The word count is information only, with no required reduction, since review can add necessary requirements.
+- The changed-section check is its own bullet because a test pins the exact text of the gate line it extends.
+
+Risks:
+- The new lines are judgment rules, so the reported count is the only measure of whether agents apply them.
+
 ## v0.63.1
 
 Removed:
