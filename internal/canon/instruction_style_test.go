@@ -1661,6 +1661,8 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Keep each rule in exactly one governance file.",
 		"Reference the owning section by heading instead of restating its rule.",
 		"Cite file paths, line numbers, and concrete behavior.",
+		"Open each finding above Nit with what could go wrong for the product, its users, or the work.",
+		"Follow each such effect with the cause, the evidence, and a recommendation or the applied correction.",
 		"Remain in Refine when the checklist finds a gap.",
 		"Default to plain text.",
 		"Color `Verified:`, `Red-teamed:`, and `Not checked:` cyan only when the response channel explicitly supports native color or ANSI color and color is enabled.",

@@ -2,6 +2,30 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.66.0
+
+Added:
+- Canon `AGENTS.md` opens each finding above Nit with what could go wrong for the product, its users, or the work.
+- Each such effect is followed by the cause, the evidence, and a recommendation or the applied correction.
+
+Changed:
+- The canon version is v0.102.0.
+
+Decisions:
+- A consumer review led with AC wording defects, and the Director had to ask for the effect on the product.
+- The Plain Language rule "Lead with the concrete problem, effect, or decision" stays unchanged.
+- A wording defect satisfied "problem" in that rule, so the new rule names the effect for findings only.
+- Two working consumer agents tested the wording over three rounds before release.
+- "A recommendation" sets no count, so the two-option rules still decide how many corrections to present.
+- "Or the applied correction" covers a finding that is already fixed.
+- Nit findings are exempt, because a forced effect line on a blank-line nit produced filler.
+- No layout rule: both agents wrote readable findings in different layouts.
+- No minimum-content rule for a Nit: neither agent showed a problem without one.
+
+Risks:
+- An agent may name only one of two effects of a finding, as one test agent did.
+- The Nit exemption rests on one agent's note about one finding.
+
 ## v0.65.0
 
 Added:
