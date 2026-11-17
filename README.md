@@ -46,9 +46,9 @@ Run one of these from `govna-trial`:
 | Agent | Command | How it loads the rules |
 | --- | --- | --- |
 | Claude Code | `claude` | [Reads `AGENTS.md` directly](https://code.claude.com/docs/en/memory#agents-md) from v2.1.277. Look for the session line `AGENTS.md loaded`; `/context` does not list the file. |
-| Codex CLI | `codex` | [Reads `AGENTS.md` before doing any work](https://learn.chatgpt.com/docs/agent-configuration/agents-md). |
+| Codex CLI | `codex` | [Reads `AGENTS.md` before doing any work](https://learn.chatgpt.com/docs/agent-configuration/agents-md), up to its `project_doc_max_bytes` limit of 32 KiB by default. Govna's `AGENTS.md` is larger than that, so set `project_doc_max_bytes = 65536` in Codex's `config.toml`. |
 
-The contract makes the agent begin its first substantive reply with the line `Govna contract loaded.` If that line never appears, the rules did not load. `apply` and `audit` print a hint for the two common causes. A Claude Code older than v2.1.277 cannot read `AGENTS.md`; upgrade it with `claude update`. A repository's own `CLAUDE.md` makes Claude Code skip `AGENTS.md`; it can now be deleted once anything you still need has moved into `AGENTS.md`. Anthropic's [`AGENTS.md` documentation](https://code.claude.com/docs/en/memory#agents-md) covers the remaining cases.
+The contract makes the agent begin its first substantive reply with the line `Govna contract loaded.` If that line never appears, the rules did not load. The line does not prove a full load: the rule that prints it sits early in the file, so it can appear when Codex has loaded only the first 32 KiB. `apply` and `audit` print a hint for the two common causes. A Claude Code older than v2.1.277 cannot read `AGENTS.md`; upgrade it with `claude update`. A repository's own `CLAUDE.md` makes Claude Code skip `AGENTS.md`; it can now be deleted once anything you still need has moved into `AGENTS.md`. Anthropic's [`AGENTS.md` documentation](https://code.claude.com/docs/en/memory#agents-md) covers the remaining cases.
 
 After that line, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt` and suggests `govna audit` when the installed canon is newer. Allow `govna version` in the agent's permissions to avoid a permission prompt at the start of each session.
 

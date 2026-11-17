@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.66.1 | AC92 contract trial findings; README names the Codex 32 KiB load limit |
 | 0.66.0 | Findings open with what could go wrong, then cause and fix; canon v0.102.0 |
 | 0.65.0 | Director request outranks recommendation, no override wording; canon v0.101.0 |
 | 0.64.0 | AC91 ACs stay lean while they are written; canon v0.100.0 |

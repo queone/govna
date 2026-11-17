@@ -18,3 +18,4 @@ Ideas captured for future reference. [`govna/development-cycle.md`](govna/develo
 
 - IE19: Explore distribution child repositories, such as a Homebrew tap, a GitHub Action, or a docs site, which use the parent's release and so release after it with no pin; most have no govna stack and so no canonical `build.sh`; research in `brainstorm.md`.
 
+- IE21: Replace `### Contract Growth` with a contract-composition review, starting from an independent review of the proposal in [`govna/contract-composition-findings.md`](govna/contract-composition-findings.md); the trial contract that moved rules out of `AGENTS.md` is stopped and is not the basis, and the composition improvement continues; retire the findings file once its lessons are in the canon, explained in the documentation, and summarized in `history.md`.

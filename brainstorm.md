@@ -73,7 +73,12 @@ it as repository-owned. Shape 1 turns that line inside one file into a file boun
   repository root down to the working directory, which fits. Claude Code reads the root file at startup; whether
   it loads a project's `AGENTS.md` at startup, on first read in that directory, or not at all needs checking. If
   not, the root contract needs a rule to read the active project's file first, and `Govna contract loaded.` must
-  mean both.
+  mean both. Codex's limit on project instructions (`project_doc_max_bytes`, 32 KiB by default) is combined across
+  the merged files, and Codex stops adding files when it is reached, so a root canon of about 50 KB crowds out the
+  project file unless the limit is raised or the canon shrinks. A rule to read the project's file is a read
+  trigger: the 2026-11-17 contract trial found that such a trigger must name a state the agent can recognize, such
+  as the first work in a project directory, and it did not test whether an agent reads again after a resumed or
+  compacted session.
 - Precedence. A project file extends the canon and cannot override it, as `## Project Rules` does today. The
   conflict order becomes Director instruction, root contract, project contract, govna documents, model defaults.
 - Routing. Contract-integrity findings classed `Consumer-local` route to the project's `AGENTS.md` instead of a

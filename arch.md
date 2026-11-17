@@ -196,6 +196,7 @@ Accepted costs of in-repository delivery:
 
 - Each adopted repository carries its own copy of the governance text.
 - Each canon update produces a diff in every adopted repository.
+- The contract loads in full only where the CLI's instruction size limit allows it. Codex CLI's `project_doc_max_bytes` defaults to 32 KiB, and the canon sections of `AGENTS.md` are about 50 KB at canon v0.102.0, so a Codex user must raise that limit.
 
 ## Conventions
 

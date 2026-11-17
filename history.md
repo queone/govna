@@ -2,6 +2,42 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.66.1
+
+Added:
+- [`govna/contract-composition-findings.md`](govna/contract-composition-findings.md) records a 2026-11-17 trial of
+  a smaller `AGENTS.md`, with its evidence limits.
+- `README.md` tells a Codex user to raise `project_doc_max_bytes` above its 32 KiB default.
+- `README.md` states that the line `Govna contract loaded.` does not prove a full load.
+- `arch.md` lists the CLI instruction size limit as an accepted cost of in-repository delivery.
+- `brainstorm.md` notes that the combined Codex limit crowds out a project file in the one-copy shape.
+
+Deferred:
+- The contract-composition review that will replace `### Contract Growth`; `plan.md` holds the entry.
+- The byte budget, the reusable scenario set, and mechanical size and reference checks.
+- Any reduction of the canon size; wording trims and rule retirement are untried.
+
+Decisions:
+- No canon file changed; the canon version stays v0.102.0.
+- The trial contract is rejected.
+- It moved 298 rules behind file reads and took `AGENTS.md` from 56,470 to 31,859 bytes in one consumer copy.
+- It left 909 bytes under 32,768, missed the 20,480-byte target, and increased the total contract text.
+- Lesson: a rule that decides whether an action applies must load before that decision.
+- Lesson: a read trigger must name a state that the agent can recognize without the procedure.
+- Lesson: a check for each moved rule's text at its new location found five dropped rules that counts missed.
+- Table form did not reduce size in this trial.
+- An independent review found the proposed replacement section not ready, because it dropped current safeguards.
+- A contract must hold under ordinary agent settings, without custom tool restrictions.
+- A new scenario needs an observed failure with a distinct gap, or a new or materially changed boundary.
+- Each new scenario needs a named gap and an expected outcome.
+- The findings file retires when its lessons are in the canon, the documentation, and this file.
+
+Risks:
+- The findings rest on 20 sessions that the author ran, with one session for each condition.
+- The trial did not test recovery after a resumed or compacted session, or execution behavior.
+- A consumer on the default Codex limit loads a cut contract until the limit is raised.
+- The trial did not observe the 32 KiB default; the Director confirmed it in other sessions.
+
 ## v0.66.0
 
 Added:
