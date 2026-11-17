@@ -145,6 +145,7 @@ func TestCommandHelpPages(t *testing.T) {
 		"  -s, --stack NAME        select CODE stack (default: inferred from cwd manifests)\n" +
 		"  -m, --module-path PATH  module path for Go CODE files (default: read from cwd's go.mod)\n" +
 		"  -k, --with-children     include the rules for a CODE parent that declares a child repository\n" +
+		"  -u, --with-utilities    include the command-line rules before the first utility exists\n" +
 		"  -c, --child             write only the child repository files for the CODE stack\n" +
 		"  -o, --orphan            write only the orphan note for a dropped child repository\n" +
 		"  -v, --version           print executable version\n" +
@@ -161,6 +162,7 @@ func TestCommandHelpPages(t *testing.T) {
 		"Options\n" +
 		"  -f, --flavor code|doc  Govna file set (CODE or DOC; default: auto-detect)\n" +
 		"  -s, --stack NAME       CODE stack (default: inferred from manifests)\n" +
+		"  -u, --with-utilities   compare against the command-line rules before the first utility exists\n" +
 		"  -c, --check            report updates without writing an AC (exit 3 when found)\n" +
 		"  -j, --json             emit JSON report alongside markdown emission\n" +
 		"  -l, --diff-lines N     diff truncation limit (default: 200)\n" +

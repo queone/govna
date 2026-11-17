@@ -46,6 +46,7 @@ const (
 )
 
 var rewrittenInstructionPaths = []string{
+	"internal/canon/assets/profile/utilities/build-release.md",
 	"internal/canon/assets/profile/rust/build-release-evidence.md",
 	"arch.md",
 	"AGENTS.md",
@@ -99,6 +100,12 @@ var (
 	canonMaintenancePaths = []string{
 		"AGENTS.md",
 	}
+	// utilityVersionPaths holds the version rules that render only for a
+	// repository with an installable utility.
+	utilityVersionPaths = []string{
+		"govna/build-release.md",
+		"internal/canon/assets/profile/utilities/build-release.md",
+	}
 	// rustPrepPaths holds the checklist lines that render only for Rust.
 	rustPrepPaths = []string{
 		"internal/canon/assets/profile/rust/build-release-evidence.md",
@@ -125,9 +132,9 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 	{"Recompute the protected-region digest after adoption.", "Recompute the protected-region digest after adoption.", auditRewrittenPaths, reviewClean},
 	{"Require the protected-region digest to match the emitted digest.", "Require the protected-region digest to match the emitted digest.", auditRewrittenPaths, reviewClean},
 
-	{"Require `--version` to exit 0.", "Require `--version` to exit 0.", buildReleaseRewrittenPaths, reviewClean},
-	{"Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.", "Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.", buildReleaseRewrittenPaths, reviewClean},
-	{"Require `--version` to write nothing to stderr.", "Require `--version` to write nothing to stderr.", buildReleaseRewrittenPaths, reviewClean},
+	{"Require `--version` to exit 0.", "Require `--version` to exit 0.", utilityVersionPaths, reviewClean},
+	{"Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.", "Require `--version` to print exactly `<utility-id> <MAJOR.MINOR.PATCH>` or `<utility-id> v<MAJOR.MINOR.PATCH>` plus its newline to stdout.", utilityVersionPaths, reviewClean},
+	{"Require `--version` to write nothing to stderr.", "Require `--version` to write nothing to stderr.", utilityVersionPaths, reviewClean},
 	{"Run ordinary canonical pre-change validation for Go prep.", "Run ordinary canonical pre-change validation for Go prep.", buildReleaseRewrittenPaths, reviewClean},
 	{"Run ordinary canonical post-change validation for Go prep.", "Run ordinary canonical post-change validation for Go prep.", buildReleaseRewrittenPaths, reviewClean},
 	{"Reserve validation-token evidence for Rust prep.", "Reserve validation-token evidence for Rust prep.", rustPrepPaths, reviewClean},
@@ -209,7 +216,7 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I07", "Create a temporary copy of the embedded Govna files with govna render."},
 	{"I08", "Confirm each file selected for update exists in the selected CODE render."},
 	{"I09", "Apply each Director choice only to its authorized file region."},
-	{"I10", "Write govna/canon-baseline.txt as the final file update."},
+	{"I10", "Write govna/canon-baseline.txt from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its Not applicable evidence holds."},
 	{"I11", "Install <replacement> before retired-source routing for <path>."},
 	{"I12", "Write govna/canon-baseline.txt from the final temporary render only after all other work is complete and the repository check succeeds."},
 	{"I13", "Create govna/metadata.txt from the selected temporary render before govna/canon-baseline.txt installation."},
@@ -293,6 +300,11 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I91", "Verify each updated parent file matches the temporary copy above its registered boundary."},
 	{"I92", "Verify every line from the boundary heading down is unchanged in each updated parent file."},
 	{"I93", "Verify each updated file's line in govna/canon-baseline.txt equals its line in the same temporary copy's baseline."},
+	{"I94", "Apply each resolved routing action while leaving the emitted AC stub unchanged."},
+	{"I95", "Preserve the boundary heading and every line below it as repo-owned content."},
+	{"I96", "Resolve an unresolved emitted repository check in chat."},
+	{"I97", "Cite repository evidence when choosing Not applicable for the repository check."},
+	{"I98", "Do not re-run govna audit as an implementation gate for the emitted AC."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -367,8 +379,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 93 {
-		t.Fatalf("generated instruction manifest has %d entries, want 93", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 98 {
+		t.Fatalf("generated instruction manifest has %d entries, want 98", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -469,13 +481,13 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1},
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I98": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,
 			"I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
 			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I64": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1,
 			"I69": 1, "I70": 1, "I71": 1, "I72": 1,
 		},
 		"internal/audit/testdata/unresolved-validation-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 2, "I28": 1, "I29": 1,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I98": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 2, "I28": 1, "I29": 1,
 			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
 			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
 			"I70": 1, "I71": 1, "I72": 1, "I73": 1,
@@ -486,7 +498,7 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1, "I87": 1, "I88": 1, "I91": 1, "I92": 1, "I93": 1},
 		"internal/remove/testdata/child-removal-golden.md": {"I79": 1, "I80": 1, "I81": 1, "I82": 1, "I83": 1},
 		"internal/audit/testdata/child-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
+			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I98": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
 			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
 			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
 			"I70": 1, "I71": 1, "I72": 1, "I74": 1, "I75": 1, "I76": 1, "I85": 1, "I86": 1,
@@ -554,9 +566,6 @@ func TestPlainLanguageContractAndMirrors(t *testing.T) {
 		"### Plain Language\n\n- Apply plain-language rules to responses, ACs, findings, completion reports, and release summaries.\n- Lead with the concrete problem, effect, or decision in plain language.\n- Pair each necessary Govna label with its plain-language meaning at first use in a document.",
 		"- Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.",
 		"- Confirm the AC title and Summary lead with the concrete outcome in plain language.",
-		"- Resolve an unresolved emitted repository check in chat.",
-		"- Cite repository evidence when choosing `Not applicable` for the repository check.",
-		"- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.",
 	}
 	for _, path := range paths {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -1328,8 +1337,8 @@ func TestRewrittenInstructionManifest(t *testing.T) {
 	if len(rewrittenInstructionReviews) != 45 {
 		t.Fatalf("rewritten instruction manifest has %d entries, want 45", len(rewrittenInstructionReviews))
 	}
-	if len(rewrittenInstructionPaths) != 17 {
-		t.Fatalf("rewritten instruction path inventory has %d entries, want 17", len(rewrittenInstructionPaths))
+	if len(rewrittenInstructionPaths) != 18 {
+		t.Fatalf("rewritten instruction path inventory has %d entries, want 18", len(rewrittenInstructionPaths))
 	}
 
 	expectedPaths := make(map[string]bool, len(rewrittenInstructionPaths))

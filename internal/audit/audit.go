@@ -32,8 +32,10 @@ type Config struct {
 	Flavor, Stack, RepoName string
 	JSON                    bool
 	Check                   bool
-	DiffLines               int
-	invocation              string
+	// Utilities selects the utility profile before the first utility exists.
+	Utilities  bool
+	DiffLines  int
+	invocation string
 }
 
 type FileResult struct {
@@ -87,6 +89,9 @@ type Report struct {
 	// withChildren reports that the repository declares a child, so every
 	// render that this report names needs --with-children.
 	withChildren bool
+	// forcedUtilities reports that --with-utilities selected the utility
+	// profile for a repository that has no utility yet.
+	forcedUtilities bool
 }
 
 type validationOutcomeKind uint8
@@ -349,6 +354,8 @@ func parse(args []string) (Config, error) {
 			c.JSON = true
 		case "-c", "--check":
 			c.Check = true
+		case "-u", "--with-utilities":
+			c.Utilities = true
 		case "-l", "--diff-lines":
 			i++
 			if i >= len(args) {
@@ -440,7 +447,12 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		return report, false, usererr.Errorf("%s is present in a DOC repository, and DOC repositories have no child repositories; delete %s and re-run audit", repository.ChildRegistryPath, repository.ChildRegistryPath)
 	}
 	report.withChildren = len(children) > 0
-	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: report.withChildren})
+	if cfg.Utilities && !canon.CanHaveUtilities(stack) {
+		return report, false, usererr.Errorf("--with-utilities applies only to a Go, Rust, or Swift repository, because no other repository has an installable utility; remove --with-utilities")
+	}
+	detected := repository.HasUtility(root, stack)
+	report.forcedUtilities = cfg.Utilities && !detected
+	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: report.withChildren, Utilities: detected || cfg.Utilities})
 	if err != nil {
 		return report, false, err
 	}
@@ -1442,10 +1454,13 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 		b.WriteString("\n")
 	}
-	writeAuditReview(&b, report.selectedStack, report.withChildren, sync, migrate, review)
+	writeAuditReview(&b, report.selectedStack, report.withChildren, report.forcedUtilities, sync, migrate, review)
 	renderCommand := "govna render"
 	if report.withChildren {
-		renderCommand = "govna render --with-children"
+		renderCommand += " --with-children"
+	}
+	if report.forcedUtilities {
+		renderCommand += " --with-utilities"
 	}
 	fmt.Fprintf(&b, "### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `%s`.\n", renderCommand)
 	if hasChildFile(sync, review) {
@@ -1458,10 +1473,17 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		b.WriteString("- Confirm each file selected for update exists in the selected CODE render.\n")
 	}
 	b.WriteString("- Apply each Director choice only to its authorized file region.\n")
+	// These instructions travel with the AC instead of every contract: an
+	// agent always holds the AC when they apply.
+	b.WriteString("- Apply each resolved routing action while leaving the emitted AC stub unchanged.\n")
+	b.WriteString("- Preserve the boundary heading and every line below it as repo-owned content.\n")
+	b.WriteString("- Resolve an unresolved emitted repository check in chat.\n")
+	b.WriteString("- Cite repository evidence when choosing `Not applicable` for the repository check.\n")
+	b.WriteString("- Do not re-run `govna audit` as an implementation gate for the emitted AC.\n")
 	for _, f := range spacing {
 		fmt.Fprintf(&b, "- Space the IE items in `%s` as listed under `### IE items to space`.\n", f.Path)
 	}
-	b.WriteString("- Write `govna/canon-baseline.txt` as the final file update.\n")
+	b.WriteString("- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.\n")
 	for _, f := range sync {
 		if len(f.LegacyPreserveMarkers) == 0 {
 			continue
@@ -1524,7 +1546,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		for _, f := range migrate {
 			switch f.Path {
 			case baselinePath:
-				b.WriteString("- Write `govna/canon-baseline.txt` from the final temporary render only after all other work is complete and the repository check succeeds.\n")
+				b.WriteString("- Write `govna/canon-baseline.txt` from the final temporary render as the last file update.\n")
 			case "govna/metadata.txt":
 				b.WriteString("- Create `govna/metadata.txt` from the selected temporary render before `govna/canon-baseline.txt` installation.\n")
 			default:
@@ -1597,7 +1619,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 // blank line separates each pair of adjacent plan.md IE items.
 const ideaSpacingCheck = `awk '{ sub(/\r$/, "") } /^- IE[0-9]+: / { if (item && blanks != 1) bad = 1; item = 1; blanks = 0; next } /^$/ { if (item) blanks++; next } /^[ \t]/ { if (item && !blanks) next } { item = 0; blanks = 0 } END { exit bad }'`
 
-func writeAuditReview(b *strings.Builder, stack string, withChildren bool, groups ...[]FileResult) {
+func writeAuditReview(b *strings.Builder, stack string, withChildren, forcedUtilities bool, groups ...[]FileResult) {
 	b.WriteString("### Audit Review\n\n")
 	b.WriteString("- Use the same resolved Govna executable that emitted this AC.\n")
 	b.WriteString("- Verify its detailed version output matches this AC's guarded marker.\n")
@@ -1605,6 +1627,9 @@ func writeAuditReview(b *strings.Builder, stack string, withChildren bool, group
 	b.WriteString("- Render the selected canon into that directory once with the resolved executable.\n")
 	if withChildren {
 		b.WriteString("- Pass `--with-children` to that render, because this repository declares a child repository.\n")
+	}
+	if forcedUtilities {
+		b.WriteString("- Pass `--with-utilities` to that render, because this audit selected the command-line rules before the first utility exists.\n")
 	}
 	b.WriteString("- Verify the rendered `govna/canon-baseline.txt` canon version matches this AC's guarded marker.\n")
 	if hasChildFile(groups...) {

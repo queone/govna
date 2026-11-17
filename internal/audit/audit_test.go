@@ -736,7 +736,7 @@ func TestAuditReviewMixedBoundaryBranches(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			file := FileResult{Path: "AGENTS.md", Classification: "ambiguity", Boundary: tc.boundary, canonPresent: true, targetInspected: true, targetPresent: true}
 			var body strings.Builder
-			writeAuditReview(&body, "Go", false, []FileResult{file})
+			writeAuditReview(&body, "Go", false, false, []FileResult{file})
 			got := body.String()
 			hasScoped := strings.Contains(got, "Compare the canon zone of `AGENTS.md` above exact boundary `## Project Rules`")
 			if hasScoped != tc.wantScoped {
@@ -1450,7 +1450,7 @@ func TestExistingAndMissingBaselineClassification(t *testing.T) {
 			t.Fatalf("baseline=%+v", baseline)
 		}
 		body := buildAC(report, "govna/ac1-audit-"+testCanonV+".md", inferredBuildOutcome())
-		want := "- Write `govna/canon-baseline.txt` from the final temporary render only after all other work is complete and the repository check succeeds."
+		want := "- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds."
 		if !strings.Contains(body, want) {
 			t.Fatalf("body=%s", body)
 		}
@@ -1805,7 +1805,7 @@ func TestGeneratedInstructionBranches(t *testing.T) {
 		"- Convert `preserve local.md` into `govna/preserve.txt` for a preserve choice on `local.md`.",
 		"- Verify every applicable resolved-route AT for `local.md` before legacy-phrase cleanup.",
 		"- Remove `preserve local.md` from `CHANGELOG.md` after resolved-state verification for `local.md`.",
-		"- Write `govna/canon-baseline.txt` from the final temporary render only after all other work is complete and the repository check succeeds.",
+		"- Write `govna/canon-baseline.txt` from the final temporary render as the last file update.",
 		"- Create `govna/metadata.txt` from the selected temporary render before `govna/canon-baseline.txt` installation.",
 		"- Create `govna/other.md` from the selected temporary render.",
 		"Preserve the protected region in `AGENTS.md` from `## Project Rules` through EOF with SHA-256 `abc123` for any update choice.",
@@ -3725,5 +3725,90 @@ func TestAuditReportsChildRulesForAParentRenderedWithoutThem(t *testing.T) {
 	}
 	if _, body := runAuditFixture(t, childless, []string{"--json", "--repo-name", "widget"}); body == "" || strings.Contains(body, "--with-children") {
 		t.Errorf("a repository without children is told to render with children:\n%s", body)
+	}
+}
+
+func TestAdoptionInstructionsCarryTheMovedRules(t *testing.T) {
+	root := fixture(t)
+	if err := os.Remove(filepath.Join(root, "govna", "roles.md")); err != nil {
+		t.Fatal(err)
+	}
+	_, body := runAuditFixture(t, root, []string{"--json", "--repo-name", "widget"})
+	_, instructions, ok := strings.Cut(body, "\n### Adoption Instructions\n")
+	if !ok {
+		t.Fatalf("adoption AC omits ### Adoption Instructions:\n%s", body)
+	}
+	instructions, _, _ = strings.Cut(instructions, "\n### ")
+	for _, rule := range []string{
+		"- Apply each resolved routing action while leaving the emitted AC stub unchanged.\n",
+		"- Preserve the boundary heading and every line below it as repo-owned content.\n",
+		"- Resolve an unresolved emitted repository check in chat.\n",
+		"- Cite repository evidence when choosing `Not applicable` for the repository check.\n",
+		"- Do not re-run `govna audit` as an implementation gate for the emitted AC.\n",
+		"- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.\n",
+	} {
+		if strings.Count(body, rule) != 1 || !strings.Contains(instructions, rule) {
+			t.Errorf("adoption AC needs %q once under ### Adoption Instructions", rule)
+		}
+	}
+	for _, weak := range []string{"only after all other work is complete and the repository check succeeds", "as the final file update"} {
+		if strings.Contains(body, weak) {
+			t.Errorf("adoption AC keeps the weaker baseline wording %q", weak)
+		}
+	}
+}
+
+func TestAuditOffersCommandLineRulesBeforeTheFirstUtility(t *testing.T) {
+	root := fixture(t)
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"--check"}, &stdout, &stderr, root, testProgramVersion); code != 0 {
+		t.Fatalf("a repository without a utility is not clean: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	report, body := runAuditFixture(t, root, []string{"--json", "--repo-name", "widget", "--with-utilities"})
+	if report.Emitted == nil {
+		t.Fatal("--with-utilities wrote no AC for a repository that lacks the command-line rules")
+	}
+	results := map[string]FileResult{}
+	for _, file := range report.Files {
+		results[file.Path] = file
+	}
+	for _, path := range []string{"AGENTS.md", "govna/build-release.md", "govna/development-guidelines.md"} {
+		file := results[path]
+		if file.Classification != "clear-sync" && file.EffectiveClassification != "force-sync" {
+			t.Errorf("%s classification=%q effective=%q, want a safe update", path, file.Classification, file.EffectiveClassification)
+		}
+	}
+	for _, want := range []string{
+		"- Pass `--with-utilities` to that render, because this audit selected the command-line rules before the first utility exists.\n",
+		"- Create a temporary copy of the embedded Govna files with `govna render --with-utilities`.\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("adoption AC omits %q", want)
+		}
+	}
+	// Adopt the offered files, add the first utility, and audit without the flag.
+	with, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget", Utilities: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range with {
+		writeAuditFile(t, filepath.Join(root, filepath.FromSlash(file.Path)), file.Content)
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(report.Emitted.ACStub))); err != nil {
+		t.Fatal(err)
+	}
+	writeAuditFile(t, filepath.Join(root, "cmd", "widget", "main.go"), []byte("package main\n\nfunc main() {}\n"))
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-qm", "command-line rules and first utility")
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"--check"}, &stdout, &stderr, root, testProgramVersion); code != 0 {
+		t.Fatalf("a repository with its first utility is not clean: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+
+	terraform := fixtureFor(t, canon.Code, "Terraform")
+	stderr.Reset()
+	if code := Run([]string{"--check", "--with-utilities"}, &stdout, &stderr, terraform, testProgramVersion); code != 1 || !strings.Contains(stderr.String(), "--with-utilities applies only to a Go, Rust, or Swift repository") {
+		t.Fatalf("Terraform code=%d stderr=%s", code, stderr.String())
 	}
 }

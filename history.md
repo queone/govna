@@ -2,6 +2,46 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.68.0
+
+Added:
+- `govna audit --with-utilities` and `govna render --with-utilities` (`-u`) select the command-line rules
+  before a repository has its first utility.
+- `govna render` follows the repository it runs in: it reads the child registry and detects a utility.
+- A Go, Rust, or Swift repository without a utility carries one rule that asks for
+  `govna audit --with-utilities` before Implement of an AC that adds the first utility.
+- `govna/canon-maintenance.md` `## Contract scenarios` holds eight scenarios for canon changes.
+
+Changed:
+- Canon v0.104.0.
+- Six audit-adoption rules moved from every contract into the emitted adoption AC.
+- The emitted AC states the full baseline condition: every other applicable test and routing outcome
+  passes, and the repository check succeeds or its `Not applicable` evidence holds.
+- `## CLI Usage Formatting` and `## Independent Utility Versions` render only for a repository with
+  an installable utility.
+- A Terraform repository holds no command-line rule.
+
+Removed:
+- The contract rule that required a named migration destination; `govna/audit.md` owns it.
+- Three size-reporting rules in `### Canon Maintenance`.
+- `TestGovernanceGrowthBaseline` and its fixture.
+
+Decisions:
+- No byte ceiling and no size check; the Director rejected both.
+- Rules that decide whether an action applies, or that grant scope, stay in `### Audit Adoption`.
+- The command-line rules are adopted before the first entry point exists, because a bare entry point
+  fails the build.
+- A utility is a Go `cmd/<name>/main.go`, a Rust `src/main.rs`, `src/bin/` file, or `[[bin]]` table,
+  or a Swift executable target or product.
+- A scenario walk is a semantic review by the Operator and runs no agent session.
+- Data and integration guidance by profile was retired from `plan.md`.
+
+Risks:
+- Between adopting the command-line rules and adding the first utility, a plain `govna audit` offers
+  to remove them.
+- Swift detection matches two text patterns in `Package.swift` and can miss an unusual layout.
+- Each consumer without a utility loses the two command-line sections at its next audit.
+
 ## v0.67.0
 
 Added:

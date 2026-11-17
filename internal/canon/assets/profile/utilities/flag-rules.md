@@ -1,0 +1,2 @@
+- Pair every new CLI flag with a leading one-letter short form and a long-form alias.
+- Migrate existing flags when their code is next touched.

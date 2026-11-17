@@ -56,7 +56,12 @@ Govna also found 1 child file needing a manual fix.
 - Confirm each parent file selected for update exists in the selected CODE render.
 - Confirm each child file selected for update exists in the child render.
 - Apply each Director choice only to its authorized file region.
-- Write `govna/canon-baseline.txt` as the final file update.
+- Apply each resolved routing action while leaving the emitted AC stub unchanged.
+- Preserve the boundary heading and every line below it as repo-owned content.
+- Resolve an unresolved emitted repository check in chat.
+- Cite repository evidence when choosing `Not applicable` for the repository check.
+- Do not re-run `govna audit` as an implementation gate for the emitted AC.
+- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.
 
 ### Routing Decisions
 

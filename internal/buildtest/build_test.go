@@ -58,7 +58,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 		},
 		{
 			name: "Go", claimsPath: "govna/canon-spec.md",
-			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget", Utilities: true},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
 				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
@@ -75,7 +75,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 		},
 		{
 			name: "Rust", claimsPath: "govna/canon-spec.md",
-			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust", Utilities: true},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh tests/build_cli.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
 				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
@@ -91,7 +91,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 		},
 		{
 			name: "Swift", claimsPath: "govna/canon-spec.md",
-			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
+			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift", Utilities: true},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
 				{claim: "Reject a registry without the `govna-children-v1` header, a final newline, or unique, byte-sorted, slash-normalized relative paths.", implementation: "_children_validate \"$registry\" || return 1", regression: "TestChildRegistryReadersAgree"},
@@ -3182,8 +3182,8 @@ var nonGoReleaseProfiles = []struct {
 	config canon.Config
 }{
 	{name: "DOC", config: canon.Config{Flavor: canon.Doc, RepoName: "handbook"}},
-	{name: "Rust", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"}},
-	{name: "Swift", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"}},
+	{name: "Rust", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust", Utilities: true}},
+	{name: "Swift", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift", Utilities: true}},
 	{name: "Terraform", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"}},
 }
 
@@ -3308,7 +3308,7 @@ func TestNonGoReleaseValidatesTagAndMessageLikeGo(t *testing.T) {
 
 func TestRustReleaseRequiresPreparedRootVersion(t *testing.T) {
 	dir := t.TempDir()
-	prepareProfileReleaseFixture(t, canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"}, dir, "1.0.0", "AC29 release", "0.9.0")
+	prepareProfileReleaseFixture(t, canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust", Utilities: true}, dir, "1.0.0", "AC29 release", "0.9.0")
 	before := gitState(t, dir)
 	out, err := run(t, dir, "", "./build.sh", "v1.0.0", "AC29 release")
 	assertRefusedBeforePrompt(t, dir, out, err, "prepared Cargo.toml [package].version is 0.9.0; require 1.0.0")
@@ -3455,7 +3455,7 @@ func TestDocReleaseAcceptsDatedTag(t *testing.T) {
 func TestCodeReleasePathsRefuseDatedTag(t *testing.T) {
 	t.Run("Swift release", func(t *testing.T) {
 		dir := t.TempDir()
-		prepareProfileReleaseFixture(t, canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"}, dir, "26.10.10a", "dated release", "")
+		prepareProfileReleaseFixture(t, canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift", Utilities: true}, dir, "26.10.10a", "dated release", "")
 		before := gitState(t, dir)
 		out, err := run(t, dir, "", "./build.sh", "v26.10.10a", "dated release")
 		assertRefusedBeforePrompt(t, dir, out, err, "version must match vMAJOR.MINOR.PATCH")
@@ -3642,7 +3642,7 @@ type releaseProfile struct {
 
 // allReleaseProfiles lists every supported profile, Go first.
 func allReleaseProfiles() []releaseProfile {
-	profiles := []releaseProfile{{name: "Go", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"}}}
+	profiles := []releaseProfile{{name: "Go", config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget", Utilities: true}}}
 	for _, p := range nonGoReleaseProfiles {
 		profiles = append(profiles, releaseProfile{name: p.name, config: p.config})
 	}
@@ -3882,7 +3882,7 @@ func TestDetachedHeadReleaseIsRefused(t *testing.T) {
 }
 
 func TestRenderedRustBuildSuitePasses(t *testing.T) {
-	files, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"})
+	files, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust", Utilities: true})
 	if err != nil {
 		t.Fatal(err)
 	}

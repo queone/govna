@@ -579,3 +579,41 @@ func TestChildRegistryAndResolution(t *testing.T) {
 		}
 	}
 }
+
+func TestHasUtilityFollowsEachStackSignal(t *testing.T) {
+	write := func(t *testing.T, root, rel, content string) {
+		t.Helper()
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name, stack, rel, content string
+		want                      bool
+	}{
+		{"Go entry point", "Go", "cmd/widget/main.go", "package main\n", true},
+		{"Go library", "Go", "widget.go", "package widget\n", false},
+		{"Go directory named main.go", "Go", "cmd/widget/main.go/keep", "", false},
+		{"Rust main", "Rust", "src/main.rs", "fn main() {}\n", true},
+		{"Rust bin directory", "Rust", "src/bin/tool.rs", "fn main() {}\n", true},
+		{"Rust bin table", "Rust", "Cargo.toml", "[package]\nname = \"w\"\n\n[[bin]]\nname = \"w\"\n", true},
+		{"Rust library", "Rust", "src/lib.rs", "pub fn f() {}\n", false},
+		{"Swift executable target", "Swift", "Package.swift", "targets: [\n  .executableTarget(name: \"w\"),\n]\n", true},
+		{"Swift executable product", "Swift", "Package.swift", "products: [\n  .executable(name: \"w\", targets: [\"w\"]),\n]\n", true},
+		{"Swift library", "Swift", "Package.swift", "products: [\n  .library(name: \"w\", targets: [\"w\"]),\n]\n", false},
+		{"Terraform", "Terraform", "cmd/widget/main.go", "package main\n", false},
+		{"no stack", "", "cmd/widget/main.go", "package main\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			write(t, root, tc.rel, tc.content)
+			if got := HasUtility(root, tc.stack); got != tc.want {
+				t.Errorf("HasUtility=%t, want %t", got, tc.want)
+			}
+		})
+	}
+}

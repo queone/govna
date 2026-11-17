@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.68.0 | AC94 Adoption steps travel in the adoption AC; CLI rules by profile; canon 0.104 |
 | 0.67.0 | AC93 Consumers get only rules they act on; child rules by profile; canon 0.103.0 |
 | 0.66.1 | AC92 contract trial findings; README names the Codex 32 KiB load limit |
 | 0.66.0 | Findings open with what could go wrong, then cause and fix; canon v0.102.0 |

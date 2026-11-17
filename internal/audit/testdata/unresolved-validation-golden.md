@@ -47,7 +47,12 @@ Govna found 2 files ready to update, 0 required control files to add, 1 file nee
 - Create a temporary copy of the embedded Govna files with `govna render`.
 - Confirm each file selected for update exists in the selected CODE render.
 - Apply each Director choice only to its authorized file region.
-- Write `govna/canon-baseline.txt` as the final file update.
+- Apply each resolved routing action while leaving the emitted AC stub unchanged.
+- Preserve the boundary heading and every line below it as repo-owned content.
+- Resolve an unresolved emitted repository check in chat.
+- Cite repository evidence when choosing `Not applicable` for the repository check.
+- Do not re-run `govna audit` as an implementation gate for the emitted AC.
+- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.
 
 ### Routing Decisions
 

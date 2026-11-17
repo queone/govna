@@ -19,7 +19,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 
 - `cmd/govna`: accepts commands and prints help, versions, the `govna version` update line, colored terminal text, and command results.
 - `internal/help`: renders every help page in the shared layout: three header lines, capitalized headings, rows aligned per section, the appended version and help rows, and single-sequence color only when the written stream supports it.
-- `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, fills each profile placeholder with child-repository or Rust text only for a repository of that profile, renders the child files and the orphan note for child repositories, and creates deterministic baselines.
+- `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, fills each profile placeholder with child-repository, command-line, or Rust text only for a repository of that profile, renders the child files and the orphan note for child repositories, and creates deterministic baselines.
 - `internal/render`: writes a selected file set to a directory after resolving and validating command options.
 - `internal/repository`: determines repository type, stack, module path, name, adoption state, and source-checkout identity, and provides the shared contained file access: path validation, link rejection, and reads and writes rooted at the resolved repository. It also reads and validates the child registry `govna/children.txt`, resolves each child repository beside the parent, and checks that the parent's profile files can be updated safely before a first child is added or a last child is dropped.
 - `internal/apply`: adds Govna files to new or existing repositories, keeps repository-owned documents and local sections whether or not an agent instruction file exists, validates every destination before writing, and initializes optional Git state.
@@ -47,7 +47,7 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 
 The executable first detects whether stderr supports terminal color. Its command runner then sends each request to the matching package with explicit output writers and environment access.
 
-Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, validates every destination through the shared contained access, and writes it without first emptying the target. `--with-children` adds the child-repository profile text for a CODE parent. It applies deterministic file modes and writes the baseline—the saved hashes of installed Govna-managed regions.
+Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, validates every destination through the shared contained access, and writes it without first emptying the target. A render from a repository follows that repository's own profile: its child registry and its installable utilities. `--with-children` and `--with-utilities` select a profile that the repository does not show yet. It applies deterministic file modes and writes the baseline—the saved hashes of installed Govna-managed regions.
 
 Apply determines repository identity through `internal/repository`, renders the selected embedded files, validates every destination, and either writes them into a new repository or merges registered Govna sections into an existing one while keeping repository-owned documents. Adding those files is adoption. `internal/emission` writes one adoption AC that names the executable version and canon version separately. Apply never reads or changes legacy `governa/` content. Optional Git initialization runs last.
 
@@ -93,6 +93,8 @@ Audit emits each adoption AC in the shape below. These rules bind `internal/audi
 - Place that CODE-render check and all routing procedure under `### Adoption Instructions`.
 - Omit the CODE-render check from DOC audit emissions.
 - Emit each adoption instruction as one imperative bullet.
+- Emit the adoption rules that apply only while an emitted AC is implemented in `### Adoption Instructions`, not in every contract.
+- Emit the full baseline condition: every other applicable acceptance test and routing outcome passes, and the repository check succeeds or its `Not applicable` evidence holds.
 - Format every numbered routing entry as one Director decision question.
 - End every numbered routing entry with `?`.
 - Keep shared implementation procedure out of routing questions.
@@ -214,7 +216,7 @@ Note: every Govna document has two possible audiences. A consumer needs the rule
 Canon text has three classes:
 
 - Consumer text renders into every repository of its flavor.
-- Profile text renders only where it applies. The child-repository rules render for a CODE parent that declares a child in `govna/children.txt`. The validation-token rules render for the Rust stack. The DOC flavor has its own contract template.
+- Profile text renders only where it applies. The child-repository rules render for a CODE parent that declares a child in `govna/children.txt`. The validation-token rules render for the Rust stack. The command-line sections render for a Go, Rust, or Swift repository that has an installable utility; a repository of those stacks without one carries a single rule that asks for `govna audit --with-utilities` before the first utility, and a Terraform repository carries no command-line rule. The DOC flavor has its own contract template.
 - Govna-only text is in no canon asset. It holds maintenance rules, the candidate-canon review, and the specifications of `govna audit` and the build scripts.
 
 The render fills each profile placeholder from `internal/canon/assets/profile/` or with nothing. A child block carries its own exceptions to other sections, so no shared section names a heading that a render may omit. Automated tests check that no render holds maintenance terms, that each profile block renders only for its profile, and that every heading reference resolves in every render.
@@ -222,6 +224,8 @@ The render fills each profile placeholder from `internal/canon/assets/profile/` 
 Accepted costs:
 
 - A parent has a child but no child rules between `govna apply --child` and the implementation of its review AC.
+- Between the adoption of the command-line rules and the first utility, a plain `govna audit` offers to remove those rules again.
+- An adoption AC from an executable older than canon v0.104.0 lacks the moved adoption instructions; a repository adopts each canon under its previous contract, which still holds them.
 - `govna apply --child` and `govna rm --child` stop for a first or last child when a profile file differs from current canon, until `govna audit` is adopted.
 - A repository that adopted an earlier canon is asked once whether to keep, move, or delete each document that left the canon.
 - The reading list in a consumer's `govna/README.md` links to current documents, not to the documents of its installed canon version.

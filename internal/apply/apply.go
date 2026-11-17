@@ -106,7 +106,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 	name := repository.Name(cwd, module, cfg.RepoName)
 	// A registry that cannot be read is reported by the destination checks below.
 	declared, _, _ := access.ReadChildren()
-	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: flavor == canon.Code && len(declared) > 0})
+	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: flavor == canon.Code && len(declared) > 0, Utilities: repository.HasUtility(cwd, stack)})
 	if err != nil {
 		fmt.Fprintf(stderr, "apply: %v\n", err)
 		return 1
@@ -464,7 +464,7 @@ func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) 
 		if stack == "Go" {
 			module = repository.ModulePath(cwd)
 		}
-		current, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: repository.Name(cwd, module, ""), Stack: stack, ModulePath: module})
+		current, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: repository.Name(cwd, module, ""), Stack: stack, ModulePath: module, Utilities: repository.HasUtility(cwd, stack)})
 		if err != nil {
 			fmt.Fprintf(stderr, "apply: %v\n", err)
 			return 1

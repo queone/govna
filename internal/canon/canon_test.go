@@ -174,7 +174,7 @@ func TestBaselineHashes(t *testing.T) {
 }
 
 func TestSelfHostedGoBaseline(t *testing.T) {
-	files, err := Render(Config{Flavor: Code, RepoName: "govna", Stack: "Go", ModulePath: "github.com/queone/govna"})
+	files, err := Render(Config{Flavor: Code, RepoName: "govna", Stack: "Go", ModulePath: "github.com/queone/govna", Utilities: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	root := filepath.Join("..", "..")
 	// This repository is a Go parent without children, so each of its canon
 	// documents equals the matching render.
-	goFiles, err := Render(Config{Flavor: Code, RepoName: "govna", Stack: "Go", ModulePath: "github.com/queone/govna"})
+	goFiles, err := Render(Config{Flavor: Code, RepoName: "govna", Stack: "Go", ModulePath: "github.com/queone/govna", Utilities: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +375,7 @@ var auditEmissionRules = []string{
 
 // profilePlaceholder matches a placeholder that the render fills with profile
 // text or with nothing.
-var profilePlaceholder = regexp.MustCompile(`\{\{(CHILD|RUST)_[A-Z_]+\}\}`)
+var profilePlaceholder = regexp.MustCompile(`\{\{(CHILD|RUST|UTILITY|CLI)_[A-Z_]+\}\}`)
 
 // docAuditText derives the DOC audit document from the govna/audit.md
 // authority. The child repository text is profile text, so a repository
@@ -725,7 +725,6 @@ func TestImmutableAuditACVerificationContract(t *testing.T) {
 	required := []string{
 		"- Confirm each settled decision landed verbatim in the AC.",
 		"- Treat a Director-resolved routing decision or explicit workflow override recorded in chat for an immutable emitted AC as satisfying the verbatim-in-AC check.",
-		"- Apply each resolved routing action while leaving the emitted AC stub unchanged.",
 		"- Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.",
 	}
 	for _, path := range paths {
@@ -1570,61 +1569,6 @@ func TestPhaseAuthorizationMatrix(t *testing.T) {
 	}
 }
 
-func TestGovernanceGrowthBaseline(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "governance-growth-baseline.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected := map[string]string{}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
-		fields := strings.Split(line, "\t")
-		if len(fields) != 3 {
-			t.Fatalf("invalid governance-growth line: %q", line)
-		}
-		expected[fields[0]] = fields[1] + "\t" + fields[2]
-	}
-	seen := map[string]bool{}
-	assetRoot := filepath.Join("assets")
-	err = filepath.WalkDir(assetRoot, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		key, err := filepath.Rel(assetRoot, path)
-		if err != nil {
-			return err
-		}
-		key = filepath.ToSlash(key)
-		if key == "base/AGENTS.md.tmpl" {
-			key = "base/AGENTS.md"
-		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		lines := strings.Count(string(content), "\n")
-		rules := 0
-		for line := range strings.SplitSeq(string(content), "\n") {
-			if strings.HasPrefix(line, "- ") {
-				rules++
-			}
-		}
-		got := fmt.Sprintf("%d\t%d", lines, rules)
-		if expected[key] != got {
-			t.Errorf("%s growth count=%s want=%s", key, got, expected[key])
-		}
-		seen[key] = true
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for key := range expected {
-		if !seen[key] {
-			t.Errorf("governance-growth fixture names missing asset %s", key)
-		}
-	}
-}
-
 func TestProductToolingStackBoundaries(t *testing.T) {
 	goFiles, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
 	if err != nil {
@@ -1733,6 +1677,12 @@ func dedupProfiles() []dedupProfile {
 		// A parent that declares a child renders the child profile text too.
 		config.Children = true
 		profiles = append(profiles, dedupProfile{name: "CODE/" + stack + "+children", config: config, cyclePath: "govna/development-cycle.md"})
+		// A repository with an installable utility renders the command-line rules.
+		if CanHaveUtilities(stack) {
+			config.Children = false
+			config.Utilities = true
+			profiles = append(profiles, dedupProfile{name: "CODE/" + stack + "+utilities", config: config, cyclePath: "govna/development-cycle.md"})
+		}
 	}
 	return profiles
 }
@@ -2732,9 +2682,9 @@ var canonMaintenanceRules = []string{
 	"Keep edits local during every update.",
 	"Use `##` for top-level sections.",
 	"Conform overlay templates and other canon files to AGENTS.md.",
-	"Measure authorized AGENTS.md hunks against the phase-entry baseline while excluding unrelated working-tree changes.",
-	"Record added, removed, and net AGENTS.md line and rule-shaped-bullet counts in the closure-audit working record.",
-	"Prevent rule-review measurements alone from becoming findings.",
+	"Walk each affected scenario in `govna/canon-maintenance.md` `## Contract scenarios` before completing a canon change to a phase, approval, scope, or release rule.",
+	"Add a scenario only for an observed failure with a distinct gap, or for a new or materially changed boundary.",
+	"Give each new scenario a named gap and an expected outcome.",
 }
 
 func TestCanonMaintenanceRulesStayInThisRepository(t *testing.T) {
@@ -3022,6 +2972,147 @@ func TestConsumerReadingListLinksResolve(t *testing.T) {
 		}
 		if bullets != 3 {
 			t.Errorf("%s reading list holds %d bullets, want 3", profile.name, bullets)
+		}
+	}
+}
+
+// movedAdoptionRules left every contract: the emitted adoption AC carries six
+// of them, and govna/audit.md already owns the first.
+var movedAdoptionRules = []string{
+	"Require the Director to name every migration destination.",
+	"Apply each resolved routing action while leaving the emitted AC stub unchanged.",
+	"Preserve the boundary heading and every line below it as repo-owned content.",
+	"Resolve an unresolved emitted repository check in chat.",
+	"Cite repository evidence when choosing `Not applicable` for the repository check.",
+	"Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.",
+	"Do not re-run `govna audit` as an implementation gate for the emitted AC.",
+}
+
+func TestAuditAdoptionKeepsOnlyRulesThatMustLoadFirst(t *testing.T) {
+	for path, text := range embeddedText(t) {
+		for _, rule := range movedAdoptionRules {
+			if strings.Contains(text, "- "+rule+"\n") {
+				t.Errorf("asset %s still carries the adoption rule %q", path, rule)
+			}
+		}
+	}
+	want := headingSection(t, repoFile(t, "AGENTS.md"), "### Audit Adoption")
+	if rules := strings.Count(want, "\n- "); rules != 23 {
+		t.Errorf("### Audit Adoption holds %d rules, want 23", rules)
+	}
+	for _, kept := range []string{
+		"- Apply integrated audit adoption only when the Director explicitly requests govna audit.\n",
+		"- Limit scratch-review authority to one unique system-temporary directory outside the consumer repository.\n",
+		"- Stop integrated audit adoption before Implement.\n",
+		"- Apply these rules whenever implementing an audit-emitted AC.\n",
+		"- Treat every Director-resolved routing target as effective implementation scope, even when it is absent from `## In Scope`.\n",
+		"- Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.\n",
+		"- Follow `govna/audit.md` `## Adoption procedure` for each resolved routing action.\n",
+	} {
+		if strings.Count(want, kept) != 1 {
+			t.Errorf("### Audit Adoption needs %q once", kept)
+		}
+	}
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		agents := fileText(t, files, "AGENTS.md")
+		if headingSection(t, agents, "### Audit Adoption") != want {
+			t.Errorf("%s ### Audit Adoption differs from the repository contract", profile.name)
+		}
+		for _, rule := range movedAdoptionRules {
+			if strings.Contains(agents, "- "+rule+"\n") {
+				t.Errorf("%s AGENTS.md still carries the adoption rule %q", profile.name, rule)
+			}
+		}
+		if !strings.Contains(fileText(t, files, "govna/audit.md"), "- Require the Director to name every migration destination in the routing response.\n") {
+			t.Errorf("%s govna/audit.md no longer requires a named migration destination", profile.name)
+		}
+	}
+}
+
+func TestUtilityProfileRendersCommandLineRules(t *testing.T) {
+	const cli, versions = "## CLI Usage Formatting", "## Independent Utility Versions"
+	const request = "- Ask the Director to run `govna audit --with-utilities` before Implement of an AC that adds the first command-line utility.\n"
+	flags := profileLines(t, "utilities/flag-rules.md")
+	if len(flags) != 2 {
+		t.Fatalf("the flag rules hold %d lines, want 2", len(flags))
+	}
+	count := func(files []File, path, text string) int {
+		for _, file := range files {
+			if file.Path == path {
+				return strings.Count("\n"+string(file.Content), "\n"+text)
+			}
+		}
+		return 0
+	}
+	check := func(name string, config Config, wantSections, wantFlags, wantRequest int) {
+		t.Helper()
+		files, err := Render(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := count(files, "govna/development-guidelines.md", cli+"\n"); got != wantSections {
+			t.Errorf("%s holds %s %d times, want %d", name, cli, got, wantSections)
+		}
+		if got := count(files, "govna/build-release.md", versions+"\n"); got != wantSections {
+			t.Errorf("%s holds %s %d times, want %d", name, versions, got, wantSections)
+		}
+		for _, line := range flags {
+			if got := count(files, "AGENTS.md", line+"\n"); got != wantFlags {
+				t.Errorf("%s holds the flag rule %q %d times, want %d", name, line, got, wantFlags)
+			}
+		}
+		if got := count(files, "AGENTS.md", request); got != wantRequest {
+			t.Errorf("%s holds the audit-request rule %d times, want %d", name, got, wantRequest)
+		}
+		if wantRequest == 1 && !strings.Contains(headingSection(t, fileText(t, files, "AGENTS.md"), "### AC-First Workflow"), request) {
+			t.Errorf("%s keeps the audit-request rule outside ### AC-First Workflow", name)
+		}
+	}
+	for _, stack := range Stacks() {
+		config := Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget"}
+		with := config
+		with.Utilities = true
+		if stack == "Terraform" {
+			check("Terraform", config, 0, 0, 0)
+			check("Terraform with the flag", with, 0, 0, 0)
+			continue
+		}
+		check(stack+" without a utility", config, 0, 1, 1)
+		check(stack+" with a utility", with, 1, 1, 0)
+	}
+	check("DOC", Config{Flavor: Doc, RepoName: "handbook", Utilities: true}, 0, 0, 0)
+}
+
+func TestContractScenariosStayInThisRepository(t *testing.T) {
+	_, section, ok := strings.Cut(repoFile(t, "govna/canon-maintenance.md"), "\n## Contract scenarios\n")
+	if !ok {
+		t.Fatal("govna/canon-maintenance.md omits ## Contract scenarios")
+	}
+	rows := 0
+	for line := range strings.SplitSeq(section, "\n") {
+		if strings.HasPrefix(line, "| S") {
+			rows++
+			if cells := strings.Split(strings.Trim(line, "| "), " | "); len(cells) != 4 || cells[3] == "" {
+				t.Errorf("scenario row lacks a boundary, a state, or an expected outcome: %s", line)
+			}
+		}
+	}
+	if rows != 8 {
+		t.Errorf("the scenario set holds %d rows, want 8", rows)
+	}
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for path, text := range governanceText(files) {
+			if strings.Contains(text, "Contract scenarios") {
+				t.Errorf("%s %s holds the scenario set", profile.name, path)
+			}
 		}
 	}
 }

@@ -475,14 +475,7 @@ Note: this rule does not prohibit batching independent commands.
 - Treat each explicitly named migration destination as effective implementation scope with its routed source.
 - Treat `govna/preserve.txt` as effective implementation scope only when a resolved routing outcome requires creating or changing it.
 - Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.
-- Require the Director to name every migration destination.
-- Apply each resolved routing action while leaving the emitted AC stub unchanged.
 - Follow `govna/audit.md` `## Adoption procedure` for each resolved routing action.
-- Preserve the boundary heading and every line below it as repo-owned content.
-- Resolve an unresolved emitted repository check in chat.
-- Cite repository evidence when choosing `Not applicable` for the repository check.
-- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.
-- Do not re-run `govna audit` as an implementation gate for the emitted AC.
 
 ## File-Change Discipline
 
@@ -680,6 +673,6 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Keep edits local during every update.
 - Use `##` for top-level sections.
 - Conform overlay templates and other canon files to AGENTS.md.
-- Measure authorized AGENTS.md hunks against the phase-entry baseline while excluding unrelated working-tree changes.
-- Record added, removed, and net AGENTS.md line and rule-shaped-bullet counts in the closure-audit working record.
-- Prevent rule-review measurements alone from becoming findings.
+- Walk each affected scenario in `govna/canon-maintenance.md` `## Contract scenarios` before completing a canon change to a phase, approval, scope, or release rule.
+- Add a scenario only for an observed failure with a distinct gap, or for a new or materially changed boundary.
+- Give each new scenario a named gap and an expected outcome.

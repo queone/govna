@@ -1286,3 +1286,32 @@ func TestApplyChildProfileKeepsPreservedFilesAndLaterChildren(t *testing.T) {
 		t.Error("a later child repeats the parent profile update")
 	}
 }
+
+func TestApplyFollowsTheRepositoryUtilities(t *testing.T) {
+	for name, withUtility := range map[string]bool{"library": false, "utility": true} {
+		t.Run(name, func(t *testing.T) {
+			d := filepath.Join(t.TempDir(), "widget")
+			writeFixture(t, filepath.Join(d, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"))
+			if withUtility {
+				writeFixture(t, filepath.Join(d, "cmd", "widget", "main.go"), []byte("package main\n\nfunc main() {}\n"))
+			}
+			if _, errOut, code := runAt(t, d); code != 0 {
+				t.Fatalf("code=%d stderr=%s", code, errOut)
+			}
+			guidelines, err := os.ReadFile(filepath.Join(d, "govna", "development-guidelines.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			agents, err := os.ReadFile(filepath.Join(d, "AGENTS.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(string(guidelines), "\n## CLI Usage Formatting\n"); got != withUtility {
+				t.Errorf("command-line section present=%t, want %t", got, withUtility)
+			}
+			if got := strings.Contains(string(agents), "govna audit --with-utilities"); got == withUtility {
+				t.Errorf("audit-request rule present=%t, want %t", got, !withUtility)
+			}
+		})
+	}
+}

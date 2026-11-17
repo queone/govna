@@ -16,7 +16,7 @@ import (
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.67.0"
+const programVersion = "0.68.0"
 
 // canonVersion is the embedded canon version, owned by internal/canon.
 const canonVersion = canon.Version
@@ -205,6 +205,7 @@ func renderPage() help.Page {
 			{Form: "-s, --stack NAME", Meaning: "select CODE stack (default: inferred from cwd manifests)"},
 			{Form: "-m, --module-path PATH", Meaning: "module path for Go CODE files (default: read from cwd's go.mod)"},
 			{Form: "-k, --with-children", Meaning: "include the rules for a CODE parent that declares a child repository"},
+			{Form: "-u, --with-utilities", Meaning: "include the command-line rules before the first utility exists"},
 			{Form: "-c, --child", Meaning: "write only the child repository files for the CODE stack"},
 			{Form: "-o, --orphan", Meaning: "write only the orphan note for a dropped child repository"},
 		}},
@@ -217,6 +218,7 @@ func auditPage() help.Page {
 		help.Section{Title: "Options", Rows: []help.Row{
 			{Form: "-f, --flavor code|doc", Meaning: "Govna file set (CODE or DOC; default: auto-detect)"},
 			{Form: "-s, --stack NAME", Meaning: "CODE stack (default: inferred from manifests)"},
+			{Form: "-u, --with-utilities", Meaning: "compare against the command-line rules before the first utility exists"},
 			{Form: "-c, --check", Meaning: "report updates without writing an AC (exit 3 when found)"},
 			{Form: "-j, --json", Meaning: "emit JSON report alongside markdown emission"},
 			{Form: "-l, --diff-lines N", Meaning: "diff truncation limit (default: 200)"},

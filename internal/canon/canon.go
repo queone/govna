@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.103.0"
+const Version = "0.104.0"
 
 const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
@@ -34,6 +34,9 @@ type Config struct {
 	// Children reports that the repository declares at least one child
 	// repository, so the render includes the child profile text.
 	Children bool
+	// Utilities reports that the repository has, or is about to add, an
+	// installable command-line utility, so the render includes those rules.
+	Utilities bool
 }
 
 type File struct {
@@ -135,7 +138,7 @@ func Render(cfg Config) ([]File, error) {
 		}
 		values["{{STACK_BUILD_RELEASE_GUIDANCE}}"] = strings.TrimSpace(string(raw))
 	}
-	if err := profileValues(values, stack, cfg.Flavor == Code && cfg.Children); err != nil {
+	if err := profileValues(values, stack, cfg.Flavor == Code && cfg.Children, cfg.Utilities); err != nil {
 		return nil, err
 	}
 	out := map[string][]byte{}
@@ -278,6 +281,29 @@ var childBlocks = []profileBlock{
 	{"{{CHILD_RELEASES_SECTION}}", "children/build-release.md", true},
 }
 
+// utilityBlocks render for a repository with an installable utility.
+var utilityBlocks = []profileBlock{
+	{"{{UTILITY_CLI_SECTION}}", "utilities/development-guidelines.md", true},
+	{"{{UTILITY_VERSIONS_SECTION}}", "utilities/build-release.md", true},
+}
+
+// flagBlocks render for every stack that can have a utility.
+var flagBlocks = []profileBlock{
+	{"{{CLI_FLAG_RULES}}", "utilities/flag-rules.md", false},
+}
+
+// auditRequestBlocks render for a stack that can have a utility while the
+// repository has none: the rule asks for the audit that adds the rules.
+var auditRequestBlocks = []profileBlock{
+	{"{{UTILITY_AUDIT_RULE}}", "utilities/audit-request-rule.md", false},
+}
+
+// CanHaveUtilities reports whether stack can produce an installable utility.
+func CanHaveUtilities(stack string) bool {
+	canonical, ok := CanonicalStack(stack)
+	return ok && canonical != "Terraform"
+}
+
 var rustBlocks = []profileBlock{
 	{"{{RUST_AGENTS_RULES}}", "rust/agents.md", false},
 	{"{{RUST_PREP_TOKEN_LINE}}", "rust/build-release-token.md", false},
@@ -287,7 +313,7 @@ var rustBlocks = []profileBlock{
 
 // profileValues fills every profile placeholder: with its asset when the
 // repository's profile needs the text, and with nothing otherwise.
-func profileValues(values map[string]string, stack string, children bool) error {
+func profileValues(values map[string]string, stack string, children, utilities bool) error {
 	fill := func(blocks []profileBlock, include bool) error {
 		for _, block := range blocks {
 			values[block.key] = ""
@@ -318,6 +344,16 @@ func profileValues(values map[string]string, stack string, children bool) error 
 		}
 		const key = "{{CHILD_RELEASES_SECTION}}"
 		values[key] = strings.Replace(values[key], "{{CHILD_PIN_COMMANDS}}\n", string(raw), 1)
+	}
+	capable := CanHaveUtilities(stack)
+	if err := fill(utilityBlocks, capable && utilities); err != nil {
+		return err
+	}
+	if err := fill(flagBlocks, capable); err != nil {
+		return err
+	}
+	if err := fill(auditRequestBlocks, capable && !utilities); err != nil {
+		return err
 	}
 	return fill(rustBlocks, stack == "Rust")
 }

@@ -15,6 +15,7 @@ Here, flavor means the CODE or DOC set of Govna files selected for the repositor
 - `-f, --flavor code|doc` — overlay flavor (default: auto-detect from repo signals).
 - `-s, --stack <name>` — CODE stack (default: inferred from manifests; not accepted with `--flavor doc`).
 - `-c, --check` — report the result without writing an AC; exit `3` when updates or Director choices are needed.
+- `-u, --with-utilities` — compare against the files for a CODE repository with an installable utility, before the first utility exists.
 - `-j, --json` — also print a JSON report to stdout alongside the markdown emission.
 - `-l, --diff-lines <N>` — diff truncation limit (default: 200).
 - `-n, --repo-name <name>` — override repo name (default: basename of the target directory).
@@ -158,6 +159,7 @@ Note: the executable ends after deterministic comparison and emission. JSON rema
 ## Adoption procedure
 
 - Apply this procedure to each routing action the Director resolves for an emitted adoption AC under `AGENTS.md` `### Audit Adoption`.
+- Follow the `### Adoption Instructions` of the emitted AC together with this procedure.
 - Render canon into a scratch directory using `govna render <scratch>`.
 - Inspect changes per `## In Scope` item by running `diff -ru <scratch>/<path> <path>`.
 - Ensure the parent directory exists for each `## In Scope` item: `mkdir -p "$(dirname <path>)"`.

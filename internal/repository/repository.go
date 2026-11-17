@@ -689,3 +689,36 @@ func (a *Access) ChildProfileFiles(current []canon.File) (update, kept []string,
 	}
 	return update, kept, nil
 }
+
+// HasUtility reports whether the repository at root has an installable
+// command-line utility for its CODE stack. A Terraform repository never has one.
+func HasUtility(root, stack string) bool {
+	canonical, _ := canon.CanonicalStack(stack)
+	switch canonical {
+	case "Go":
+		return hasRegularMatch(filepath.Join(root, "cmd", "*", "main.go"))
+	case "Rust":
+		if regularFile(filepath.Join(root, "src", "main.rs")) || hasRegularMatch(filepath.Join(root, "src", "bin", "*")) {
+			return true
+		}
+		return manifestHasLine(filepath.Join(root, "Cargo.toml"), func(line string) bool { return strings.TrimSpace(line) == "[[bin]]" })
+	case "Swift":
+		return manifestHasLine(filepath.Join(root, "Package.swift"), func(line string) bool {
+			return strings.Contains(line, ".executableTarget(") || strings.Contains(line, ".executable(")
+		})
+	}
+	return false
+}
+
+func manifestHasLine(name string, match func(string) bool) bool {
+	data, err := os.ReadFile(name)
+	if err != nil {
+		return false
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if match(line) {
+			return true
+		}
+	}
+	return false
+}

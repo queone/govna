@@ -203,7 +203,7 @@ func TestRenderGoldenManifest(t *testing.T) {
 		expected[fields[0]+"\t"+fields[1]] = fields[2] + "\t" + fields[3]
 	}
 	seen := map[string]bool{}
-	for _, variant := range []string{"doc", "go", "go+children", "rust", "swift", "terraform"} {
+	for _, variant := range []string{"doc", "go", "go+children", "go+utilities", "rust", "swift", "terraform"} {
 		cwd := filepath.Join(t.TempDir(), "widget")
 		if err := os.Mkdir(cwd, 0o755); err != nil {
 			t.Fatal(err)
@@ -217,7 +217,7 @@ func TestRenderGoldenManifest(t *testing.T) {
 				args = append(args, "--module-path", "example.com/widget")
 			}
 			if children != "" {
-				args = append(args, "--with-children")
+				args = append(args, "--with-"+children)
 			}
 			args = append(args, target)
 		}
@@ -479,5 +479,58 @@ func TestRenderWithChildrenAddsTheChildRules(t *testing.T) {
 		if _, errOut, code := render("--with-children", mode); code != 1 || !strings.Contains(errOut, "--with-children does not apply to "+mode) {
 			t.Errorf("%s code=%d stderr=%s", mode, code, errOut)
 		}
+	}
+}
+
+func TestRenderFollowsTheRepositoryProfile(t *testing.T) {
+	render := func(cwd string, args ...string) (map[string]string, string, int) {
+		var stdout, stderr bytes.Buffer
+		target := filepath.Join(t.TempDir(), "out")
+		code := Run(append(args, target), &stdout, &stderr, cwd)
+		out := map[string]string{}
+		for _, path := range []string{"AGENTS.md", "govna/development-guidelines.md", "govna/build-release.md"} {
+			data, _ := os.ReadFile(filepath.Join(target, filepath.FromSlash(path)))
+			out[path] = string(data)
+		}
+		return out, stderr.String(), code
+	}
+	base := []string{"--flavor", "code", "--stack", "go", "--module-path", "example.com/widget"}
+	plain := t.TempDir()
+	files, errOut, code := render(plain, base...)
+	if code != 0 || strings.Contains(files["govna/development-guidelines.md"], "## CLI Usage Formatting") || !strings.Contains(files["AGENTS.md"], "govna audit --with-utilities") {
+		t.Errorf("render without a utility code=%d stderr=%s", code, errOut)
+	}
+	for _, flag := range []string{"-u", "--with-utilities"} {
+		files, errOut, code = render(plain, append(base, flag)...)
+		if code != 0 || !strings.Contains(files["govna/development-guidelines.md"], "\n## CLI Usage Formatting\n") || !strings.Contains(files["govna/build-release.md"], "\n## Independent Utility Versions\n") || strings.Contains(files["AGENTS.md"], "govna audit --with-utilities") {
+			t.Errorf("%s code=%d stderr=%s; the command-line rules are missing", flag, code, errOut)
+		}
+	}
+	// A render from a repository follows that repository's own profile.
+	repo := t.TempDir()
+	for path, content := range map[string]string{
+		"cmd/widget/main.go": "package main\n",
+		"govna/children.txt": "govna-children-v1\n../engine\n",
+	} {
+		full := filepath.Join(repo, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, errOut, code = render(repo, base...)
+	if code != 0 || !strings.Contains(files["govna/development-guidelines.md"], "\n## CLI Usage Formatting\n") || !strings.Contains(files["AGENTS.md"], "\n### Child Repositories\n") {
+		t.Errorf("render from a parent with a utility code=%d stderr=%s", code, errOut)
+	}
+	if _, errOut, code = render(plain, "--flavor", "code", "--stack", "terraform", "--with-utilities"); code != 1 || !strings.Contains(errOut, "--with-utilities applies only to the Go, Rust, and Swift stacks") {
+		t.Errorf("Terraform code=%d stderr=%s", code, errOut)
+	}
+	if _, errOut, code = render(plain, "--flavor", "doc", "--with-utilities"); code != 1 || !strings.Contains(errOut, "--with-utilities applies only to CODE canon") {
+		t.Errorf("DOC code=%d stderr=%s", code, errOut)
+	}
+	if _, errOut, code = render(plain, "--with-utilities", "--child"); code != 1 || !strings.Contains(errOut, "--with-utilities does not apply to --child") {
+		t.Errorf("--child code=%d stderr=%s", code, errOut)
 	}
 }

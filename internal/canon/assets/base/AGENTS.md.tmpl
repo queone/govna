@@ -267,7 +267,7 @@ Note: this rule does not prohibit batching independent commands.
 - Draft no retroactive AC for such a companion change.
 - Draft `govna/ac<N>-<slug>.md` before implementation using `govna/ac-template.md`.
 - Size each AC to its change by the rules in `govna/ac-template.md`.
-
+{{UTILITY_AUDIT_RULE}}
 ### Four-Phase Workflow
 
 - Follow the lifecycle `Draft → Audit → Refine → Implement → Ratify → Package` for every governed AC.
@@ -475,14 +475,7 @@ Note: this rule does not prohibit batching independent commands.
 - Treat each explicitly named migration destination as effective implementation scope with its routed source.
 - Treat `govna/preserve.txt` as effective implementation scope only when a resolved routing outcome requires creating or changing it.
 - Treat `CHANGELOG.md` as effective implementation scope only when a resolved legacy-phrase outcome requires removing an exact phrase.
-- Require the Director to name every migration destination.
-- Apply each resolved routing action while leaving the emitted AC stub unchanged.
 - Follow `govna/audit.md` `## Adoption procedure` for each resolved routing action.
-- Preserve the boundary heading and every line below it as repo-owned content.
-- Resolve an unresolved emitted repository check in chat.
-- Cite repository evidence when choosing `Not applicable` for the repository check.
-- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.
-- Do not re-run `govna audit` as an implementation gate for the emitted AC.
 
 ## File-Change Discipline
 
@@ -636,9 +629,7 @@ Note: the Director triggers those actions; Ratify names what is pending.
 
 ### Code Style and Conventions
 
-- Pair every new CLI flag with a leading one-letter short form and a long-form alias.
-- Migrate existing flags when their code is next touched.
-- Follow existing repo patterns unless an approved improvement says otherwise.
+{{CLI_FLAG_RULES}}- Follow existing repo patterns unless an approved improvement says otherwise.
 - Comment public functions.
 - Avoid product or vendor names in identifiers.
 - Use product or vendor names only when an identifier names a real product-specific artifact or compatibility surface.

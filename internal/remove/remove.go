@@ -97,7 +97,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		module = repository.ModulePath(cwd)
 	}
 	name := repository.Name(cwd, module, cfg.RepoName)
-	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: len(children) > 0})
+	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: len(children) > 0, Utilities: repository.HasUtility(cwd, stack)})
 	if err != nil {
 		fmt.Fprintf(stderr, "rm: %v\n", err)
 		return 1
@@ -229,7 +229,7 @@ func runChild(arg string, children []string, flavor canon.Flavor, stdout, stderr
 		if stack == "Go" {
 			module = repository.ModulePath(cwd)
 		}
-		current, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: repository.Name(cwd, module, ""), Stack: stack, ModulePath: module, Children: true})
+		current, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: repository.Name(cwd, module, ""), Stack: stack, ModulePath: module, Children: true, Utilities: repository.HasUtility(cwd, stack)})
 		if err != nil {
 			access.Close()
 			fmt.Fprintf(stderr, "rm: %v\n", err)
