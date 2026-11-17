@@ -84,6 +84,9 @@ type Report struct {
 	IdentifierFindings []IdentifierFinding `json:"identifier_findings,omitempty"`
 	selectedStack      string
 	repoCheck          string
+	// withChildren reports that the repository declares a child, so every
+	// render that this report names needs --with-children.
+	withChildren bool
 }
 
 type validationOutcomeKind uint8
@@ -135,7 +138,7 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"State what changed after the Package evidence under `Red-teamed:`.",
 		"State the remaining check that needs a Director action or a new Director authorization, or that none remains, under `Not checked:`.",
 		"Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction.",
-		"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
+		"Exempt only an eligible bounded completeness correction and an eligible decision re-entry from a fresh Implement action instruction.",
 		"Resume Refine after the Director resolves every blocking finding and decision.",
 		"Stop integrated audit adoption before Implement.",
 		"Authorize the bounded scratch-review procedure in `govna/audit.md` from the original explicit `govna audit` request.",
@@ -154,14 +157,6 @@ var sharedContentCoherenceRules = []contentCoherenceRule{{
 		"Require the emitted AC marker versions to match the recorded detailed version.",
 		"Render the selected canon into that scratch directory once with the resolved executable.",
 		"Compare every actionable path through the emitted `### Audit Review` instructions.",
-	},
-}, {
-	Reference: "govna/canon-cycle.md",
-	Required: []string{
-		"Exercise every rendered profile through ordinary non-JSON `govna audit` at least once.",
-		"Complete one bounded scratch review for every actionable emitted AC.",
-		"Exercise an oversized projected batch before another Implement.",
-		"Exercise oversized, partial, and partly unaccepted batches before Package prep.",
 	},
 }}
 
@@ -437,7 +432,15 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 		module = repository.ModulePath(root)
 	}
 	name := repository.Name(root, module, cfg.RepoName)
-	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module})
+	children, childrenPresent, err := access.ReadChildren()
+	if err != nil {
+		return report, false, err
+	}
+	if childrenPresent && flavor == canon.Doc {
+		return report, false, usererr.Errorf("%s is present in a DOC repository, and DOC repositories have no child repositories; delete %s and re-run audit", repository.ChildRegistryPath, repository.ChildRegistryPath)
+	}
+	report.withChildren = len(children) > 0
+	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: report.withChildren})
 	if err != nil {
 		return report, false, err
 	}
@@ -447,13 +450,6 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	}
 	if err := checkCoherence(canonMap); err != nil {
 		return report, false, err
-	}
-	children, childrenPresent, err := access.ReadChildren()
-	if err != nil {
-		return report, false, err
-	}
-	if childrenPresent && flavor == canon.Doc {
-		return report, false, usererr.Errorf("%s is present in a DOC repository, and DOC repositories have no child repositories; delete %s and re-run audit", repository.ChildRegistryPath, repository.ChildRegistryPath)
 	}
 	preserve, err := parsePreserve(access.ReadOptional(preservePath))
 	if err != nil {
@@ -1446,8 +1442,12 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 		b.WriteString("\n")
 	}
-	writeAuditReview(&b, report.selectedStack, sync, migrate, review)
-	b.WriteString("### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `govna render`.\n")
+	writeAuditReview(&b, report.selectedStack, report.withChildren, sync, migrate, review)
+	renderCommand := "govna render"
+	if report.withChildren {
+		renderCommand = "govna render --with-children"
+	}
+	fmt.Fprintf(&b, "### Adoption Instructions\n\n- Resolve every Director choice in chat.\n- Leave this generated AC unchanged.\n- Create a temporary copy of the embedded Govna files with `%s`.\n", renderCommand)
 	if hasChildFile(sync, review) {
 		b.WriteString("- Create a temporary copy of the child files with `govna render --child`.\n")
 	}
@@ -1597,12 +1597,15 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 // blank line separates each pair of adjacent plan.md IE items.
 const ideaSpacingCheck = `awk '{ sub(/\r$/, "") } /^- IE[0-9]+: / { if (item && blanks != 1) bad = 1; item = 1; blanks = 0; next } /^$/ { if (item) blanks++; next } /^[ \t]/ { if (item && !blanks) next } { item = 0; blanks = 0 } END { exit bad }'`
 
-func writeAuditReview(b *strings.Builder, stack string, groups ...[]FileResult) {
+func writeAuditReview(b *strings.Builder, stack string, withChildren bool, groups ...[]FileResult) {
 	b.WriteString("### Audit Review\n\n")
 	b.WriteString("- Use the same resolved Govna executable that emitted this AC.\n")
 	b.WriteString("- Verify its detailed version output matches this AC's guarded marker.\n")
 	b.WriteString("- Create one unique system-temporary scratch directory outside this repository.\n")
 	b.WriteString("- Render the selected canon into that directory once with the resolved executable.\n")
+	if withChildren {
+		b.WriteString("- Pass `--with-children` to that render, because this repository declares a child repository.\n")
+	}
 	b.WriteString("- Verify the rendered `govna/canon-baseline.txt` canon version matches this AC's guarded marker.\n")
 	if hasChildFile(groups...) {
 		fmt.Fprintf(b, "- Render the child files once into a second scratch directory with `govna render --child --stack %s <child-scratch>`.\n", stack)

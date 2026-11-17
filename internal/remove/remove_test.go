@@ -366,6 +366,23 @@ func declareChildren(t *testing.T, root string, names ...string) []string {
 	if err := os.WriteFile(filepath.Join(root, "govna", "children.txt"), repository.FormatChildren(entries), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A parent that declares a child carries the child profile text.
+	withChildren, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget", Children: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := map[string]bool{"govna/canon-baseline.txt": true}
+	for _, path := range canon.ChildProfilePaths() {
+		profile[path] = true
+	}
+	for _, file := range withChildren {
+		if !profile[file.Path] {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(file.Path)), file.Content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return entries
 }
 
@@ -420,7 +437,27 @@ func TestRemoveChildDropsOneDeclaredChild(t *testing.T) {
 		t.Fatalf("child removal AC is missing or unguarded: %v", err)
 	}
 	inScope, _, _ := strings.Cut(string(data)[strings.Index(string(data), "## In Scope"):], "## Out Of Scope")
-	if strings.Count(inScope, "\n- ") != 2 || !strings.Contains(inScope, "`"+entries[0]+"/AGENTS.md` — rewrite to the orphan note") || !strings.Contains(inScope, "`govna/children.txt` — remove entry `"+entries[0]+"`") {
+	// Dropping the only child also removes the child rules from the parent.
+	for _, path := range append(canon.ChildProfilePaths(), "govna/canon-baseline.txt") {
+		if !strings.Contains(inScope, "- `"+path+"` — update from the temporary copy; the parent loses the child rules.\n") {
+			t.Errorf("child removal In Scope omits the parent profile file %s:\n%s", path, inScope)
+		}
+	}
+	for _, want := range []string{
+		"It also removes the child rules from the parent's contract and documents. Every other file stays unchanged.",
+		"### Parent Profile Update\n",
+		"- Complete this section after the orphan rewrite and the registry change.\n",
+		"- Create a temporary copy of the parent's Govna files with `govna render <scratch>`.\n",
+		"- Keep that boundary heading and every line below it.\n",
+		"**AT3** [Automated] [Pre-release gate] — Verify each updated parent file matches the temporary copy above its registered boundary.\n",
+		"**AT4** [Automated] [Pre-release gate] — Verify every line from the boundary heading down is unchanged in each updated parent file.\n",
+		"**AT5** [Automated] [Pre-release gate] — Verify each updated file's line in `govna/canon-baseline.txt` equals its line in the same temporary copy's baseline.\n",
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("child removal AC omits %q", want)
+		}
+	}
+	if strings.Count(inScope, "\n- ") != 7 || !strings.Contains(inScope, "`"+entries[0]+"/AGENTS.md` — rewrite to the orphan note") || !strings.Contains(inScope, "`govna/children.txt` — remove entry `"+entries[0]+"`") {
 		t.Fatalf("child removal In Scope:\n%s", inScope)
 	}
 	want, err := os.ReadFile("testdata/child-removal-golden.md")
@@ -428,7 +465,7 @@ func TestRemoveChildDropsOneDeclaredChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := buildChildAC("govna/ac7-govna-rm-child-engine-"+testCanonV+".md", testProgramVersion, "../engine"); got != string(want) {
+	if got := buildChildAC("govna/ac7-govna-rm-child-engine-"+testCanonV+".md", testProgramVersion, "../engine", nil); got != string(want) {
 		t.Fatalf("child removal golden mismatch\n%s", got)
 	}
 	stderr.Reset()
@@ -459,5 +496,65 @@ func TestRemoveRejectsChildRegistryInDocRepository(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := Run(nil, &stdout, &stderr, root, testProgramVersion); code != 1 || !strings.Contains(stderr.String(), "govna/children.txt is present in a DOC repository, and DOC repositories have no child repositories; delete govna/children.txt and re-run rm") {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestRemoveChildLeavesTheParentProfileToTheRemovalAC(t *testing.T) {
+	root := fixture(t)
+	entries := declareChildren(t, root, "engine", "tools")
+	read := func() map[string]string {
+		out := map[string]string{}
+		for _, path := range append(canon.ChildProfilePaths(), "govna/canon-baseline.txt") {
+			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			out[path] = string(data)
+		}
+		return out
+	}
+	before := read()
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"--child", entries[0]}, &stdout, &stderr, root, testProgramVersion); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	stub, err := os.ReadFile(filepath.Join(root, "govna", "ac1-govna-rm-child-engine-"+testCanonV+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(stub), "Parent Profile Update") {
+		t.Error("dropping one of two children changes the parent profile")
+	}
+	for path, want := range before {
+		if read()[path] != want {
+			t.Errorf("rm --child changed the parent file %s", path)
+		}
+	}
+}
+
+func TestRemoveLastChildStopsBeforeWritingForAnUnsafeProfileFile(t *testing.T) {
+	root := fixture(t)
+	entries := declareChildren(t, root, "engine")
+	path := filepath.Join(root, "AGENTS.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, bytes.Replace(data, []byte("\n## Project Rules\n"), []byte("\n"), 1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"--child", entries[0]}, &stdout, &stderr, root, testProgramVersion); code != 1 || !strings.Contains(stderr.String(), "AGENTS.md lacks its \"## Project Rules\" heading") {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if matches, _ := filepath.Glob(filepath.Join(root, "govna", "ac*-govna-rm-child-*.md")); len(matches) != 0 {
+		t.Errorf("rm wrote a removal AC: %v", matches)
+	}
+	if err := os.WriteFile(path, append([]byte("local edit\n"), data...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if code := Run([]string{"--child", entries[0]}, &stdout, &stderr, root, testProgramVersion); code != 1 || !strings.Contains(stderr.String(), "AGENTS.md differs from this executable's Govna files") {
+		t.Fatalf("stale profile code=%d stderr=%s", code, stderr.String())
 	}
 }

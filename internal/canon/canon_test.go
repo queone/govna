@@ -89,7 +89,7 @@ func TestEfficiencyPurposeRenders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			rationale := fileText(t, files, "govna/operator-contract-rationale.md")
+			rationale := repoFile(t, "arch.md")
 			if count := strings.Count(rationale, efficiencyPurposeDefinition); count != 1 {
 				t.Errorf("contract purpose definition count=%d, want 1", count)
 			}
@@ -266,29 +266,15 @@ func TestRendererErrorsExplainTheMissingRequirement(t *testing.T) {
 
 func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	root := filepath.Join("..", "..")
-	for _, tc := range []struct {
-		authority string
-		assets    []string
-	}{
-		{"govna/ac-template.md", []string{"assets/overlays/code/files/govna/ac-template.md.tmpl"}},
-		{"govna/audit.md", []string{"assets/overlays/code/files/govna/audit.md.tmpl"}},
-		{"govna/canon-cycle.md", []string{"assets/overlays/code/files/govna/canon-cycle.md.tmpl", "assets/overlays/doc/files/govna/canon-cycle.md.tmpl"}},
-		{"govna/development-cycle.md", []string{"assets/overlays/code/files/govna/development-cycle.md.tmpl"}},
-		{"govna/operator-contract-rationale.md", []string{"assets/overlays/code/files/govna/operator-contract-rationale.md.tmpl", "assets/overlays/doc/files/govna/operator-contract-rationale.md.tmpl"}},
-		{"govna/roles.md", []string{"assets/overlays/code/files/govna/roles.md.tmpl"}},
-	} {
-		want, err := os.ReadFile(filepath.Join(root, tc.authority))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, asset := range tc.assets {
-			got, err := fs.ReadFile(assets, asset)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if string(got) != string(want) {
-				t.Errorf("%s does not mirror %s", asset, tc.authority)
-			}
+	// This repository is a Go parent without children, so each of its canon
+	// documents equals the matching render.
+	goFiles, err := Render(Config{Flavor: Code, RepoName: "govna", Stack: "Go", ModulePath: "github.com/queone/govna"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, authority := range []string{"govna/ac-template.md", "govna/audit.md", "govna/canon-cycle.md", "govna/development-cycle.md", "govna/README.md", "govna/roles.md"} {
+		if fileText(t, goFiles, authority) != repoFile(t, authority) {
+			t.Errorf("the Go render of %s does not mirror the repository copy", authority)
 		}
 	}
 	roles, err := os.ReadFile(filepath.Join(root, "govna", "roles.md"))
@@ -324,7 +310,7 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	}
 	wantZone, _, _ := strings.Cut(string(agents), "## Project Rules\n")
 	gotParts := strings.Split(string(base), "## Project Rules\n")
-	if gotParts[0] != wantZone {
+	if zone, _, _ := strings.Cut(fileText(t, goFiles, "AGENTS.md"), "## Project Rules\n"); zone != wantZone {
 		t.Error("base AGENTS canon zone differs from authority")
 	}
 	if strings.TrimSpace(gotParts[1]) != "" {
@@ -387,26 +373,26 @@ var auditEmissionRules = []string{
 	"<N>. **Repository check**: Which command should run after the selected file updates, or what repository evidence shows that no command applies?",
 }
 
+// profilePlaceholder matches a placeholder that the render fills with profile
+// text or with nothing.
+var profilePlaceholder = regexp.MustCompile(`\{\{(CHILD|RUST)_[A-Z_]+\}\}`)
+
 // docAuditText derives the DOC audit document from the govna/audit.md
-// authority by removing the CODE-only child repository text.
+// authority. The child repository text is profile text, so a repository
+// without children and a DOC repository hold the same audit document.
 func docAuditText(t *testing.T, authority string) string {
 	t.Helper()
-	text := authority
-	for _, codeOnly := range []struct {
-		pattern     string
-		replacement string
-	}{
-		{"(?m)^\\| `manual-fix` \\|.*\n", ""},
-		{"(?m)^Accept an entry that starts with `\\.\\.`.*\n\n", ""},
-		{"(?s)## Child repositories\n.*?(## Canon baseline manifest\n)", "$1"},
-	} {
-		re := regexp.MustCompile(codeOnly.pattern)
-		if count := len(re.FindAllStringIndex(text, -1)); count != 1 {
-			t.Fatalf("govna/audit.md CODE-only text %q count=%d, want 1", codeOnly.pattern, count)
-		}
-		text = re.ReplaceAllString(text, codeOnly.replacement)
+	return authority
+}
+
+// repoFile reads one file of this repository.
+func repoFile(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(path)))
+	if err != nil {
+		t.Fatal(err)
 	}
-	return text
+	return string(content)
 }
 
 func TestAuditValidationContract(t *testing.T) {
@@ -428,11 +414,12 @@ func TestAuditValidationContract(t *testing.T) {
 		}
 		if authority == nil {
 			authority = content
-		} else if string(content) != want {
+		} else if profilePlaceholder.ReplaceAllString(string(content), "") != want {
 			t.Errorf("%s does not mirror govna/audit.md", path)
 		}
+		// A rule that specifies the tool lives in govna/canon-spec.md instead.
 		for _, required := range auditValidationRules {
-			if strings.Count(string(content), required) != 1 {
+			if strings.Count(string(content), required)+strings.Count(repoFile(t, "govna/canon-spec.md"), required) != 1 {
 				t.Errorf("%s requires one occurrence of %q", path, required)
 			}
 		}
@@ -593,8 +580,7 @@ func TestAgentReleaseContract(t *testing.T) {
 		"Interpret standalone `release` or `rel` only as an agent-run release under `### Agent Release`.",
 		"as the named-batch Package form.",
 	}
-	codeBlock := strings.Replace(docBlock, "- Run no other git or GitHub write under the keyword.\n",
-		"- Run no other git or GitHub write under the keyword except each child release under `### Child Repositories`.\n", 1)
+	codeBlock := docBlock
 	assertContract := func(t *testing.T, name string, flavor Flavor, agents string, governance map[string]string) {
 		t.Helper()
 		block := docBlock
@@ -617,7 +603,7 @@ func TestAgentReleaseContract(t *testing.T) {
 
 	root := filepath.Join("..", "..")
 	rootFiles := map[string]string{}
-	for _, path := range []string{"AGENTS.md", "govna/roles.md", "govna/build-release.md", "govna/code-stacks.md"} {
+	for _, path := range []string{"AGENTS.md", "govna/roles.md", "govna/build-release.md", "govna/canon-spec.md"} {
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			t.Fatal(err)
@@ -645,7 +631,7 @@ func TestAgentReleaseContract(t *testing.T) {
 
 func TestSupportedCODEStackContract(t *testing.T) {
 	root := filepath.Join("..", "..")
-	for _, path := range []string{"govna/code-stacks.md", "internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl"} {
+	for _, path := range []string{"govna/canon-spec.md"} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			t.Fatal(err)
@@ -689,17 +675,13 @@ func TestCandidateCanonReviewContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, rule := range []string{
-		"- Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.",
+		"- Run the consumer-equivalent candidate-canon review in `govna/canon-maintenance.md` before completing any canon change.",
 	} {
 		if strings.Count(string(agents), rule) != 1 {
 			t.Errorf("AGENTS.md requires one maintainer gate: %s", rule)
 		}
 	}
-	for _, path := range []string{
-		"govna/canon-cycle.md",
-		"internal/canon/assets/overlays/code/files/govna/canon-cycle.md.tmpl",
-		"internal/canon/assets/overlays/doc/files/govna/canon-cycle.md.tmpl",
-	} {
+	for _, path := range []string{"govna/canon-maintenance.md"} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			t.Fatal(err)
@@ -983,11 +965,7 @@ func TestRatifiedReleaseBatchContract(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{
-		"govna/canon-cycle.md",
-		"internal/canon/assets/overlays/code/files/govna/canon-cycle.md.tmpl",
-		"internal/canon/assets/overlays/doc/files/govna/canon-cycle.md.tmpl",
-	} {
+	for _, path := range []string{"govna/canon-maintenance.md"} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			t.Fatal(err)
@@ -1024,8 +1002,9 @@ func TestEmptyReleaseBatchFlavorRules(t *testing.T) {
 	const checklistEvidence = "   - Use the successful final full build as current Package evidence for a direct batch."
 	const acceptWithout = "Accept a message without AC references."
 	for path, count := range map[string]int{
-		"govna/build-release.md": 1,
-		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl": 1,
+		"govna/canon-spec.md":    1,
+		"govna/build-release.md": 0,
+		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl": 0,
 		"internal/canon/assets/overlays/doc/files/govna/release.md.tmpl":        0,
 	} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -1329,7 +1308,7 @@ func TestGovernanceScenarios(t *testing.T) {
 		"- Cover every passing automated acceptance test in one line of that report.",
 		"- Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.",
 		"- Enter Refine automatically when Audit completes with only advancement-eligible findings.",
-		"## Why Clean Ratify Reuses Implement Evidence",
+		"**Why Clean Ratify Reuses Implement Evidence.**",
 	}
 	for _, profile := range profiles {
 		t.Run(profile.name, func(t *testing.T) {
@@ -1341,7 +1320,7 @@ func TestGovernanceScenarios(t *testing.T) {
 				fileText(t, files, "AGENTS.md"),
 				fileText(t, files, "govna/roles.md"),
 				fileText(t, files, profile.cyclePath),
-				fileText(t, files, "govna/operator-contract-rationale.md"),
+				repoFile(t, "arch.md"),
 			}, "\n")
 			for _, rule := range required {
 				if !strings.Contains(contract, rule) {
@@ -1492,7 +1471,7 @@ func TestPhaseEligibleACRoutingRules(t *testing.T) {
 
 func TestPhaseAuthorizationMatrix(t *testing.T) {
 	const refineRule = "- Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction."
-	const implementRule = "- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction."
+	const implementRule = "- Exempt only an eligible bounded completeness correction and an eligible decision re-entry from a fresh Implement action instruction."
 	const retiredRule = "Exempt only an eligible bounded completeness correction under ### Four-Phase Workflow from a fresh Refine or Implement action instruction."
 
 	root := filepath.Join("..", "..")
@@ -1546,9 +1525,9 @@ func TestPhaseAuthorizationMatrix(t *testing.T) {
 		"- Require fresh approval for every new action.",
 		"- Treat an explicit request to run govna audit as authorization for integrated audit adoption under ### Audit Adoption.",
 		"- Pause after Audit until the Director requests Refine unless integrated audit adoption or eligible automatic Refine entry applies.",
-		"- Pause after Refine and await explicit Director implementation-ready confirmation to Implement.",
+		"- Pause after Refine and await explicit Director implementation-ready confirmation to Implement, except for an eligible bounded completeness correction or an eligible decision re-entry.",
 		"- Apply the bounded completeness exception only after the Director authorizes Implement.",
-		"- Prevent the exception from authorizing initial Implement, Audit, Ratify, Package, release preparation, publication, delegation, or commits.",
+		"- Prevent the exception and a decision re-entry from authorizing initial Implement, Audit, Ratify, Package, release preparation, publication, delegation, or commits.",
 		"- Treat only explicit Director action language as authorization to enter the named next action.",
 		"- Treat a compound request as authorization for only the named action.",
 		"- Pause before any unnamed action.",
@@ -1705,7 +1684,8 @@ func TestProductToolingStackBoundaries(t *testing.T) {
 	}
 
 	goAgents := fileText(t, goFiles, "AGENTS.md")
-	if !strings.Contains(goAgents, "Rust prep") || strings.Contains(goAgents, "CODE stack provides no validation-token support") {
+	rustAgents := fileText(t, rustFiles, "AGENTS.md")
+	if strings.Contains(goAgents, "Rust prep") || !strings.Contains(rustAgents, "Rust prep") || strings.Contains(rustAgents, "CODE stack provides no validation-token support") {
 		t.Fatal("rendered CODE governance is not Rust-token-specific")
 	}
 
@@ -1750,6 +1730,9 @@ func dedupProfiles() []dedupProfile {
 			config.ModulePath = "example.com/widget"
 		}
 		profiles = append(profiles, dedupProfile{name: "CODE/" + stack, config: config, cyclePath: "govna/development-cycle.md"})
+		// A parent that declares a child renders the child profile text too.
+		config.Children = true
+		profiles = append(profiles, dedupProfile{name: "CODE/" + stack + "+children", config: config, cyclePath: "govna/development-cycle.md"})
 	}
 	return profiles
 }
@@ -2018,7 +2001,7 @@ func TestRepeatDetectorsCatchInjectedRepeats(t *testing.T) {
 	}
 	longParaphrase := []governanceRule{
 		{path: "govna/build-release.md", text: "Validate every compiled utility result before release-metadata writes in every supported stack."},
-		{path: "govna/code-stacks.md", text: "Validate each compiled utility result before release-metadata writes in every supported stack."},
+		{path: "govna/canon-spec.md", text: "Validate each compiled utility result before release-metadata writes in every supported stack."},
 	}
 	for index := range longParaphrase {
 		longParaphrase[index].words = contentWords(longParaphrase[index].text)
@@ -2033,8 +2016,8 @@ func TestRepeatDetectorsCatchInjectedRepeats(t *testing.T) {
 		{path: "AGENTS.md", text: "Run `./build.sh` after prep."},
 		{path: "AGENTS.md", text: "Treat the snapshot as current."},
 		{path: "AGENTS.md", text: "Treat the snapshot as not current."},
-		{path: "govna/code-stacks.md", text: "Validate every compiled utility's help output before installation during release compilation."},
-		{path: "govna/code-stacks.md", text: "Validate every compiled utility's help output after installation during release compilation."},
+		{path: "govna/canon-spec.md", text: "Validate every compiled utility's help output before installation during release compilation."},
+		{path: "govna/canon-spec.md", text: "Validate every compiled utility's help output after installation during release compilation."},
 		{path: "AGENTS.md", text: "Use isolated binary smoke commands before validation only when they do not claim repository health."},
 		{path: "AGENTS.md", text: "Use isolated binary smoke commands before validation when they do not claim repository health."},
 		{path: "AGENTS.md", text: "Rerun applicable validation before prep when Package evidence is missing or stale for the release batch."},
@@ -2056,13 +2039,12 @@ func TestPrepAppendixDescribesEveryStack(t *testing.T) {
 			if stack == "Go" {
 				config.ModulePath = "example.com/widget"
 			}
-			files, err := Render(config)
-			if err != nil {
+			if _, err := Render(config); err != nil {
 				t.Fatal(err)
 			}
-			_, appendix, ok := strings.Cut(fileText(t, files, "govna/build-release.md"), "### Appendix: what prep does\n\n")
+			_, appendix, ok := strings.Cut(repoFile(t, "govna/canon-spec.md"), "## What prep does\n\n")
 			if !ok {
-				t.Fatal("govna/build-release.md omits the prep appendix")
+				t.Fatal("govna/canon-spec.md omits the prep description")
 			}
 			opening, _, _ := strings.Cut(appendix, "\n\n")
 			if strings.Contains(opening, "Go `./build.sh prep` performs bookkeeping only") {
@@ -2145,13 +2127,13 @@ func TestCheckModeDocumentation(t *testing.T) {
 			t.Fatal(err)
 		}
 		documents[name] = map[string]string{}
-		for _, path := range []string{"govna/audit.md", "govna/operator-contract-rationale.md", "README.md"} {
+		for _, path := range []string{"govna/audit.md", "README.md"} {
 			documents[name][path] = fileText(t, files, path)
 		}
 	}
 	root := filepath.Join("..", "..")
 	documents["repository"] = map[string]string{}
-	for _, path := range []string{"govna/audit.md", "govna/operator-contract-rationale.md", "README.md", "arch.md"} {
+	for _, path := range []string{"govna/audit.md", "README.md", "arch.md"} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			t.Fatal(err)
@@ -2162,12 +2144,16 @@ func TestCheckModeDocumentation(t *testing.T) {
 		if count := strings.Count(docs["govna/audit.md"], stackLine+checkLine); count != 1 {
 			t.Errorf("%s govna/audit.md check flag line after stack line count=%d, want 1", name, count)
 		}
-		if count := strings.Count(docs["govna/audit.md"], checkParagraph); count != 1 {
-			t.Errorf("%s govna/audit.md check-mode paragraph count=%d, want 1", name, count)
+		// The check-mode paragraph specifies the tool, so no consumer receives it.
+		if count := strings.Count(docs["govna/audit.md"], checkParagraph); count != 0 {
+			t.Errorf("%s govna/audit.md check-mode paragraph count=%d, want 0", name, count)
 		}
-		rationale := docs["govna/operator-contract-rationale.md"]
+		if count := strings.Count(repoFile(t, "govna/canon-spec.md"), checkParagraph); count != 1 {
+			t.Errorf("govna/canon-spec.md check-mode paragraph count=%d, want 1", count)
+		}
+		rationale := documents["repository"]["arch.md"]
 		if count := strings.Count(rationale, efficiencyPurposeDefinition); count != 1 || strings.Contains(rationale, legacyPurposeDefinition) {
-			t.Errorf("%s govna/operator-contract-rationale.md purpose definition count=%d, legacy=%t", name, count, strings.Contains(rationale, legacyPurposeDefinition))
+			t.Errorf("%s arch.md purpose definition count=%d, legacy=%t", name, count, strings.Contains(rationale, legacyPurposeDefinition))
 		}
 		if count := strings.Count(docs["README.md"], phaseSentence); count != 1 {
 			t.Errorf("%s README.md check-mode phase sentence count=%d, want 1", name, count)
@@ -2281,14 +2267,12 @@ func TestStaticcheckPinRulesRenderOnce(t *testing.T) {
 	}
 	type check struct{ name, text, want string }
 	checks := []check{
-		{"rendered govna/code-stacks.md", fileText(t, files, "govna/code-stacks.md"), stackRule},
 		{"rendered govna/development-guidelines.md", fileText(t, files, "govna/development-guidelines.md"), practice},
 	}
 	for path, want := range map[string]string{
-		"govna/code-stacks.md": stackRule,
-		"internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl": stackRule,
-		"govna/development-guidelines.md":                                     practice,
-		"internal/canon/assets/stack-guidelines/go.md":                        practice,
+		"govna/canon-spec.md":                          stackRule,
+		"govna/development-guidelines.md":              practice,
+		"internal/canon/assets/stack-guidelines/go.md": practice,
 	} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
@@ -2313,14 +2297,12 @@ func TestGoToolchainPinRulesRenderOnce(t *testing.T) {
 	}
 	type check struct{ name, text, want string }
 	checks := []check{
-		{"rendered govna/code-stacks.md", fileText(t, files, "govna/code-stacks.md"), stackRule},
 		{"rendered govna/development-guidelines.md", fileText(t, files, "govna/development-guidelines.md"), practice},
 	}
 	for path, want := range map[string]string{
-		"govna/code-stacks.md": stackRule,
-		"internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl": stackRule,
-		"govna/development-guidelines.md":                                     practice,
-		"internal/canon/assets/stack-guidelines/go.md":                        practice,
+		"govna/canon-spec.md":                          stackRule,
+		"govna/development-guidelines.md":              practice,
+		"internal/canon/assets/stack-guidelines/go.md": practice,
 	} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
@@ -2397,7 +2379,7 @@ func TestChildRepositoryRulesRenderForCodeOnly(t *testing.T) {
 		"- Follow `govna/development-cycle.md` `## Child Repositories` for the session procedure.\n" +
 		"- Change child membership only through `govna apply --child` and `govna rm --child`.\n"
 	for _, stack := range Stacks() {
-		files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget"})
+		files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget", Children: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2476,12 +2458,12 @@ func sectionText(t *testing.T, text, heading string) string {
 func TestGoWorkspaceRecipeSetsTheGoModGoLine(t *testing.T) {
 	const recipe = "- Use `go work init . <child>` for a child override.\n" +
 		"- Set the `go.work` `go` line to the `go.mod` `go` line with `go work edit -go=<version>`.\n"
-	files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
+	files, err := Render(Config{Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget", Children: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count := strings.Count(fileText(t, files, "govna/code-stacks.md"), recipe); count != 1 {
-		t.Fatalf("code-stacks.md Go workspace recipe count=%d, want 1", count)
+	if count := strings.Count(fileText(t, files, "govna/build-release.md"), recipe); count != 1 {
+		t.Fatalf("build-release.md Go workspace recipe count=%d, want 1", count)
 	}
 }
 
@@ -2544,14 +2526,502 @@ func TestRenderedIESpacingRuleLivesInSyncedFiles(t *testing.T) {
 			t.Errorf("%v %s plan.md lacks the linked preamble %q", config.Flavor, config.Stack, preamble)
 		}
 		const commitment = "5. **Stub rules.**\n   - Keep rules out of the `plan.md` and `arch.md` stubs.\n   - Place each such rule in a synced canon file.\n"
-		if count := strings.Count(fileText(t, files, "govna/canon-cycle.md"), commitment); count != 1 {
-			t.Errorf("%v %s canon-cycle.md holds the stub-rules commitment %d times, want 1", config.Flavor, config.Stack, count)
+		if count := strings.Count(repoFile(t, "govna/canon-maintenance.md"), commitment); count != 1 {
+			t.Errorf("%v %s canon-maintenance.md holds the stub-rules commitment %d times, want 1", config.Flavor, config.Stack, count)
 		}
 		audit := fileText(t, files, "govna/audit.md")
-		for _, want := range []string{"\n## IE spacing\n", "`## IE spacing` names the one exception for `plan.md`.", "- Put exactly one blank line between each pair of adjacent IE items in a `plan.md` listed under `### IE items to space`.\n"} {
+		for _, want := range []string{"\n## IE spacing\n", "`## IE spacing` names the one exception for `plan.md`."} {
+			if count := strings.Count(repoFile(t, "govna/canon-spec.md"), want); count != 1 {
+				t.Errorf("govna/canon-spec.md holds %q %d times, want 1", want, count)
+			}
+		}
+		for _, want := range []string{"- Put exactly one blank line between each pair of adjacent IE items in a `plan.md` listed under `### IE items to space`.\n"} {
 			if count := strings.Count(audit, want); count != 1 {
 				t.Errorf("%v %s audit.md holds %q %d times, want 1", config.Flavor, config.Stack, want, count)
 			}
+		}
+	}
+}
+
+// governanceText returns the rendered AGENTS.md and govna/*.md files by path.
+func governanceText(files []File) map[string]string {
+	out := map[string]string{}
+	for _, file := range files {
+		if file.Path == "AGENTS.md" || (strings.HasPrefix(file.Path, "govna/") && strings.HasSuffix(file.Path, ".md")) {
+			out[file.Path] = string(file.Content)
+		}
+	}
+	return out
+}
+
+// headingSection returns the text of one AGENTS.md section, from its heading
+// to the next heading of the same or a higher level.
+func headingSection(t *testing.T, text, heading string) string {
+	t.Helper()
+	_, after, ok := strings.Cut(text, "\n"+heading+"\n")
+	if !ok {
+		t.Fatalf("missing heading %q", heading)
+	}
+	end := len(after)
+	stops := []string{"\n## "}
+	if strings.HasPrefix(heading, "### ") {
+		stops = append(stops, "\n### ")
+	}
+	for _, stop := range stops {
+		if index := strings.Index(after, stop); index >= 0 && index < end {
+			end = index
+		}
+	}
+	return after[:end]
+}
+
+// embeddedText returns every embedded canon asset by path.
+func embeddedText(t *testing.T) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := fs.WalkDir(assets, "assets", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		content, err := fs.ReadFile(assets, path)
+		if err != nil {
+			return err
+		}
+		out[path] = string(content)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// audienceSplitRules lists each canon rule that the audience split added or
+// reworded, by the AGENTS.md section that owns it.
+func audienceSplitRules(cycle string) map[string][]string {
+	return map[string][]string{
+		"## Governed Sections": {
+			"Add repository rules only under `## Project Rules`.",
+		},
+		"### Session Entry": {
+			"Read `govna/roles.md` before the first substantive govna-governed action of a session.",
+		},
+		"### Rule Review": {
+			"Run a rule-review after authorized governance edits and before Implement completion.",
+			"Review each touched section for a rule to retire, merge, or enforce mechanically before adding a rule.",
+			"Report the review result in one line only when it finds a rule to retire, merge, or enforce mechanically.",
+			"Name each read trigger as a state or event that an agent can recognize without reading the target document.",
+			"Label every proposal that loosens an approval or scope boundary.",
+			"Treat a canon rule that this repository can never act on as rule-review evidence.",
+			"Treat a rule that slowed or misdirected the active work, with an observed consequence, as rule-review evidence.",
+			"Test representative triggers, authorization boundaries, allowed actions, exceptions, and exit conditions after governance restructuring.",
+			"Record each governance-restructuring scenario input and expected outcome in the closure-audit record.",
+		},
+		"### Four-Phase Workflow": {
+			"Read `" + cycle + "` `### Implement Evidence Snapshot` before capturing the snapshot.",
+			"Read `" + cycle + "` `### Closure Audit` before the closure audit.",
+			"Pause after Refine and await explicit Director implementation-ready confirmation to Implement, except for an eligible bounded completeness correction or an eligible decision re-entry.",
+			"Define a decision re-entry as a return to Implement after a Refine that records only decisions the Director gave during that Implement.",
+			"Require the Director's message to name each change that the Refine records.",
+			"Require a clean Pre-Implementation Verification before a decision re-entry.",
+			"Re-enter Implement automatically when a decision re-entry is eligible.",
+			"Apply decision re-entry only after the Director authorizes Implement.",
+			"Prevent the exception and a decision re-entry from authorizing initial Implement, Audit, Ratify, Package, release preparation, publication, delegation, or commits.",
+		},
+		"### Phase-Advancement Rules": {
+			"Exempt only an eligible bounded completeness correction and an eligible decision re-entry from a fresh Implement action instruction.",
+		},
+		"### Agent Release": {
+			"Run no other git or GitHub write under the keyword.",
+		},
+	}
+}
+
+func TestAudienceSplitRulesRenderOnce(t *testing.T) {
+	for _, profile := range dedupProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			agents := fileText(t, files, "AGENTS.md")
+			homes := audienceSplitRules(profile.cyclePath)
+			if profile.config.Children {
+				homes["### Child Repositories"] = []string{"Exempt each child release from the `### Agent Release` limit on other git writes."}
+			}
+			for heading, rules := range homes {
+				section := headingSection(t, agents, heading)
+				for _, rule := range rules {
+					line := "- " + rule + "\n"
+					if strings.Count(agents, line) != 1 || !strings.Contains(section, line) {
+						t.Errorf("AGENTS.md needs %q once, under %s", rule, heading)
+					}
+				}
+			}
+			if strings.Contains(agents, "### Contract Growth") || !strings.Contains(agents, "\n### Rule Review\n") {
+				t.Error("AGENTS.md does not name the review section `### Rule Review`")
+			}
+		})
+	}
+}
+
+// retiredAudienceSplitText lists wording that the audience split removed from
+// every canon asset and every render.
+var retiredAudienceSplitText = []string{
+	"Preserve short atomic imperative instructions as the default.",
+	"` `### Implement Evidence Snapshot` for snapshot contents and dependency boundaries.",
+	"` `### Closure Audit` for the paths, documents, and records the closure audit maps.",
+	"Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
+	"await explicit Director implementation-ready confirmation to Implement.\n",
+	"Execute a release command only under `AGENTS.md` `### Agent Release`.",
+	"Follow `govna/build-release.md` `## Child Releases` to release a child.",
+	"Add new rules under the best-fit existing section.",
+	"except each child release under `### Child Repositories`",
+	"Contract Growth",
+	"contract-growth",
+	"code-stacks.md",
+	"operator-contract-rationale",
+}
+
+func TestAudienceSplitRetiredTextIsGone(t *testing.T) {
+	for path, text := range embeddedText(t) {
+		for _, retired := range retiredAudienceSplitText {
+			if strings.Contains(text, retired) {
+				t.Errorf("asset %s retains %q", path, retired)
+			}
+		}
+	}
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			if file.Path == "govna/code-stacks.md" || file.Path == "govna/operator-contract-rationale.md" {
+				t.Errorf("%s renders the retired document %s", profile.name, file.Path)
+			}
+			for _, retired := range retiredAudienceSplitText {
+				if strings.Contains(string(file.Content), retired) {
+					t.Errorf("%s %s retains %q", profile.name, file.Path, retired)
+				}
+			}
+			if strings.Contains(string(file.Content), "{{") && strings.HasSuffix(file.Path, ".md") {
+				t.Errorf("%s %s keeps an unfilled placeholder", profile.name, file.Path)
+			}
+		}
+	}
+}
+
+// canonMaintenanceRules lists the rules that only this repository follows.
+var canonMaintenanceRules = []string{
+	"Apply these rules to every canon change.",
+	"Define consumer text as text that a consumer's agent or Director acts on.",
+	"Classify each new or changed canon rule and document section as consumer, profile, or Govna-only before writing it.",
+	"Keep Govna-only text out of every canon asset.",
+	"Render profile text only into a repository whose profile needs it.",
+	"Review each touched canon file for text that fails the consumer test.",
+	"Record each profile candidate that a canon change leaves in place as a `plan.md` idea entry.",
+	"Check that each touched pointer to an owning document states its trigger, its authority boundary, and the decision or action that waits.",
+	"Confirm that each moved rule's text exists at its new location.",
+	"Label each governance verification claim as an inventory check, a semantic review, observed behavior, or a mechanical check.",
+	"Add each canon rule under the best-fit existing section.",
+	"Preserve each section's semantic intent across edits.",
+	"Edit sections in place.",
+	"Change section order or the `##` section list only when the user explicitly requests a contract amendment.",
+	"Name the exact sections to change during every update.",
+	"Keep edits local during every update.",
+	"Use `##` for top-level sections.",
+	"Conform overlay templates and other canon files to AGENTS.md.",
+	"Measure authorized AGENTS.md hunks against the phase-entry baseline while excluding unrelated working-tree changes.",
+	"Record added, removed, and net AGENTS.md line and rule-shaped-bullet counts in the closure-audit working record.",
+	"Prevent rule-review measurements alone from becoming findings.",
+}
+
+func TestCanonMaintenanceRulesStayInThisRepository(t *testing.T) {
+	_, tail, ok := strings.Cut(repoFile(t, "AGENTS.md"), "\n## Project Rules\n")
+	if !ok {
+		t.Fatal("AGENTS.md omits ## Project Rules")
+	}
+	section := headingSection(t, tail, "### Canon Maintenance")
+	embedded := embeddedText(t)
+	for _, rule := range canonMaintenanceRules {
+		line := "- " + rule + "\n"
+		if strings.Count(repoFile(t, "AGENTS.md"), line) != 1 || !strings.Contains(section, line) {
+			t.Errorf("AGENTS.md needs %q once, under ### Canon Maintenance", rule)
+		}
+		for path, text := range embedded {
+			if strings.Contains(text, line) {
+				t.Errorf("asset %s carries the maintenance rule %q", path, rule)
+			}
+		}
+	}
+}
+
+// maintenanceTerms name work that only this repository does.
+var maintenanceTerms = []string{"candidate-canon", "state-equivalence", "overlay templates", "tombstone"}
+
+func TestRendersHoldNoMaintenanceText(t *testing.T) {
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for path, text := range governanceText(files) {
+			for _, term := range maintenanceTerms {
+				if strings.Contains(text, term) {
+					t.Errorf("%s %s holds the maintenance term %q", profile.name, path, term)
+				}
+			}
+		}
+	}
+}
+
+// profileLines returns the rule, heading, and table lines of the named
+// profile assets.
+func profileLines(t *testing.T, names ...string) []string {
+	t.Helper()
+	var lines []string
+	for _, name := range names {
+		content, err := fs.ReadFile(assets, "assets/profile/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for line := range strings.SplitSeq(string(content), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "| ") || strings.HasPrefix(trimmed, "7. ") {
+				lines = append(lines, line)
+			}
+		}
+	}
+	return lines
+}
+
+// countLine counts the files' lines that equal line.
+func countLine(texts map[string]string, line string) int {
+	count := 0
+	for _, text := range texts {
+		count += strings.Count("\n"+text, "\n"+line+"\n")
+	}
+	return count
+}
+
+func TestChildProfileRendersOnlyForParents(t *testing.T) {
+	var blocks []string
+	for _, block := range childBlocks {
+		blocks = append(blocks, block.asset)
+	}
+	for _, stack := range Stacks() {
+		t.Run(stack, func(t *testing.T) {
+			config := Config{Flavor: Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget"}
+			without, err := Render(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config.Children = true
+			with, err := Render(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plain, parent := governanceText(without), governanceText(with)
+			for _, line := range profileLines(t, blocks...) {
+				if strings.Contains(line, "{{") {
+					continue
+				}
+				if count := countLine(plain, line); count != 0 {
+					t.Errorf("a render without children holds the child line %q", line)
+				}
+				if count := countLine(parent, line); count != 1 {
+					t.Errorf("a render with children holds %q %d times, want 1", line, count)
+				}
+			}
+			for _, heading := range []string{"### Child Repositories", "## Child Repositories", "## Child repositories", "## Child Releases"} {
+				if countLine(plain, heading) != 0 {
+					t.Errorf("a render without children holds %s", heading)
+				}
+			}
+			for _, other := range Stacks() {
+				want := 0
+				if other == stack {
+					want = 1
+				}
+				for _, line := range profileLines(t, "children/pins/"+strings.ToLower(other)+".md") {
+					if count := countLine(parent, line); count != want {
+						t.Errorf("a %s parent holds the %s pin line %q %d times, want %d", stack, other, line, count, want)
+					}
+					if countLine(plain, line) != 0 {
+						t.Errorf("a render without children holds the pin line %q", line)
+					}
+				}
+			}
+			releases := headingSection(t, parent["govna/build-release.md"], "## Child Releases")
+			for _, line := range profileLines(t, "children/pins/"+strings.ToLower(stack)+".md") {
+				if !strings.Contains(releases, line+"\n") {
+					t.Errorf("## Child Releases omits the pin line %q", line)
+				}
+			}
+			if fileText(t, without, "build.sh") != fileText(t, with, "build.sh") {
+				t.Error("build.sh differs between the renders with and without children")
+			}
+		})
+	}
+	doc, err := Render(Config{Flavor: Doc, RepoName: "handbook", Children: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range profileLines(t, blocks...) {
+		if !strings.Contains(line, "{{") && countLine(governanceText(doc), line) != 0 {
+			t.Errorf("a DOC render holds the child line %q", line)
+		}
+	}
+}
+
+func TestRustProfileRendersOnlyForRust(t *testing.T) {
+	var blocks []string
+	for _, block := range rustBlocks {
+		blocks = append(blocks, block.asset)
+	}
+	lines := profileLines(t, blocks...)
+	if len(lines) != 6 {
+		t.Fatalf("the Rust profile holds %d lines, want 6", len(lines))
+	}
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 0
+		if profile.config.Stack == "Rust" {
+			want = 1
+		}
+		for _, line := range lines {
+			if count := countLine(governanceText(files), line); count != want {
+				t.Errorf("%s holds the Rust line %q %d times, want %d", profile.name, line, count, want)
+			}
+		}
+	}
+}
+
+func TestRenderedHeadingReferencesResolve(t *testing.T) {
+	pathRef := regexp.MustCompile("`((?:AGENTS|govna/[a-z-]+)\\.md)` `(#{2,3} [^`]+)`")
+	bareRef := regexp.MustCompile("`(#{2,3} [^`]+)`")
+	// documentHeadings are headings of an AC or of another repository-owned
+	// document, which a rule may name without the heading being in the contract.
+	documentHeadings := map[string]bool{
+		"## In Scope": true, "## Out Of Scope": true, "## Summary": true, "## Status": true,
+		"## Acceptance Tests": true, "## Migration findings": true, "## Project Practices": true,
+	}
+	for _, profile := range dedupProfiles() {
+		t.Run(profile.name, func(t *testing.T) {
+			files, err := Render(profile.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			texts := governanceText(files)
+			headings := map[string]map[string]bool{}
+			for path, text := range texts {
+				headings[path] = map[string]bool{}
+				for line := range strings.SplitSeq(text, "\n") {
+					if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
+						headings[path][line] = true
+					}
+				}
+			}
+			for path, text := range texts {
+				for _, match := range pathRef.FindAllStringSubmatch(text, -1) {
+					target, ok := headings[match[1]]
+					if !ok {
+						t.Errorf("%s references %s, which this profile does not render", path, match[1])
+						continue
+					}
+					if !target[match[2]] {
+						t.Errorf("%s references the missing heading %s `%s`", path, match[1], match[2])
+					}
+				}
+			}
+			agents := pathRef.ReplaceAllString(texts["AGENTS.md"], "")
+			for _, match := range bareRef.FindAllStringSubmatch(agents, -1) {
+				if !headings["AGENTS.md"][match[1]] && !documentHeadings[match[1]] {
+					t.Errorf("AGENTS.md references the missing heading `%s`", match[1])
+				}
+			}
+		})
+	}
+}
+
+func TestMovedSectionsHaveOneHome(t *testing.T) {
+	homes := map[string][]string{
+		"govna/canon-spec.md": {
+			"## Metadata and retired routing marker", "## Classification order and file handling", "## Format-defining files",
+			"## Expected-divergence registry", "## Target-only detection", "## Migration-required items", "## Markdown identifiers",
+			"## IE spacing", "## Retired link", "## Canon baseline manifest", "## Canon-coherence precondition",
+			"## First-Class CODE Stacks", "## Multi-Utility Versioning", "## Markdown Identifier Check", "## Go", "## Rust",
+			"## Terraform", "## Swift", "## CODE Build Presentation", "## What prep does", "## DOC Release",
+		},
+		"govna/canon-maintenance.md": {
+			"## govna-side commitments", "## Candidate-canon review", "### Render and audit", "### Emitted AC review",
+			"### Behavior parity", "### Release-batch safety", "### Review evidence",
+		},
+		"arch.md": {"### Canon Audiences", "### Contract Rationale"},
+	}
+	var renders []map[string]string
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		renders = append(renders, governanceText(files))
+	}
+	for path, headings := range homes {
+		home := map[string]string{path: repoFile(t, path)}
+		for _, heading := range headings {
+			if count := countLine(home, heading); count != 1 {
+				t.Errorf("%s holds %q %d times, want 1", path, heading, count)
+			}
+			for _, render := range renders {
+				if countLine(render, heading) != 0 {
+					t.Errorf("a render still holds the moved section %q", heading)
+				}
+			}
+		}
+	}
+	for _, path := range []string{"govna/canon-spec.md", "govna/canon-maintenance.md"} {
+		for _, asset := range embeddedText(t) {
+			if strings.Contains(asset, strings.TrimSuffix(strings.SplitN(repoFile(t, path), "\n", 2)[0], "\n")+"\n") {
+				t.Errorf("an embedded asset carries the title of %s", path)
+			}
+		}
+	}
+}
+
+func TestConsumerReadingListLinksResolve(t *testing.T) {
+	link := regexp.MustCompile(`^- \[[^\]]+\]\(https://github\.com/queone/govna/blob/main/([^)]+)\) — .+\.$`)
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, list, ok := strings.Cut(fileText(t, files, "govna/README.md"), "\n## More About Govna\n")
+		if !ok {
+			t.Fatalf("%s govna/README.md omits ## More About Govna", profile.name)
+		}
+		if !strings.Contains(list, "They carry no rule for this repository and do not specify its installed version.") {
+			t.Errorf("%s reading list does not say that it carries no rule", profile.name)
+		}
+		bullets := 0
+		for line := range strings.SplitSeq(list, "\n") {
+			if !strings.HasPrefix(line, "- ") {
+				continue
+			}
+			bullets++
+			match := link.FindStringSubmatch(line)
+			if match == nil {
+				t.Errorf("%s reading list bullet has no Govna repository link: %s", profile.name, line)
+				continue
+			}
+			repoFile(t, match[1])
+		}
+		if bullets != 3 {
+			t.Errorf("%s reading list holds %d bullets, want 3", profile.name, bullets)
 		}
 	}
 }

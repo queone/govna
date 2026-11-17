@@ -19,14 +19,14 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 
 - `cmd/govna`: accepts commands and prints help, versions, the `govna version` update line, colored terminal text, and command results.
 - `internal/help`: renders every help page in the shared layout: three header lines, capitalized headings, rows aligned per section, the appended version and help rows, and single-sequence color only when the written stream supports it.
-- `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, renders the child files and the orphan note for child repositories, and creates deterministic baselines.
+- `internal/canon`: stores the embedded governance files, fills repository values, combines CODE or DOC layers, fills each profile placeholder with child-repository or Rust text only for a repository of that profile, renders the child files and the orphan note for child repositories, and creates deterministic baselines.
 - `internal/render`: writes a selected file set to a directory after resolving and validating command options.
-- `internal/repository`: determines repository type, stack, module path, name, adoption state, and source-checkout identity, and provides the shared contained file access: path validation, link rejection, and reads and writes rooted at the resolved repository. It also reads and validates the child registry `govna/children.txt` and resolves each child repository beside the parent.
+- `internal/repository`: determines repository type, stack, module path, name, adoption state, and source-checkout identity, and provides the shared contained file access: path validation, link rejection, and reads and writes rooted at the resolved repository. It also reads and validates the child registry `govna/children.txt`, resolves each child repository beside the parent, and checks that the parent's profile files can be updated safely before a first child is added or a last child is dropped.
 - `internal/apply`: adds Govna files to new or existing repositories, keeps repository-owned documents and local sections whether or not an agent instruction file exists, validates every destination before writing, and initializes optional Git state.
 - `internal/audit`: rejects malformed saved Govna state before comparing files, treats an escaping baseline path as malformed, fails instead of guessing when a governed path is a link, a directory, a special file, or unreadable, explains each exact classification label, and reviews extra repository files only when specific Govna evidence identifies them.
 - `internal/remove`: determines which files can be deleted, must be kept, or need a Director choice without following symlinks or deleting content.
 - `internal/buildtest`: checks product tooling in isolated repositories with stable expected output.
-- `internal/emission`: chooses the next AC number, reuses an unedited AC for the same canon version, and rejects edited generated bodies.
+- `internal/emission`: chooses the next AC number, reuses an unedited AC for the same canon version, rejects edited generated bodies, and writes the parent profile update that a first-child or last-child AC carries.
 - `internal/update`: asks the Go module proxy at most once a day whether a newer govna release exists, keeps the answer in a private cache file, and never installs anything.
 - Governance and release scaffolding.
 
@@ -40,12 +40,14 @@ One dependency-free Go module handles the complete workflow. It selects the CODE
 - `govna/development-cycle.md`: workflow from roadmap through release
 - `govna/ac-template.md`: acceptance-criteria template for new work
 - `govna/build-release.md`: build, test, and release rules
+- `govna/canon-maintenance.md`: repository-owned procedures for a canon change, including the candidate-canon review
+- `govna/canon-spec.md`: repository-owned specification of `govna audit` and the stack build scripts
 
 ## Data And Control Flow
 
 The executable first detects whether stderr supports terminal color. Its command runner then sends each request to the matching package with explicit output writers and environment access.
 
-Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, validates every destination through the shared contained access, and writes it without first emptying the target. It applies deterministic file modes and writes the baseline—the saved hashes of installed Govna-managed regions.
+Render selects a CODE or DOC file set (the flavor), asks `internal/canon` for path-sorted content, validates every destination through the shared contained access, and writes it without first emptying the target. `--with-children` adds the child-repository profile text for a CODE parent. It applies deterministic file modes and writes the baseline—the saved hashes of installed Govna-managed regions.
 
 Apply determines repository identity through `internal/repository`, renders the selected embedded files, validates every destination, and either writes them into a new repository or merges registered Govna sections into an existing one while keeping repository-owned documents. Adding those files is adoption. `internal/emission` writes one adoption AC that names the executable version and canon version separately. Apply never reads or changes legacy `governa/` content. Optional Git initialization runs last.
 
@@ -53,13 +55,15 @@ Audit validates a repository that has adopted Govna, reads metadata, the baselin
 
 Removal reads the same repository identity and preserve information. It compares current Govna files and examines repository-only entries without following symlinks. It sorts files into remove, keep, and Director-choice groups, removes preserve control state last, and writes or safely reuses one canon-version-keyed removal AC. The removal marker records executable and canon versions separately and upgrades unedited legacy markers. The command carries out no removal choice.
 
-A child repository is a separate Git repository that a CODE parent imports at a pinned version and governs from its own sessions. `govna apply --child` resolves the child beside the parent, checks that it uses the parent's stack and has not adopted Govna, writes the child files (the pointer `AGENTS.md`, the stack's build tooling, `.gitignore`, and `CHANGELOG.md`) through a handle contained in the child root, and records the child in `govna/children.txt` with a review AC in the parent. Audit compares each declared child's files with the child render and names them by parent-relative path: it force-syncs the pointer and build tooling, gives `.gitignore` the ordinary choices, and checks only the `CHANGELOG.md` shape. Removal rewrites each child's `AGENTS.md` to the orphan note, and `govna rm --child` drops one child. Every CODE stack's full build runs each declared child's `build.sh` first, but only when the child's build tooling matches the parent's copy, and stops with a clone hint when a child is missing. During Implement and Ratify the parent builds against a changed child through the stack's local override; the Go build skips `go mod tidy` while `go.work` names a declared child. Package releases each changed child first through the child's own `build.sh`, removes each override, moves the parent's pin, rebuilds, and then releases the parent; each stack's prep and release refuse a local override to a declared child, so the released parent builds from a released child. The Go release accepts a library with no `cmd/<target>/main.go` and releases it from its tag alone. DOC repositories have no child repositories.
+A child repository is a separate Git repository that a CODE parent imports at a pinned version and governs from its own sessions. `govna apply --child` resolves the child beside the parent, checks that it uses the parent's stack and has not adopted Govna, writes the child files (the pointer `AGENTS.md`, the stack's build tooling, `.gitignore`, and `CHANGELOG.md`) through a handle contained in the child root, and records the child in `govna/children.txt` with a review AC in the parent. Audit, apply, and removal render the parent with the child profile whenever the registry lists a child. For a first child the review AC, not the command, adds the child rules to the parent's four profile files; for a last child the removal AC removes them. Each command first checks those files and stops before writing when one is unreadable, linked, boundary-less, or different from current canon. Audit compares each declared child's files with the child render and names them by parent-relative path: it force-syncs the pointer and build tooling, gives `.gitignore` the ordinary choices, and checks only the `CHANGELOG.md` shape. Removal rewrites each child's `AGENTS.md` to the orphan note, and `govna rm --child` drops one child. Every CODE stack's full build runs each declared child's `build.sh` first, but only when the child's build tooling matches the parent's copy, and stops with a clone hint when a child is missing. During Implement and Ratify the parent builds against a changed child through the stack's local override; the Go build skips `go mod tidy` while `go.work` names a declared child. Package releases each changed child first through the child's own `build.sh`, removes each override, moves the parent's pin, rebuilds, and then releases the parent; each stack's prep and release refuse a local override to a declared child, so the released parent builds from a released child. The Go release accepts a library with no `cmd/<target>/main.go` and releases it from its tag alone. DOC repositories have no child repositories.
 
 The canonical Go build discovers regular command entry points, checks their literal versions, compiles into invocation-owned external storage, validates the compiled programs, and only then replaces safe install destinations. Go release prep performs bookkeeping only, rejects any result outside its planned transformations, and prints the release command without running it. Validation-token and baseline-refresh behavior remains specific to Rust tooling.
 
 ## AC Lifecycle Control Flow
 
 The governed change path is `Draft → Audit → Refine → Implement → Ratify → Package`. Draft creates the AC; Audit, Refine, Implement, and Ratify are the four AC phases; Package is post-Ratify release preparation and is not a fifth phase.
+
+Refine pauses for the Director's Implement instruction, with two exceptions that continue an Implement the Director already authorized: a bounded completeness correction, and a decision re-entry, where Refine records only decisions the Director gave during that Implement and Pre-Implementation Verification passes.
 
 Integrated audit adoption is the only command-mediated phase exception. It can advance one emitted adoption AC through immediate Audit and no-edit Refine, but it cannot enter Implement. Every unpackaged AC with implementation in the unreleased state enters the pending release batch, including work awaiting Ratify. A private pre-Implement calculation prevents that complete batch from growing beyond one 80-byte prefix-plus-summary message. Package requires every member to be Ratified, rejects excluded implemented work, and rechecks the complete batch before prep. A named request such as `Package AC<N>+AC<M>` establishes a fitting multi-AC batch; a standalone Package alias reuses the complete batch already established in the active session. A direct batch, one with no implemented AC awaiting release, packages direct-handled changes with a release message that names no AC.
 
@@ -81,7 +85,7 @@ Audit emits each adoption AC in the shape below. These rules bind `internal/audi
 - Require one unique scratch render outside the consumer repository.
 - Emit one executable review command for every actionable path.
 - Apply `### Mixed-content sync verification` to every existing mixed-content review target.
-- Require exact rule, overlap, placement, reference, contract-growth, and acceptance-evidence review.
+- Require exact rule, overlap, placement, reference, rule-review, and acceptance-evidence review.
 - Require exact scratch cleanup before the Audit report.
 - Omit rendered diff bodies from the emitted AC.
 - Omit companion review artifacts.
@@ -196,7 +200,73 @@ Accepted costs of in-repository delivery:
 
 - Each adopted repository carries its own copy of the governance text.
 - Each canon update produces a diff in every adopted repository.
-- The contract loads in full only where the CLI's instruction size limit allows it. Codex CLI's `project_doc_max_bytes` defaults to 32 KiB, and the canon sections of `AGENTS.md` are about 50 KB at canon v0.102.0, so a Codex user must raise that limit.
+- The contract loads in full only where the CLI's instruction size limit allows it. Codex CLI's `project_doc_max_bytes` defaults to 32 KiB, and the canon sections of `AGENTS.md` are about 49 KB at canon v0.103.0 for a Go repository without children, so a Codex user must raise that limit.
+
+### Canon Audiences
+
+- Keep in the canon assets only text that a consumer's agent or Director acts on.
+- Keep Govna-only text in repository-owned places: `AGENTS.md` `### Canon Maintenance`, `govna/canon-maintenance.md`, `govna/canon-spec.md`, and this document.
+- Render profile text only into a repository whose profile needs it.
+- Carry the parent's profile update for a first or last child in the emitted AC.
+
+Note: every Govna document has two possible audiences. A consumer needs the rules it acts on. Govna needs the rules and specifications that maintain the canon. Earlier canon versions shipped both to every consumer, because this repository's own files are the template source and no rule asked which audience a text served.
+
+Canon text has three classes:
+
+- Consumer text renders into every repository of its flavor.
+- Profile text renders only where it applies. The child-repository rules render for a CODE parent that declares a child in `govna/children.txt`. The validation-token rules render for the Rust stack. The DOC flavor has its own contract template.
+- Govna-only text is in no canon asset. It holds maintenance rules, the candidate-canon review, and the specifications of `govna audit` and the build scripts.
+
+The render fills each profile placeholder from `internal/canon/assets/profile/` or with nothing. A child block carries its own exceptions to other sections, so no shared section names a heading that a render may omit. Automated tests check that no render holds maintenance terms, that each profile block renders only for its profile, and that every heading reference resolves in every render.
+
+Accepted costs:
+
+- A parent has a child but no child rules between `govna apply --child` and the implementation of its review AC.
+- `govna apply --child` and `govna rm --child` stop for a first or last child when a profile file differs from current canon, until `govna audit` is adopted.
+- A repository that adopted an earlier canon is asked once whether to keep, move, or delete each document that left the canon.
+- The reading list in a consumer's `govna/README.md` links to current documents, not to the documents of its installed canon version.
+
+### Contract Rationale
+
+This section records why the Operator contract exists. `AGENTS.md` alone defines operational rules and wins every conflict. No consumer receives this text.
+
+**Contract Purpose.** Govna exists to make programming and publishing ceremonies more effective and efficient. Those ceremonies are the recurring CODE and DOC checkpoints around intent, authorization, scope, review, implementation or editing, verification, and release. Reusable context reduces process reconstruction, ambiguity, duplicated decisions, and avoidable rework across phases and sessions.
+
+Efficiency does not weaken authorization, review, verification, or release gates. Govna keeps decision-bearing choices with the Director and makes only settled, deterministic mechanics reusable.
+
+**Session-Entry Purpose.** Session Entry tells a general-purpose agent that constrained repository rules apply before substantive work. It initializes contract identity, substantive-action scope, gates, precedence, and an observable checkpoint without restating the full contract. Audit catches residual drift.
+
+**LLM-Agent Behavior Assumptions.** The design assumes similarity-weighted retrieval, stronger compliance with imperative wording, and a modest primacy benefit for role framing. `AGENTS.md` therefore stays imperative and near the action; this document serves human onboarding without diluting that signal.
+
+**Why Plain Language Matters.** Concrete wording helps both people and agents identify the required result before interpreting a workflow label. Govna keeps exact labels when they carry contract meaning, but explains each one at first use so the label does not hide the problem, effect, or decision.
+
+**The Govna contract loaded. Checkpoint.** `Govna contract loaded.` is a human-visible readiness signal emitted only after internalizing `AGENTS.md` and before the first substantive governed action. Its narrow trigger keeps it meaningful; it detects rather than prevents contract skipping.
+
+Right after the checkpoint, the agent compares the canon version that `govna version` prints with `canon_version` in `govna/metadata.txt`. When the installed canon is newer, the agent runs `govna audit --check` once and suggests `govna audit` only when that check finds real updates, so a release that changes nothing in the repository's own profile stays quiet. Session entry is when a stale repository matters most, because every later rule comes from the adopted canon. The comparison reads two local values, the check writes nothing, and the release check behind `govna version` runs at most once a day with a two-second limit, so session entry stays fast. The question waits until the end of the response, so it never blocks the requested work. `govna version` and `govna audit --check` run the installed govna, not a repository command, so the explicit-wording rule for repository commands does not apply to them.
+
+**Audit Verification.** `govna audit` complements session framing by detecting canon incoherence, consumer adoption drift, and local-rule decay across sessions and repositories.
+
+**Why Effective Implementation Scope Is Bounded.** Effective implementation scope permits one directly broken supporting file with only one valid correction to be fixed without repeating a decision the Director already settled. It preserves behavior and intent, records every use, and returns to Refine wherever product, scope, security, destructive, publication, release, dependency, migration, architecture, or competing-outcome judgment begins.
+
+**Why Contract Integrity Reporting Is Evidence-Triggered.** A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug. Evidence keeps this process from turning wording preferences into findings. Classification routes repository-specific, shared Govna, or unclear findings but never grants editing authority. Blocking findings stop unsafe or decision-bearing work; unchanged acknowledged findings stay silent; authorized corrections land only in their owning governance document.
+
+**Why Rule Changes Are Reviewed.** A rule-review checks whether new rules duplicate, hide, misplace, or crowd out existing rules. It applies only to proposed or authorized governance changes. Repository evidence routes shared defects upstream without granting editing authority.
+
+Each review first looks for a rule to retire, merge, or enforce mechanically, so a revision can shrink the contract as well as grow it. A rule that a repository can never act on, or that slowed or misdirected real work, counts as evidence in any session. The review stays silent when it finds nothing.
+
+A read trigger must name a state or event that an agent can recognize without reading the target document. A trial showed that a trigger defined only inside its target is circular: the agent must already have read the procedure to know that it applies.
+
+**Why Implement Can Close Bounded Completeness Gaps.** Implement and its final read-only closure audit can expose a missed path inside an already settled outcome. Requiring another Director instruction for that omission adds a step without adding a decision. A bounded completeness correction continues the original Implement authority only when repository evidence identifies the gap, an active acceptance test already requires the correction, the artifact family is already named, and only one materially valid outcome exists. The Operator may correct at most three missed paths or instructions before asking the Director again. The final AC wording and scope check called Pre-Implementation Verification protects each corrected AC, and visible reporting records every transition.
+
+A decision re-entry follows the same reasoning. When the Director gives a decision during Implement, the Operator records it in the AC through Refine and resumes. A second Implement instruction would repeat an authorization that the Director already gave together with the decision. The Director's message must name each recorded change, and Pre-Implementation Verification must pass, so an Operator-proposed change still waits for the Director.
+
+**Why Clean Ratify Reuses Implement Evidence.** Ratify is the Director-triggered final acceptance review, not a request to reconstruct proof that is still current. Implement therefore closes with one session-only evidence snapshot covering repository state, validation inputs, tools, results, and acceptance-test dispositions. Cheap state and identity checks can prove that snapshot unchanged without another render, build, or test. The complete repository is the safe default boundary, so recording the snapshot does not require a per-test dependency inventory.
+
+Missing, incomplete, stale, or uncertain evidence still requires applicable revalidation. An inline correction also invalidates the evidence it affects. Evidence freshness never upgrades a failed, pending, manual, or unexercised disposition, and clean reuse never replaces Ratify's final review or contract-integrity check.
+
+**Why Draft And Clean Audit Advance Automatically.** A completed Draft flows into Audit, and a clean Audit flows into Refine, because those actions mutate nothing except the active AC document and stay cheap to redo before implementation. Automatic Refine entry requires every finding to be advancement-eligible: outside every Director-owned category with exactly one materially valid correction. Refine-to-Implement, Ratify, and Package stay Director-gated because they mutate the repository, accept work, or prepare a release.
+
+**Canon Versus Local Flexibility.** Canon fixes shared roles, workflow, approvals, discipline, and review behavior. Consumers own non-conflicting `## Project Rules`, additional local governance documents, tooling, build scripts, and CI. Propose disputed canon upstream instead of creating permanent local drift.
 
 ## Conventions
 

@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.102.0"
+const Version = "0.103.0"
 
 const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
@@ -31,6 +31,9 @@ type Config struct {
 	RepoName   string
 	Stack      string
 	ModulePath string
+	// Children reports that the repository declares at least one child
+	// repository, so the render includes the child profile text.
+	Children bool
 }
 
 type File struct {
@@ -131,6 +134,9 @@ func Render(cfg Config) ([]File, error) {
 			return nil, usererr.Errorf("Govna could not load the Rust build and release guidance: %w", err)
 		}
 		values["{{STACK_BUILD_RELEASE_GUIDANCE}}"] = strings.TrimSpace(string(raw))
+	}
+	if err := profileValues(values, stack, cfg.Flavor == Code && cfg.Children); err != nil {
+		return nil, err
 	}
 	out := map[string][]byte{}
 	base, err := renderAsset("assets/base/AGENTS.md.tmpl", values)
@@ -248,6 +254,72 @@ func IsChildAgentFile(content []byte) bool {
 		}
 	}
 	return false
+}
+
+// ChildProfilePaths returns the parent files whose canon text changes when
+// the parent declares its first child or drops its last one, in byte order.
+func ChildProfilePaths() []string {
+	return []string{"AGENTS.md", "govna/audit.md", "govna/build-release.md", "govna/development-cycle.md"}
+}
+
+// profileBlock names one placeholder and the profile asset that fills it.
+// A section block ends with a blank line so the next heading stays separated.
+type profileBlock struct {
+	key, asset string
+	section    bool
+}
+
+var childBlocks = []profileBlock{
+	{"{{CHILD_AGENTS_SECTION}}", "children/agents.md", true},
+	{"{{CHILD_CYCLE_SECTION}}", "children/development-cycle.md", true},
+	{"{{CHILD_SNAPSHOT_RULE}}", "children/snapshot-rule.md", false},
+	{"{{CHILD_AUDIT_SECTION}}", "children/audit.md", true},
+	{"{{CHILD_AUDIT_CLASSIFICATION_ROW}}", "children/audit-classification-row.md", false},
+	{"{{CHILD_RELEASES_SECTION}}", "children/build-release.md", true},
+}
+
+var rustBlocks = []profileBlock{
+	{"{{RUST_AGENTS_RULES}}", "rust/agents.md", false},
+	{"{{RUST_PREP_TOKEN_LINE}}", "rust/build-release-token.md", false},
+	{"{{RUST_PREP_EVIDENCE_LINES}}", "rust/build-release-evidence.md", false},
+	{"{{RUST_CANON_CYCLE_ITEM}}", "rust/canon-cycle.md", false},
+}
+
+// profileValues fills every profile placeholder: with its asset when the
+// repository's profile needs the text, and with nothing otherwise.
+func profileValues(values map[string]string, stack string, children bool) error {
+	fill := func(blocks []profileBlock, include bool) error {
+		for _, block := range blocks {
+			values[block.key] = ""
+			if !include {
+				continue
+			}
+			raw, err := fs.ReadFile(assets, "assets/profile/"+block.asset)
+			if err != nil {
+				return usererr.Errorf("Govna could not load the profile text %s: %w", block.asset, err)
+			}
+			text := string(raw)
+			if block.section {
+				text = strings.TrimRight(text, "\n") + "\n\n"
+			}
+			values[block.key] = text
+		}
+		return nil
+	}
+	if err := fill(childBlocks, children); err != nil {
+		return err
+	}
+	if children {
+		// The release block carries only the override and pin commands of
+		// the parent's own stack.
+		raw, err := fs.ReadFile(assets, "assets/profile/children/pins/"+strings.ToLower(stack)+".md")
+		if err != nil {
+			return usererr.Errorf("Govna could not load the child pin commands for the %s stack: %w", stack, err)
+		}
+		const key = "{{CHILD_RELEASES_SECTION}}"
+		values[key] = strings.Replace(values[key], "{{CHILD_PIN_COMMANDS}}\n", string(raw), 1)
+	}
+	return fill(rustBlocks, stack == "Rust")
 }
 
 func walkOverlay(prefix string, values map[string]string, out map[string][]byte) error {

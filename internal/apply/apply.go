@@ -104,7 +104,9 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string, co
 		fmt.Fprintln(stderr, "existing governance files detected; Govna will report whether each file is written, merged, or preserved")
 	}
 	name := repository.Name(cwd, module, cfg.RepoName)
-	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module})
+	// A registry that cannot be read is reported by the destination checks below.
+	declared, _, _ := access.ReadChildren()
+	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: flavor == canon.Code && len(declared) > 0})
 	if err != nil {
 		fmt.Fprintf(stderr, "apply: %v\n", err)
 		return 1
@@ -454,6 +456,27 @@ func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) 
 		fmt.Fprintf(stderr, "apply: check destination %s: %v\n", repository.ChildRegistryPath, err)
 		return 1
 	}
+	// The first child changes the parent's profile. The review AC carries that
+	// update, so check it can be applied before anything is written.
+	var profile *emission.ParentProfile
+	if len(entries) == 0 {
+		module := ""
+		if stack == "Go" {
+			module = repository.ModulePath(cwd)
+		}
+		current, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: repository.Name(cwd, module, ""), Stack: stack, ModulePath: module})
+		if err != nil {
+			fmt.Fprintf(stderr, "apply: %v\n", err)
+			return 1
+		}
+		update, kept, err := parent.ChildProfileFiles(current)
+		if err != nil {
+			fmt.Fprintf(stderr, "apply: %v\n", err)
+			return 1
+		}
+		p := emission.NewParentProfile(true, update, kept)
+		profile = &p
+	}
 	fmt.Fprintln(stdout, "mode: apply child")
 	fmt.Fprintf(stdout, "parent: %s\n", cwd)
 	fmt.Fprintf(stdout, "child: %s\n", entry)
@@ -497,7 +520,7 @@ func runChild(arg string, stdout, stderr io.Writer, cwd, programVersion string) 
 		return fail(stderr, err)
 	}
 	rel := fmt.Sprintf("govna/ac%d-govna-apply-child.md", n)
-	if err := parent.WriteFile(rel, []byte(childAdoption(n, entry, stack, programVersion, outcomes, replacedRules)), 0o644); err != nil {
+	if err := parent.WriteFile(rel, []byte(childAdoption(n, entry, stack, programVersion, outcomes, replacedRules, profile)), 0o644); err != nil {
 		fmt.Fprintf(stderr, "apply: write %s: %v\n", rel, err)
 		return 1
 	}
@@ -518,7 +541,7 @@ func metadataValues(data []byte) map[string]string {
 
 // childAdoption renders the review AC for govna apply --child. replacedRules
 // reports that apply replaced a child AGENTS.md that held the child's own rules.
-func childAdoption(n int, entry, stack, programVersion string, out []Outcome, replacedRules bool) string {
+func childAdoption(n int, entry, stack, programVersion string, out []Outcome, replacedRules bool, profile *emission.ParentProfile) string {
 	var b strings.Builder
 	name := path.Base(entry)
 	fmt.Fprintf(&b, "# AC%d Review Child Repository %s\n\n## Summary\n\nGovna executable v%s added its embedded child files (canon v%s) for the %s child repository `%s` and listed it in `%s`. The list below records whether each file was written, replaced, or kept. The parent's full `./build.sh` builds `%s` first and fails until the child's own `./build.sh` passes.\n\n## In Scope\n\nFiles Govna processed:\n\n", n, entry, programVersion, canon.Version, stack, entry, repository.ChildRegistryPath, entry)
@@ -526,6 +549,15 @@ func childAdoption(n int, entry, stack, programVersion string, out []Outcome, re
 		fmt.Fprintf(&b, "- `%s` (%s)\n", o.Path, o.Label)
 	}
 	fmt.Fprintf(&b, "- `%s` (lists `%s`)\n", repository.ChildRegistryPath, entry)
+	if profile != nil {
+		b.WriteString("\nFiles this AC updates in the parent:\n\n")
+		for _, path := range profile.Paths {
+			fmt.Fprintf(&b, "- `%s` (update: child rules)\n", path)
+		}
+		b.WriteString("\n")
+		b.WriteString(strings.TrimRight(profile.Instructions, "\n"))
+		b.WriteString("\n")
+	}
 	fmt.Fprintf(&b, "\n### Follow-up\n\n- Run `./build.sh` in `%s` before the parent's next full build.\n- Plan follow-up child work as a second AC in the same release batch as this AC.\n", entry)
 	if replacedRules {
 		fmt.Fprintf(&b, "- Move the replaced child `AGENTS.md` rules into this parent's `AGENTS.md` `## Project Rules` under `### %s`.\n", name)
@@ -535,6 +567,13 @@ func childAdoption(n int, entry, stack, programVersion string, out []Outcome, re
 	fmt.Fprintf(&b, "**AT2** [Automated] [Pre-release gate] — Verify `./build.sh` runs the build of `%s` before its own steps.\n\n", entry)
 	if replacedRules {
 		fmt.Fprintf(&b, "**AT3** [Manual] [Pre-release gate] — Verify each rule from the replaced `%s/AGENTS.md` is in this parent's `## Project Rules` under `### %s` or was dropped on purpose.\n\n", entry, name)
+	}
+	if profile != nil {
+		first := 3
+		if replacedRules {
+			first = 4
+		}
+		b.WriteString(profile.Tests(first))
 	}
 	b.WriteString("## Status\n\n`PENDING` — apply emission; awaiting explicit Director Audit.\n")
 	return b.String()

@@ -1,0 +1,2 @@
+   - Reserve validation-token evidence for Rust prep.
+   - Refresh validation-token evidence for Rust prep.

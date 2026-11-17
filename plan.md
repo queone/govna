@@ -18,4 +18,14 @@ Ideas captured for future reference. [`govna/development-cycle.md`](govna/develo
 
 - IE19: Explore distribution child repositories, such as a Homebrew tap, a GitHub Action, or a docs site, which use the parent's release and so release after it with no pin; most have no govna stack and so no canonical `build.sh`; research in `brainstorm.md`.
 
-- IE21: Replace `### Contract Growth` with a contract-composition review, starting from an independent review of the proposal in [`govna/contract-composition-findings.md`](govna/contract-composition-findings.md); the trial contract that moved rules out of `AGENTS.md` is stopped and is not the basis, and the composition improvement continues; retire the findings file once its lessons are in the canon, explained in the documentation, and summarized in `history.md`.
+- IE22: Set a byte budget for the canon sections of `AGENTS.md` and check it in the build; weigh the 32 KiB default load limit of Codex CLI against the rules every consumer needs.
+
+- IE23: Keep a reusable set of contract scenarios for governance revisions; add a scenario only for an observed failure with a distinct gap, or for a new or materially changed boundary, and give each one a named gap and an expected outcome.
+
+- IE24: Add mechanical checks for canon sizes, heading references, and repeated rules, building on `TestGovernanceGrowthBaseline`, which already tracks lines and rule bullets for each canon file.
+
+- IE25: Render the command-line rules, such as `## CLI Usage Formatting` and `## Independent Utility Versions`, only for a repository with an installable utility.
+
+- IE26: Render the data and integration guidance, such as identifier, schema migration, and external integration practices, only for a repository that declares that work.
+
+- IE27: Carry the `### Audit Adoption` rules in the emitted adoption AC instead of every contract, since the emitted AC is a trigger an agent always sees.

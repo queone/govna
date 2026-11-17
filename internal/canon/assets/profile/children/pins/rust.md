@@ -1,0 +1,3 @@
+- Use a `[patch]` entry with a `path` for a child override.
+- Detect a child override in a `path` dependency or `[patch]` entry in `Cargo.toml` or `.cargo/config.toml`.
+- Move a pin by setting the dependency's `tag`, removing the override, then running `cargo update -p <crate>`.

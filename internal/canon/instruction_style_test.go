@@ -46,17 +46,17 @@ const (
 )
 
 var rewrittenInstructionPaths = []string{
+	"internal/canon/assets/profile/rust/build-release-evidence.md",
 	"arch.md",
 	"AGENTS.md",
 	"govna/audit.md",
 	"govna/build-release.md",
-	"govna/code-stacks.md",
+	"govna/canon-spec.md",
 	"govna/development-guidelines.md",
 	"govna/roles.md",
 	"internal/canon/assets/base/AGENTS.md.tmpl",
 	"internal/canon/assets/overlays/code/files/govna/audit.md.tmpl",
 	"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl",
-	"internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl",
 	"internal/canon/assets/overlays/code/files/govna/development-guidelines.md.tmpl",
 	"internal/canon/assets/overlays/code/files/govna/roles.md.tmpl",
 	"internal/canon/assets/overlays/doc/files/AGENTS.md.tmpl",
@@ -81,8 +81,7 @@ var (
 		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl",
 	}
 	codeStacksRewrittenPaths = []string{
-		"govna/code-stacks.md",
-		"internal/canon/assets/overlays/code/files/govna/code-stacks.md.tmpl",
+		"govna/canon-spec.md",
 	}
 	developmentRewrittenPaths = []string{
 		"govna/development-guidelines.md",
@@ -96,14 +95,22 @@ var (
 	editingRewrittenPaths = []string{
 		"internal/canon/assets/overlays/doc/files/govna/editing-guidelines.md.tmpl",
 	}
+	// canonMaintenancePaths holds the rules that only this repository follows.
+	canonMaintenancePaths = []string{
+		"AGENTS.md",
+	}
+	// rustPrepPaths holds the checklist lines that render only for Rust.
+	rustPrepPaths = []string{
+		"internal/canon/assets/profile/rust/build-release-evidence.md",
+	}
 	archRewrittenPaths = []string{
 		"arch.md",
 	}
 )
 
 var rewrittenInstructionReviews = []rewrittenInstructionReview{
-	{"Name the exact sections to change during every update.", "Name the exact sections to change during every update.", agentsRewrittenPaths, reviewClean},
-	{"Keep edits local during every update.", "Keep edits local during every update.", agentsRewrittenPaths, reviewClean},
+	{"Name the exact sections to change during every update.", "Name the exact sections to change during every update.", canonMaintenancePaths, reviewClean},
+	{"Keep edits local during every update.", "Keep edits local during every update.", canonMaintenancePaths, reviewClean},
 	{"Create files only after explicit user authorization — including draft files, scratch scripts, scaffolding, and config tweaks.", "Create files only after explicit user authorization — including draft files, scratch scripts, scaffolding, and config tweaks.", agentsRewrittenPaths, reviewClean},
 	{"Make repository edits only after explicit user authorization.", "Make repository edits only after explicit user authorization.", agentsRewrittenPaths, reviewClean},
 	{"Stop when a request lacks authorization, scope, or required context.", "Stop when a request lacks authorization, scope, or required context.", agentsRewrittenPaths, reviewClean},
@@ -123,8 +130,8 @@ var rewrittenInstructionReviews = []rewrittenInstructionReview{
 	{"Require `--version` to write nothing to stderr.", "Require `--version` to write nothing to stderr.", buildReleaseRewrittenPaths, reviewClean},
 	{"Run ordinary canonical pre-change validation for Go prep.", "Run ordinary canonical pre-change validation for Go prep.", buildReleaseRewrittenPaths, reviewClean},
 	{"Run ordinary canonical post-change validation for Go prep.", "Run ordinary canonical post-change validation for Go prep.", buildReleaseRewrittenPaths, reviewClean},
-	{"Reserve validation-token evidence for Rust prep.", "Reserve validation-token evidence for Rust prep.", buildReleaseRewrittenPaths, reviewClean},
-	{"Refresh validation-token evidence for Rust prep.", "Refresh validation-token evidence for Rust prep.", buildReleaseRewrittenPaths, reviewClean},
+	{"Reserve validation-token evidence for Rust prep.", "Reserve validation-token evidence for Rust prep.", rustPrepPaths, reviewClean},
+	{"Refresh validation-token evidence for Rust prep.", "Refresh validation-token evidence for Rust prep.", rustPrepPaths, reviewClean},
 	{"Rebuild a release from its clean tagged commit before publication.", "Rebuild a release from its clean tagged commit before publication.", codeStacksRewrittenPaths, reviewClean},
 	{"Install the rebuilt release before publication.", "Install the rebuilt release before publication.", codeStacksRewrittenPaths, reviewClean},
 
@@ -283,6 +290,9 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I88", "Plan follow-up child work as a second AC in the same release batch as this AC."},
 	{"I89", "Move the replaced child AGENTS.md rules into this parent's AGENTS.md ## Project Rules under ### <name>."},
 	{"I90", "Verify each rule from the replaced <child>/AGENTS.md is in this parent's ## Project Rules under ### <name> or was dropped on purpose."},
+	{"I91", "Verify each updated parent file matches the temporary copy above its registered boundary."},
+	{"I92", "Verify every line from the boundary heading down is unchanged in each updated parent file."},
+	{"I93", "Verify each updated file's line in govna/canon-baseline.txt equals its line in the same temporary copy's baseline."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -357,8 +367,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 90 {
-		t.Fatalf("generated instruction manifest has %d entries, want 90", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 93 {
+		t.Fatalf("generated instruction manifest has %d entries, want 93", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -473,7 +483,7 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/remove/testdata/removal-golden.md": {
 			"I05": 1, "I19": 1, "I20": 1, "I21": 1, "I23": 2, "I24": 2, "I25": 1, "I26": 1, "I27": 1,
 		},
-		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1, "I87": 1, "I88": 1},
+		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1, "I87": 1, "I88": 1, "I91": 1, "I92": 1, "I93": 1},
 		"internal/remove/testdata/child-removal-golden.md": {"I79": 1, "I80": 1, "I81": 1, "I82": 1, "I83": 1},
 		"internal/audit/testdata/child-golden.md": {
 			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
@@ -699,9 +709,9 @@ func TestPlainLanguageFirstUseExplanations(t *testing.T) {
 			"This temporary copy is a scratch render",
 			"A consumer repository is any repository that has adopted Govna.",
 		},
-		"govna/operator-contract-rationale.md": {
+		"arch.md": {
 			"A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug.",
-			"A contract-growth review checks whether new rules duplicate, hide, misplace, or crowd out existing rules.",
+			"A rule-review checks whether new rules duplicate, hide, misplace, or crowd out existing rules.",
 			"final read-only closure audit",
 			"final AC wording and scope check called Pre-Implementation Verification",
 		},
@@ -812,10 +822,10 @@ func TestScopedPlainLanguageReplacements(t *testing.T) {
 		{"arch.md", "bounded target-only evidence", "reviews extra repository files only when specific Govna evidence identifies them"},
 		{"arch.md", "guarded stem/version-keyed stub reuse with body-hash edit detection", "reuses an unedited AC for the same canon version"},
 		{"arch.md", "dual-axis and legacy-upgrade behavior", "records executable and canon versions separately and upgrades unedited legacy markers"},
-		{"govna/operator-contract-rationale.md", "deterministic fallout", "one directly broken supporting file with only one valid correction"},
-		{"govna/operator-contract-rationale.md", "Evidence-triggered reporting distinguishes contract defects", "A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug."},
-		{"govna/operator-contract-rationale.md", "Atomicity reduces dropped qualifiers", "A contract-growth review checks whether new rules duplicate, hide, misplace, or crowd out existing rules."},
-		{"govna/operator-contract-rationale.md", "the three-round limit returns repeated or decision-bearing churn", "The Operator may correct at most three missed paths or instructions before asking the Director again."},
+		{"arch.md", "deterministic fallout", "one directly broken supporting file with only one valid correction"},
+		{"arch.md", "Evidence-triggered reporting distinguishes contract defects", "A contract-integrity finding reports a proven governance-rule problem rather than an implementation bug."},
+		{"arch.md", "Atomicity reduces dropped qualifiers", "A rule-review checks whether new rules duplicate, hide, misplace, or crowd out existing rules."},
+		{"arch.md", "the three-round limit returns repeated or decision-bearing churn", "The Operator may correct at most three missed paths or instructions before asking the Director again."},
 	}
 	root := filepath.Join("..", "..")
 	for _, check := range checks {
@@ -854,11 +864,7 @@ func TestManualACTitleAndSummaryScenario(t *testing.T) {
 }
 
 func TestEfficiencyPurposeSourceCoverage(t *testing.T) {
-	for _, path := range []string{
-		"govna/operator-contract-rationale.md",
-		"internal/canon/assets/overlays/code/files/govna/operator-contract-rationale.md.tmpl",
-		"internal/canon/assets/overlays/doc/files/govna/operator-contract-rationale.md.tmpl",
-	} {
+	for _, path := range []string{"arch.md"} {
 		content := readSourceForLanguageTest(t, path)
 		if count := strings.Count(content, efficiencyPurposeDefinition); count != 1 {
 			t.Errorf("%s purpose definition count=%d, want 1", path, count)
@@ -1192,11 +1198,13 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 		},
 		"govna/build-release.md": {
 			"- Keep Go prep free of canonical build, Go build, and Go dependency commands.",
-			"- Reserve validation-token evidence for Rust prep.",
-			"- Refresh validation-token evidence for Rust prep.",
 			"- Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch.",
 		},
-		"govna/code-stacks.md": {
+		"internal/canon/assets/profile/rust/build-release-evidence.md": {
+			"- Reserve validation-token evidence for Rust prep.",
+			"- Refresh validation-token evidence for Rust prep.",
+		},
+		"govna/canon-spec.md": {
 			"- Bump the root package version during release prep.",
 			"- Refresh `Cargo.lock` during release prep.",
 			"- Build only selected executable products during scoped builds.",
@@ -1218,7 +1226,7 @@ func TestAtomicInstructionCorrections(t *testing.T) {
 			"- Ask for the missing authorization, scope, or context.",
 			"- Apply integrated audit adoption only when the Director explicitly requests govna audit.",
 			"- Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction.",
-			"- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction.",
+			"- Exempt only an eligible bounded completeness correction and an eligible decision re-entry from a fresh Implement action instruction.",
 			"- Require the release-message AC-reference set to equal the established release batch before Package runs prep.",
 		},
 	}
@@ -1262,14 +1270,14 @@ func TestCycleDocumentsDoNotRestatePhaseSteps(t *testing.T) {
 func TestCandidateCanonAndPackageInstructions(t *testing.T) {
 	want := map[string][]string{
 		"AGENTS.md": {
-			"Run the consumer-equivalent candidate-canon review in `govna/canon-cycle.md` before completing any canon change.",
+			"Run the consumer-equivalent candidate-canon review in `govna/canon-maintenance.md` before completing any canon change.",
 		},
 		"govna/build-release.md": {
 			"End the structured Package completion report with `Run below to release:`.",
 			"Place the exact release command immediately after that line.",
 			"Add nothing after the release command.",
 		},
-		"govna/canon-cycle.md": {
+		"govna/canon-maintenance.md": {
 			"Render DOC and every registered CODE stack.",
 			"Exercise every rendered profile through ordinary non-JSON `govna audit` at least once.",
 			"Complete one bounded scratch review for every actionable emitted AC.",
@@ -1282,7 +1290,7 @@ func TestCandidateCanonAndPackageInstructions(t *testing.T) {
 			"Verify every supported profile provides its required canonical command implementation.",
 			"Block Implement completion on any unresolved Govna-canon finding.",
 		},
-		"govna/code-stacks.md": {
+		"govna/canon-spec.md": {
 			"Use only Go, Rust, Swift, or Terraform as selectable CODE stacks.",
 		},
 		"internal/canon/assets/overlays/code/files/govna/build-release.md.tmpl": {
@@ -1466,7 +1474,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 
 	const phaseHeading = "### Phase-Advancement Rules\n"
 	const refineException = "- Exempt integrated audit adoption, eligible automatic Refine entry, and an eligible bounded completeness correction from a fresh Refine action instruction."
-	const implementException = "- Exempt only an eligible bounded completeness correction from a fresh Implement action instruction."
+	const implementException = "- Exempt only an eligible bounded completeness correction and an eligible decision re-entry from a fresh Implement action instruction."
 	const retiredException = "Exempt only an eligible bounded completeness correction under `### Four-Phase Workflow` from a fresh Refine or Implement action instruction."
 	for _, path := range agentsRewrittenPaths {
 		content := corpus[path]
@@ -1492,7 +1500,7 @@ func TestAffectedInstructionSectionEnvelopes(t *testing.T) {
 	const first = "Apply this checklist only to an explicit Director Package instruction for an established Ratified release batch or direct batch."
 	checklistRules := []string{first}
 	checklistOpening := "- " + strings.Join(checklistRules, "\n- ") + "\n"
-	codeOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\nNote: the operator flow has two steps.\n\n1. **Run prep.**\n"
+	codeOpening := "## Pre-Release Checklist\n\n" + checklistOpening + "\nNote: the operator flow has two steps. Prep stops on a bare AC, AT, or IE identifier that `AGENTS.md` `### AC Mechanics` does not allow.\n\n1. **Run prep.**\n"
 	for _, path := range buildReleaseRewrittenPaths {
 		content := corpus[path]
 		if !strings.Contains(content, codeOpening) {
@@ -1566,14 +1574,16 @@ func governanceCorpus(t *testing.T) map[string]string {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".md.tmpl") {
+		profile := strings.HasPrefix(path, "assets/profile/") && strings.HasSuffix(path, ".md")
+		if entry.IsDir() || (!strings.HasSuffix(path, ".md.tmpl") && !profile) {
 			return nil
 		}
 		content, err := fs.ReadFile(assets, path)
 		if err != nil {
 			return err
 		}
-		corpus["internal/canon/"+path] = string(content)
+		// A profile placeholder shares a line with the rule that follows it.
+		corpus["internal/canon/"+path] = profilePlaceholder.ReplaceAllString(string(content), "")
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -1650,14 +1660,13 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Report each failed, pending, manual, or unexercised acceptance test in the Implement completion report.",
 		"Cover every passing automated acceptance test in one line of that report.",
 		"Keep the closure-audit working record out of chat replies.",
-		"Record added, removed, and net AGENTS.md line and rule-shaped-bullet counts in the closure-audit working record.",
 		"Report a clean checklist in one line.",
 		"Pair each necessary Govna label with its plain-language meaning at first use in a document.",
 		"Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits outside `### Agent Release`.",
 		"Paste the literal output in a code block when the Director asks to see a file or command output.",
 		"Add no attribution trailer to a drafted or agent-run commit or release message.",
 		"Exclude wording preferences, raw size, speculative maintainability concerns, speculative conflicts, and disagreement with a settled Director decision.",
-		"Treat any repeated rule, misplaced procedural detail, excessive flat density with operational effect, or demonstrated retrieval or execution impairment as contract-growth evidence.",
+		"Treat any repeated rule, misplaced procedural detail, excessive flat density with operational effect, or demonstrated retrieval or execution impairment as rule-review evidence.",
 		"Keep each rule in exactly one governance file.",
 		"Reference the owning section by heading instead of restating its rule.",
 		"Cite file paths, line numbers, and concrete behavior.",
@@ -1770,11 +1779,11 @@ func TestStateEachRuleOnceRules(t *testing.T) {
 			release := "govna/release.md"
 			if p.config.Flavor == Code {
 				release = "govna/build-release.md"
-				rules["govna/code-stacks.md"] = append(rules["govna/code-stacks.md"], "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.")
+				rules["govna/canon-spec.md"] = append(rules["govna/canon-spec.md"], "Reject a Rust, Terraform, or Swift release whose tag, message, or CHANGELOG row prep did not prepare in the current repository before the approval prompt.")
 			}
 			rules["AGENTS.md"] = append(rules["AGENTS.md"], "Follow the Pre-Release Checklist in `"+release+"` during Package.")
 			for path, list := range rules {
-				content := fileText(t, files, path)
+				content := ruleHome(t, files, path)
 				for _, rule := range list {
 					if count := countRuleInstruction(content, rule); count != 1 {
 						t.Errorf("%s rule count=%d, want 1: %s", path, count, rule)
@@ -1831,16 +1840,13 @@ var agentReleaseRules = map[string][]string{
 		"Replace `No commit or release command executed.` and `Run below to release:` with the release result in that report.",
 		"Treat a successful agent-run release as a completed release under `### Completed Release` unless `## Project Rules` name a later step that completes a release.",
 	},
-	"govna/roles.md": {
-		"Execute a release command only under `AGENTS.md` `### Agent Release`.",
-	},
 }
 
 // childReleaseRules lists every rule that releasing changed children before
 // their CODE parent adds or rewrites, keyed by the rendered file that owns it.
 var childReleaseRules = map[string][]string{
 	"AGENTS.md": {
-		"Run no other git or GitHub write under the keyword except each child release under `### Child Repositories`.",
+		"Exempt each child release from the `### Agent Release` limit on other git writes.",
 		"Build the parent against each child that the active AC changes through the stack's local override during Implement and Ratify validation.",
 		"Treat a Package request as authorization for each child prep, local-override removal, and parent pin update.",
 		"Release each changed child before the parent's pin update.",
@@ -1863,7 +1869,7 @@ var childReleaseRules = map[string][]string{
 		"Continue to stage 2 after the child releases under `release` or `rel`.",
 		"Run stage 2 when no declared child is changed.",
 		"Remove each local override that resolves to a declared child.",
-		"Move each child pin to that child's latest tag with the stack's command in `govna/code-stacks.md`.",
+		"Move each child pin to that child's latest tag with the pin command at the end of this section.",
 		"Run the full build only after every override is removed and every pin is moved.",
 		"Write the `history.md` section after that full build passes.",
 		"Run the parent's prep after the `history.md` section.",
@@ -1871,10 +1877,7 @@ var childReleaseRules = map[string][]string{
 		"List every `go.mod` change beyond the child pin lines in a Go parent's Package completion report.",
 		"State the fix-forward recovery in every report of a failure after a published child tag.",
 	},
-	"govna/development-cycle.md": {
-		"Follow `govna/build-release.md` `## Child Releases` to release a child.",
-	},
-	"govna/code-stacks.md": {
+	"govna/canon-spec.md": {
 		"Stop prep and release when a local override resolves to a declared child.",
 		"Name the child, the override, and the pin update that removes it in that message.",
 		"Accept a local override to a declared child during a full build.",
@@ -1882,22 +1885,8 @@ var childReleaseRules = map[string][]string{
 		"Clone each declared child at its registry path before a full build, including in CI.",
 		"Run a scoped build in a clone that lacks its children.",
 		"Release a repository with no `cmd/<target>/main.go` from its tag alone, without compiling or installing a utility.",
-		"Use `go work init . <child>` for a child override.",
-		"Set the `go.work` `go` line to the `go.mod` `go` line with `go work edit -go=<version>`.",
-		"Detect a child override in a `go.mod` `replace` directive and in the workspace that `go env GOWORK` names.",
 		"Skip `go mod tidy` in a full build only while that workspace names a declared child.",
 		"Print one line that names the child when the build skips `go mod tidy`.",
-		"Move a pin with `go mod edit -dropreplace=<module>` when a replace exists, then `go get <module>@<tag>`.",
-		"Set `GOPRIVATE` or `GOPROXY=direct` when `go get` cannot see a just-pushed tag.",
-		"Use a `[patch]` entry with a `path` for a child override.",
-		"Detect a child override in a `path` dependency or `[patch]` entry in `Cargo.toml` or `.cargo/config.toml`.",
-		"Move a pin by setting the dependency's `tag`, removing the override, then running `cargo update -p <crate>`.",
-		"Use a local module `source` for a child override.",
-		"Detect a child override in any `.tf` module `source`.",
-		"Move a pin by setting `?ref=<tag>` in each child module `source`.",
-		"Use `swift package edit --path <child> <package>` for a child override.",
-		"Detect a child override in `.package(path:)` and in edit mode.",
-		"Move a pin by setting the version in `Package.swift`, running `swift package unedit <package>`, then `swift package resolve`.",
 	},
 }
 
@@ -1918,7 +1907,6 @@ var childAdoptionRules = map[string][]string{
 var childReleaseRetired = []string{
 	"Leave each child release for the Director",
 	"Ignore the registry during prep and release.",
-	"- Run no other git or GitHub write under the keyword.\n",
 }
 
 // agentReleaseRetired lists wording that the phase-action and agent-release
@@ -1938,7 +1926,8 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 			for path, list := range agentReleaseRules {
 				rules[path] = append(rules[path], list...)
 			}
-			if p.config.Flavor == Code {
+			rules["AGENTS.md"] = append(rules["AGENTS.md"], "Run no other git or GitHub write under the keyword.")
+			if p.config.Children {
 				for path, list := range childReleaseRules {
 					rules[path] = append(rules[path], list...)
 				}
@@ -1949,7 +1938,7 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 					"AGENTS.md":                  fileText(t, files, "AGENTS.md"),
 					"govna/build-release.md":     fileText(t, files, "govna/build-release.md"),
 					"govna/development-cycle.md": fileText(t, files, "govna/development-cycle.md"),
-					"govna/code-stacks.md":       fileText(t, files, "govna/code-stacks.md"),
+					"govna/canon-spec.md":        repoFile(t, "govna/canon-spec.md"),
 				} {
 					for _, retired := range childReleaseRetired {
 						if strings.Contains(content, retired) {
@@ -1957,19 +1946,17 @@ func TestAgentReleaseRulesFollowInstructionStyle(t *testing.T) {
 						}
 					}
 				}
-			} else {
-				rules["AGENTS.md"] = append(rules["AGENTS.md"], "Run no other git or GitHub write under the keyword.")
 			}
 			if p.config.Flavor == Code {
 				rules["govna/build-release.md"] = append(rules["govna/build-release.md"], "Append `--yes` or `-y` to skip that prompt only for an agent-run release under `AGENTS.md` `### Agent Release`.")
-				rules["govna/code-stacks.md"] = append(rules["govna/code-stacks.md"],
+				rules["govna/canon-spec.md"] = append(rules["govna/canon-spec.md"],
 					"Accept `--yes` or `-y` after the two release arguments in every stack.",
 					"Print the same candidate files and release sequence under `--yes` as the interactive release.",
 					"Skip only the approval prompt under `--yes`.",
 					"Keep `--yes` out of the printed release command.")
 			}
 			for path, list := range rules {
-				content := fileText(t, files, path)
+				content := ruleHome(t, files, path)
 				for _, rule := range list {
 					if count := countRuleInstruction(content, rule); count != 1 {
 						t.Errorf("%s rule count=%d, want 1: %s", path, count, rule)
@@ -2100,11 +2087,11 @@ func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
 		if !strings.Contains(session, placement) {
 			t.Error("Session Entry does not list the audit-suggestion rules in order after the Govna contract loaded. rule")
 		}
-		_, checkpoint, ok := strings.Cut(rationale, "\n## The `Govna contract loaded.` Checkpoint\n")
+		_, checkpoint, ok := strings.Cut(rationale, "\n**The Govna contract loaded. Checkpoint.** ")
 		if !ok {
 			t.Fatal("rationale omits the Govna contract loaded. checkpoint")
 		}
-		checkpoint, _, _ = strings.Cut(checkpoint, "\n## ")
+		checkpoint, _, _ = strings.Cut(checkpoint, "\n**")
 		if !strings.Contains(checkpoint, "\n"+sessionEntryAuditRationale+"\n") {
 			t.Error("checkpoint section omits the session-entry audit rationale")
 		}
@@ -2118,11 +2105,11 @@ func TestSessionEntryAuditRulesFollowInstructionStyle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, fileText(t, files, "AGENTS.md"), fileText(t, files, "govna/operator-contract-rationale.md"))
+			check(t, fileText(t, files, "AGENTS.md"), readSourceForLanguageTest(t, "arch.md"))
 		})
 	}
 	t.Run("root", func(t *testing.T) {
-		check(t, readSourceForLanguageTest(t, "AGENTS.md"), readSourceForLanguageTest(t, "govna/operator-contract-rationale.md"))
+		check(t, readSourceForLanguageTest(t, "AGENTS.md"), readSourceForLanguageTest(t, "arch.md"))
 	})
 }
 
@@ -2308,4 +2295,18 @@ func TestHistoryLookupRulesFollowInstructionStyle(t *testing.T) {
 			t.Error("history.md header paragraph does not match the canon header")
 		}
 	})
+}
+
+// ruleHome returns the text that may own a rule listed for path: the rendered
+// file when the render carries it, plus the repository-owned documents that
+// hold Govna-only text.
+func ruleHome(t *testing.T, files []File, path string) string {
+	t.Helper()
+	text := ""
+	for _, file := range files {
+		if file.Path == path {
+			text = string(file.Content)
+		}
+	}
+	return text + "\n" + repoFile(t, "govna/canon-spec.md") + "\n" + repoFile(t, "govna/canon-maintenance.md")
 }

@@ -144,6 +144,7 @@ func TestCommandHelpPages(t *testing.T) {
 		"  -f, --flavor code|doc   select Govna file set: CODE or DOC (default: inferred from cwd)\n" +
 		"  -s, --stack NAME        select CODE stack (default: inferred from cwd manifests)\n" +
 		"  -m, --module-path PATH  module path for Go CODE files (default: read from cwd's go.mod)\n" +
+		"  -k, --with-children     include the rules for a CODE parent that declares a child repository\n" +
 		"  -c, --child             write only the child repository files for the CODE stack\n" +
 		"  -o, --orphan            write only the orphan note for a dropped child repository\n" +
 		"  -v, --version           print executable version\n" +

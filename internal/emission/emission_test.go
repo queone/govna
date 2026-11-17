@@ -144,3 +144,31 @@ func TestAuditPathKeepsSupersededNumber(t *testing.T) {
 		}
 	})
 }
+
+func TestParentProfileNamesFilesStepsAndTests(t *testing.T) {
+	adds := NewParentProfile(true, []string{"AGENTS.md", "govna/audit.md"}, []string{"`govna/build-release.md` (listed in `govna/preserve.txt`)"})
+	for _, want := range []string{
+		"### Parent Profile Update\n\nThis parent declares its first child, so its contract and documents gain the child rules.\n",
+		"- Complete this section before any other work in this AC.\n",
+		"`govna render --with-children <scratch>`",
+		"Files to update:\n\n- `AGENTS.md`\n- `govna/audit.md`\n- `govna/canon-baseline.txt`\n",
+		"Files left unchanged:\n\n- `govna/build-release.md` (listed in `govna/preserve.txt`)\n",
+	} {
+		if !strings.Contains(adds.Instructions, want) {
+			t.Errorf("profile update omits %q:\n%s", want, adds.Instructions)
+		}
+	}
+	if len(adds.Paths) != 3 || adds.Paths[2] != BaselinePath {
+		t.Errorf("paths=%v", adds.Paths)
+	}
+	removes := NewParentProfile(false, []string{"AGENTS.md"}, nil)
+	if !strings.Contains(removes.Instructions, "`govna render <scratch>`") || strings.Contains(removes.Instructions, "--with-children") || strings.Contains(removes.Instructions, "Files left unchanged") {
+		t.Errorf("removal profile update:\n%s", removes.Instructions)
+	}
+	tests := removes.Tests(3)
+	for _, want := range []string{"**AT3** [Automated] [Pre-release gate] — Verify each updated parent file", "**AT4** [Automated] [Pre-release gate] — Verify every line from the boundary heading down", "**AT5** [Automated] [Pre-release gate] — Verify each updated file's line in `govna/canon-baseline.txt`"} {
+		if !strings.Contains(tests, want) {
+			t.Errorf("tests omit %q:\n%s", want, tests)
+		}
+	}
+}

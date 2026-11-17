@@ -641,3 +641,51 @@ func hasRegularMatch(pattern string) bool {
 	matches, _ := filepath.Glob(pattern)
 	return slices.ContainsFunc(matches, regularFile)
 }
+
+// ChildProfileFiles checks the parent files that hold child profile text
+// before a command emits an AC that updates them. current is the render for
+// the parent's present profile. It returns the files the AC updates and a note
+// for each file it leaves alone. It fails when a file cannot be updated
+// safely: unreadable, without its boundary, or different from current canon.
+func (a *Access) ChildProfileFiles(current []canon.File) (update, kept []string, err error) {
+	rendered := map[string][]byte{}
+	for _, file := range current {
+		rendered[file.Path] = file.Content
+	}
+	preserved := map[string]bool{}
+	if data, ok, err := a.ReadOptional("govna/preserve.txt"); err != nil {
+		return nil, nil, fmt.Errorf("read govna/preserve.txt: %w", err)
+	} else if ok {
+		for line := range strings.SplitSeq(string(data), "\n") {
+			preserved[strings.TrimSpace(line)] = true
+		}
+	}
+	for _, rel := range canon.ChildProfilePaths() {
+		if preserved[rel] {
+			kept = append(kept, "`"+rel+"` (listed in `govna/preserve.txt`)")
+			continue
+		}
+		if err := a.Preflight(rel); err != nil {
+			return nil, nil, fmt.Errorf("check %s: %w", rel, err)
+		}
+		if _, err := a.Lstat(rel); errors.Is(err, fs.ErrNotExist) {
+			kept = append(kept, "`"+rel+"` (absent; `govna audit` reports it)")
+			continue
+		}
+		data, err := a.ReadFile(rel)
+		if err != nil {
+			return nil, nil, usererr.Errorf("%s cannot be read, so its child rules cannot be updated: %w; fix the file's permissions and retry", rel, err)
+		}
+		region, ok := canon.ComparisonRegion(rel, data)
+		if !ok {
+			boundary, _ := canon.Boundary(rel)
+			return nil, nil, usererr.Errorf("%s lacks its %q heading, so its repository-owned text cannot be kept safely; run govna audit, adopt its AC, and retry", rel, boundary)
+		}
+		want, _ := canon.ComparisonRegion(rel, rendered[rel])
+		if string(region) != string(want) {
+			return nil, nil, usererr.Errorf("%s differs from this executable's Govna files, so its child rules cannot be updated safely; run govna audit, adopt its AC, and retry", rel)
+		}
+		update = append(update, rel)
+	}
+	return update, kept, nil
+}

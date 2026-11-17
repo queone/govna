@@ -203,7 +203,7 @@ func TestRenderGoldenManifest(t *testing.T) {
 		expected[fields[0]+"\t"+fields[1]] = fields[2] + "\t" + fields[3]
 	}
 	seen := map[string]bool{}
-	for _, variant := range []string{"doc", "go", "rust", "swift", "terraform"} {
+	for _, variant := range []string{"doc", "go", "go+children", "rust", "swift", "terraform"} {
 		cwd := filepath.Join(t.TempDir(), "widget")
 		if err := os.Mkdir(cwd, 0o755); err != nil {
 			t.Fatal(err)
@@ -211,9 +211,13 @@ func TestRenderGoldenManifest(t *testing.T) {
 		target := t.TempDir()
 		args := []string{"--flavor", "doc", target}
 		if variant != "doc" {
-			args = []string{"--flavor", "code", "--stack", variant}
-			if variant == "go" {
+			stack, children, _ := strings.Cut(variant, "+")
+			args = []string{"--flavor", "code", "--stack", stack}
+			if stack == "go" {
 				args = append(args, "--module-path", "example.com/widget")
+			}
+			if children != "" {
+				args = append(args, "--with-children")
 			}
 			args = append(args, target)
 		}
@@ -446,6 +450,34 @@ func assertRenderedExactly(t *testing.T, target string, want []canon.File) {
 	for _, file := range want {
 		if !bytes.Equal(got[file.Path], file.Content) {
 			t.Fatalf("%s differs from the canon render", file.Path)
+		}
+	}
+}
+
+func TestRenderWithChildrenAddsTheChildRules(t *testing.T) {
+	cwd := t.TempDir()
+	render := func(args ...string) (string, string, int) {
+		var stdout, stderr bytes.Buffer
+		target := filepath.Join(t.TempDir(), "out")
+		code := Run(append(args, target), &stdout, &stderr, cwd)
+		agents, _ := os.ReadFile(filepath.Join(target, "AGENTS.md"))
+		return string(agents), stderr.String(), code
+	}
+	for _, flag := range []string{"-k", "--with-children"} {
+		agents, errOut, code := render("--flavor", "code", "--stack", "go", "--module-path", "example.com/widget", flag)
+		if code != 0 || !strings.Contains(agents, "\n### Child Repositories\n") {
+			t.Errorf("%s code=%d stderr=%s; AGENTS.md omits the child rules", flag, code, errOut)
+		}
+	}
+	if agents, errOut, code := render("--flavor", "code", "--stack", "go", "--module-path", "example.com/widget"); code != 0 || strings.Contains(agents, "### Child Repositories") {
+		t.Errorf("plain render code=%d stderr=%s; AGENTS.md holds the child rules", code, errOut)
+	}
+	if _, errOut, code := render("--flavor", "doc", "--with-children"); code != 1 || !strings.Contains(errOut, "--with-children applies only to CODE canon") {
+		t.Errorf("DOC code=%d stderr=%s", code, errOut)
+	}
+	for _, mode := range []string{"--child", "--orphan"} {
+		if _, errOut, code := render("--with-children", mode); code != 1 || !strings.Contains(errOut, "--with-children does not apply to "+mode) {
+			t.Errorf("%s code=%d stderr=%s", mode, code, errOut)
 		}
 	}
 }

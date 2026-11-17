@@ -15,11 +15,15 @@ import (
 )
 
 func Run(args []string, stdout, stderr io.Writer, cwd string) int {
-	flavor, stack, modulePath, target, mode, code := parse(args, stderr)
+	flavor, stack, modulePath, target, mode, children, code := parse(args, stderr)
 	if code != 0 {
 		return code
 	}
 	if mode != "" {
+		if children {
+			fmt.Fprintf(stderr, "--with-children does not apply to --%s; remove --with-children\n", mode)
+			return 1
+		}
 		return runChildFiles(mode, flavor, stack, modulePath, target, stdout, stderr, cwd)
 	}
 	resolvedFlavor, err := repository.Flavor(cwd, flavor)
@@ -29,6 +33,10 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	}
 	if resolvedFlavor == canon.Doc && stack != "" {
 		fmt.Fprintln(stderr, "--stack applies only to CODE canon; remove --stack or select --flavor code")
+		return 1
+	}
+	if resolvedFlavor == canon.Doc && children {
+		fmt.Fprintln(stderr, "--with-children applies only to CODE canon because DOC repositories have no child repositories; remove --with-children or select --flavor code")
 		return 1
 	}
 	if resolvedFlavor == canon.Doc && modulePath != "" {
@@ -70,7 +78,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd string) int {
 	if modulePath != "" {
 		repoName = path.Base(modulePath)
 	}
-	files, err := canon.Render(canon.Config{Flavor: resolvedFlavor, RepoName: repoName, Stack: stack, ModulePath: modulePath})
+	files, err := canon.Render(canon.Config{Flavor: resolvedFlavor, RepoName: repoName, Stack: stack, ModulePath: modulePath, Children: children})
 	if err != nil {
 		fmt.Fprintf(stderr, "render canon: %v\n", err)
 		return 1
@@ -157,9 +165,11 @@ func write(files []canon.File, absTarget string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func parse(args []string, stderr io.Writer) (flavor, stack, modulePath, target, mode string, code int) {
+func parse(args []string, stderr io.Writer) (flavor, stack, modulePath, target, mode string, children bool, code int) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "-k", "--with-children":
+			children = true
 		case "-c", "--child", "-o", "--orphan":
 			next := "child"
 			if args[i] == "-o" || args[i] == "--orphan" {
@@ -167,51 +177,51 @@ func parse(args []string, stderr io.Writer) (flavor, stack, modulePath, target, 
 			}
 			if mode != "" && mode != next {
 				fmt.Fprintln(stderr, "--child and --orphan cannot be combined; render each into its own target")
-				return "", "", "", "", "", 2
+				return "", "", "", "", "", false, 2
 			}
 			mode = next
 		case "-f", "--flavor":
 			if i+1 == len(args) {
 				fmt.Fprintln(stderr, "--flavor requires a value")
-				return "", "", "", "", "", 2
+				return "", "", "", "", "", false, 2
 			}
 			i++
 			flavor = args[i]
 		case "-s", "--stack":
 			if i+1 == len(args) {
 				fmt.Fprintln(stderr, "--stack requires a value")
-				return "", "", "", "", "", 2
+				return "", "", "", "", "", false, 2
 			}
 			i++
 			stack = strings.TrimSpace(args[i])
 			if stack == "" {
 				fmt.Fprintln(stderr, "--stack requires a non-empty value")
-				return "", "", "", "", "", 2
+				return "", "", "", "", "", false, 2
 			}
 		case "-m", "--module-path":
 			if i+1 == len(args) {
 				fmt.Fprintln(stderr, "--module-path requires a value")
-				return "", "", "", "", "", 2
+				return "", "", "", "", "", false, 2
 			}
 			i++
 			modulePath = args[i]
 		default:
 			if target != "" {
 				fmt.Fprintf(stderr, "unexpected argument: %s (target already set to %q)\n", args[i], target)
-				return "", "", "", "", "", 2
+				return "", "", "", "", "", false, 2
 			}
 			target = args[i]
 		}
 	}
 	if target == "" {
 		fmt.Fprintln(stderr, "render requires a positional <target> argument")
-		return "", "", "", "", "", 2
+		return "", "", "", "", "", false, 2
 	}
 	if flavor != "" && flavor != "code" && flavor != "doc" {
 		fmt.Fprintf(stderr, "invalid --flavor: %q (must be 'code' or 'doc')\n", flavor)
-		return "", "", "", "", "", 2
+		return "", "", "", "", "", false, 2
 	}
-	return flavor, stack, modulePath, target, mode, 0
+	return flavor, stack, modulePath, target, mode, children, 0
 }
 
 func resolveFlavor(cwd, explicit string) (canon.Flavor, error) {

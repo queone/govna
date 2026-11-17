@@ -124,6 +124,8 @@ Govna carries a versioned set of governance files inside one dependency-free Go 
 - A two-role Director and Operator collaboration model.
 - An Acceptance Criteria workflow for bounded, reviewable changes.
 - Stack-aware CODE overlays for Go, Rust, Terraform, and Swift.
+- A contract for each repository that holds only the rules that repository acts on.
+- Rules for one kind of repository, such as a parent with child repositories, only where they apply.
 - Non-interactive `apply`, `audit`, `rm`, and `render` commands.
 - Canonical build scripts with validation, installation, and release support.
 
@@ -134,7 +136,7 @@ Govna uses a closed two-role model:
 - **Operator** — the coding agent responsible for implementation, tests, documentation alignment, and self-review.
 - **Director** — the human responsible for intent, priorities, scope, and irreversible or decision-bearing actions.
 
-The full role definitions and review contract live in [`govna/roles.md`](govna/roles.md). The reasoning behind the session-entry contract is documented in [`govna/operator-contract-rationale.md`](govna/operator-contract-rationale.md).
+The full role definitions and review contract live in [`govna/roles.md`](govna/roles.md). The reasoning behind the contract is documented in [`arch.md`](arch.md) under `### Contract Rationale`.
 
 ## Acceptance Criteria
 
@@ -151,6 +153,8 @@ Draft → Audit → Refine → Implement → Ratify → Package
 ```
 
 Draft creates the AC. Audit, Refine, Implement, and Ratify are its four phases. Package is the separate post-Ratify release-preparation action.
+
+Refine pauses until the Director sends Implement. When the Director gives a decision during Implement, the Operator records it in the AC through Refine and resumes Implement without a second instruction, because the decision came with the authority to continue.
 
 Audit, Refine, Implement, and Ratify target one eligible AC. The pending release batch contains every unpackaged AC whose implementation is present, including work still awaiting Ratify. Before another AC enters Implement, the Operator privately checks that the projected plus-joined references and a brief result summary can fit one 80-byte message; that calculation does not start Package. Package requires every pending member to be Ratified and targets the complete batch. Use `Package AC<N>+AC<M>` to establish a fitting multi-AC batch, or use standalone `Package`, `package`, `pack`, or `prep` after a complete batch is already known. Prep rejects an oversized batch, a partial batch, and a smaller batch that would leave implemented work outside the release. A direct batch, one with no implemented AC awaiting release, packages direct-handled changes with a release message that names no AC.
 
@@ -208,6 +212,8 @@ Flags:
 
 A child repository is a separate repository that this parent imports at a pinned version and governs from its own sessions, such as a public engine for a private game. Run `govna apply --child ../engine` from the parent. Govna checks that the child is beside the parent, uses the parent's stack, and has not adopted Govna. It then writes the child files: a pointer `AGENTS.md` that never names the parent, the stack's build tooling (`build.sh`, plus `tests/build_cli.sh` for Rust), `.gitignore`, and `CHANGELOG.md`. It records the child in `govna/children.txt` and writes a review AC in the parent, then prints a note: the parent's full build now builds the child first and fails until the child's own `./build.sh` passes. When it replaces a child `AGENTS.md` that held the child's own rules, it warns you to move them into the parent's `AGENTS.md` `## Project Rules` under a `###` heading named for the child, such as `### engine`. Plan follow-up child work as a second AC released together with the review AC. The parent's full `./build.sh` runs the child's `build.sh` first, but only when the child's build tooling matches the parent's copy. Every clone of the parent, including CI, needs each child at its registry path for a full build; a clone without its children can run a scoped build, which skips them. A later `govna apply` in the child replaces an unedited pointer with the full Govna files. DOC repositories have no child repositories.
 
+When the child is the parent's first, the review AC also adds the child-repository rules to the parent's `AGENTS.md`, `govna/audit.md`, `govna/build-release.md`, and `govna/development-cycle.md`, and replaces their lines in `govna/canon-baseline.txt`. Apply itself changes none of those files, so you approve the contract change before it happens, and the text below each file's repository-owned heading stays as it is. Apply stops before writing anything when one of those files cannot be read, lacks its boundary heading, or differs from the current Govna files; run `govna audit` first in that case. A file listed in `govna/preserve.txt` stays unchanged.
+
 Apply keeps an existing `README.md`, `CHANGELOG.md`, `arch.md`, or `plan.md`, puts one blank line between existing `plan.md` IE items while keeping their text and order, merges every registered governance boundary whether or not an agent instruction file already exists, recognizes a boundary with LF or CRLF line endings, and reports every outcome in the adoption AC. Before writing anything, apply validates every destination: it rejects a symbolic link at a managed path or intermediate directory, a directory or special file where a regular file belongs, and any path outside the target, naming the path and the recovery action. Every read and write runs through a handle contained in the resolved target. After adoption, the repository owns its generated files and may adapt them to local needs.
 
 Apply never creates `CLAUDE.md`. Earlier Govna versions created it as a symbolic link to `AGENTS.md`; apply deletes a link whose target is exactly `AGENTS.md`, prints `removed CLAUDE.md (retired Govna link)`, and records the removal in the adoption AC. It never changes any other `CLAUDE.md`; it records the kept file in the adoption AC instead. Apply prints the two Claude Code hints from [Start the agent and confirm it sees the rules](#3-start-the-agent-and-confirm-it-sees-the-rules) on stderr; they never change its exit code, stdout, or written files.
@@ -244,7 +250,7 @@ govna rm
 
 The command labels files for deletion, preservation, or Director review and writes a guarded removal AC. It does not carry out any removal choice or delete repository content.
 
-In a parent with child repositories, the removal AC also rewrites each child's `AGENTS.md` to a short orphan note and deletes `govna/children.txt`, and keeps every other child file. Run `govna rm --child <path>` (`-c`) to write an AC that drops one declared child only.
+In a parent with child repositories, the removal AC also rewrites each child's `AGENTS.md` to a short orphan note and deletes `govna/children.txt`, and keeps every other child file. Run `govna rm --child <path>` (`-c`) to write an AC that drops one declared child only. When that child is the parent's last, the same AC also removes the child-repository rules from the parent's contract and documents, under the same checks as `govna apply --child`.
 
 Follow [Leave the Trial or Remove Govna](#leave-the-trial-or-remove-govna) to review and implement that plan through your agent CLI. Removal does not recover pre-adoption file contents.
 
@@ -258,7 +264,7 @@ Write the selected CODE or DOC built-in governance files to a target directory f
 govna render --flavor code --stack Go --module-path example.com/my-service <target>
 ```
 
-Use `--child` (`-c`) to write only the child files for the selected CODE stack, or `--orphan` (`-o`) to write only the orphan note as `AGENTS.md`. Neither applies to DOC.
+Use `--with-children` (`-k`) to include the rules for a CODE parent that declares a child repository; a render without it holds no child-repository rules. Use `--child` (`-c`) to write only the child files for the selected CODE stack, or `--orphan` (`-o`) to write only the orphan note as `AGENTS.md`. Neither applies to DOC.
 
 Render writes embedded Govna files only and creates no adoption record. The target is not pre-cleaned. Render validates destinations the same way apply does and rejects links, directories, and special files at managed paths before writing anything. It never creates or changes `CLAUDE.md`.
 
@@ -279,6 +285,8 @@ The `update:` line asks the Go module proxy for the latest govna release at most
 
 Canon is the versioned set of governance files embedded into the executable at compile time. Govna writes those files deterministically. A consumer repository is any repository that has adopted Govna. It carries metadata and a baseline—the saved hashes of the Govna-managed regions previously installed there—so audit can distinguish new Govna files from local edits.
 
+Canon text has two possible audiences, and Govna keeps them apart. A consumer receives only text that its agent or Director acts on. Rules and specifications that only maintain the canon stay in this repository: `AGENTS.md` `### Canon Maintenance`, [`govna/canon-maintenance.md`](govna/canon-maintenance.md), and [`govna/canon-spec.md`](govna/canon-spec.md). Text for one kind of repository is profile text, and it renders only there: the child-repository rules reach a CODE parent that declares a child, and the validation-token rules reach a Rust repository. Each consumer's `govna/README.md` links to the Govna-only documents as background reading.
+
 The preserve registry at `govna/preserve.txt` lists files that a Director chose to keep local. Audit keeps those decisions explicit while continuing to identify updates, migrations, and review choices elsewhere.
 
 ## Repository Types and CODE Stacks
@@ -288,7 +296,7 @@ Govna provides two overlay flavors:
 - **CODE** — governance, architecture, development, build, and release support for software repositories.
 - **DOC** — governance and editing support for documentation repositories.
 
-CODE repositories can select only Go, Rust, Swift, and Terraform because those stacks have complete canonical build adapters. Each supported stack defines inference, canonical validation, installation, scoped-build, and release behavior. See [`govna/code-stacks.md`](govna/code-stacks.md) for the complete contracts.
+CODE repositories can select only Go, Rust, Swift, and Terraform because those stacks have complete canonical build adapters. Each supported stack defines inference, canonical validation, installation, scoped-build, and release behavior. See [`govna/canon-spec.md`](govna/canon-spec.md) for the complete contracts; consumers do not receive that specification.
 
 ## Choosing a DOC Kind and Page Types
 
@@ -325,6 +333,8 @@ Govna is a standard-library-only Go module. It keeps every governance template i
 Every command reaches repository files through one contained-access helper in `internal/repository`. It validates each path as normalized and repository-relative, rejects symbolic links at managed paths, and performs each operation through a handle rooted at the resolved target, so a link substituted after preflight cannot escape it.
 
 The canonical build checks generated apply, audit, and removal ACs for direct imperative instructions, one action per instruction, expected wording, and every expected output branch. These language checks run separately from byte-for-byte fixture comparisons.
+
+The build also guards the audience split. It fails when a render holds maintenance text, when child-repository or Rust text renders outside its profile, or when a rendered rule names a heading that the same render lacks.
 
 Command output is deterministic and terminal color is gated by TTY capability, `NO_COLOR`, `TERM=dumb`, and 256-color support. The generated build scripts are self-contained and remain compatible with their documented stack environments.
 

@@ -1,0 +1,2 @@
+- Pass the full build's validation token to Rust prep during `Package` only when the repository provides Rust validation-token support.
+- Fall back to a pre-change full build only when Rust validation-token support exists and its prep evidence is missing or stale.

@@ -41,6 +41,13 @@ func notApplicableOutcome(evidence, reason string) validationOutcome {
 	return validationOutcome{kind: validationNotApplicable, evidence: evidence, reason: reason}
 }
 
+// retiredCanonDocuments lists the documents that no consumer receives any
+// more. A repository that adopted an earlier canon still holds them.
+var retiredCanonDocuments = map[string]bool{
+	"govna/code-stacks.md":                 true,
+	"govna/operator-contract-rationale.md": true,
+}
+
 func fixture(t *testing.T) string {
 	return fixtureFor(t, canon.Code, "Go")
 }
@@ -729,7 +736,7 @@ func TestAuditReviewMixedBoundaryBranches(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			file := FileResult{Path: "AGENTS.md", Classification: "ambiguity", Boundary: tc.boundary, canonPresent: true, targetInspected: true, targetPresent: true}
 			var body strings.Builder
-			writeAuditReview(&body, "Go", []FileResult{file})
+			writeAuditReview(&body, "Go", false, []FileResult{file})
 			got := body.String()
 			hasScoped := strings.Contains(got, "Compare the canon zone of `AGENTS.md` above exact boundary `## Project Rules`")
 			if hasScoped != tc.wantScoped {
@@ -2909,7 +2916,14 @@ func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 			}
 			for _, file := range report.Files {
 				switch file.Classification {
-				case "ambiguity", "target-has-no-canon", "migration-required":
+				case "target-has-no-canon":
+					// A document that left the canon after the tag is the one
+					// expected Director choice: keep it, move it, or delete it.
+					if retiredCanonDocuments[file.Path] {
+						continue
+					}
+					t.Errorf("%s needs a Director choice after a clean %s adoption: %s", file.Path, tag, file.Classification)
+				case "ambiguity", "migration-required":
 					t.Errorf("%s needs a Director choice after a clean %s adoption: %s", file.Path, tag, file.Classification)
 				}
 			}
@@ -3003,7 +3017,9 @@ func TestAuditDocExplainsEveryEmittedClassification(t *testing.T) {
 	}
 	configs := map[string]canon.Config{"DOC": {Flavor: canon.Doc, RepoName: "handbook"}}
 	for _, stack := range canon.Stacks() {
-		config := canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: stack}
+		// Only a parent that declares a child can receive manual-fix, so the
+		// row renders with the child profile.
+		config := canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: stack, Children: true}
 		if stack == "Go" {
 			config.ModulePath = "example.com/widget"
 		}
@@ -3086,6 +3102,14 @@ func childAuditFixture(t *testing.T) (string, string, string) {
 		t.Fatal(err)
 	}
 	writeAuditFile(t, filepath.Join(root, "govna", "children.txt"), repository.FormatChildren([]string{entry}))
+	// A parent that declares a child carries the child profile text.
+	withChildren, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget", Children: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range withChildren {
+		writeAuditFile(t, filepath.Join(root, filepath.FromSlash(file.Path)), file.Content)
+	}
 	git(t, root, "add", ".")
 	git(t, root, "commit", "-qm", "declare child")
 	return root, child, entry
@@ -3649,5 +3673,57 @@ func TestAuditFlagsCompactPlanIdeas(t *testing.T) {
 				t.Errorf("spacing check fails after spacing: %v: %s", err, spacing)
 			}
 		})
+	}
+}
+
+func TestAuditReportsChildRulesForAParentRenderedWithoutThem(t *testing.T) {
+	root, _, _ := childAuditFixture(t)
+	plain, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := map[string]bool{"govna/canon-baseline.txt": true}
+	for _, path := range canon.ChildProfilePaths() {
+		profile[path] = true
+	}
+	for _, file := range plain {
+		if profile[file.Path] {
+			writeAuditFile(t, filepath.Join(root, filepath.FromSlash(file.Path)), file.Content)
+		}
+	}
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-qm", "parent without child rules")
+	report, body := runAuditFixture(t, root, []string{"--json", "--repo-name", "widget"})
+	if report.Emitted == nil {
+		t.Fatal("audit wrote no AC for a parent that lacks its child rules")
+	}
+	results := map[string]FileResult{}
+	for _, file := range report.Files {
+		results[file.Path] = file
+	}
+	for _, path := range canon.ChildProfilePaths() {
+		file := results[path]
+		if file.Classification != "clear-sync" && file.EffectiveClassification != "force-sync" {
+			t.Errorf("%s classification=%q effective=%q, want a safe update", path, file.Classification, file.EffectiveClassification)
+		}
+		if !strings.Contains(body, "`"+path+"`") {
+			t.Errorf("adoption AC omits %s", path)
+		}
+	}
+	for _, want := range []string{
+		"- Pass `--with-children` to that render, because this repository declares a child repository.\n",
+		"- Create a temporary copy of the embedded Govna files with `govna render --with-children`.\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("adoption AC omits %q", want)
+		}
+	}
+
+	childless := fixture(t)
+	if err := os.Remove(filepath.Join(childless, "govna", "roles.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, body := runAuditFixture(t, childless, []string{"--json", "--repo-name", "widget"}); body == "" || strings.Contains(body, "--with-children") {
+		t.Errorf("a repository without children is told to render with children:\n%s", body)
 	}
 }

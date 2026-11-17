@@ -17,7 +17,6 @@ Current contents:
 - `govna/editing-cycle.md`
 - `govna/editing-guidelines.md`
 - `govna/metadata.txt`
-- `govna/operator-contract-rationale.md`
 - `govna/README.md`
 - `govna/release.md`
 - `govna/roles.md`

@@ -1,0 +1,3 @@
+- Use a local module `source` for a child override.
+- Detect a child override in any `.tf` module `source`.
+- Move a pin by setting `?ref=<tag>` in each child module `source`.

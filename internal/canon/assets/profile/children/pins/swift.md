@@ -1,0 +1,3 @@
+- Use `swift package edit --path <child> <package>` for a child override.
+- Detect a child override in `.package(path:)` and in edit mode.
+- Move a pin by setting the version in `Package.swift`, running `swift package unedit <package>`, then `swift package resolve`.

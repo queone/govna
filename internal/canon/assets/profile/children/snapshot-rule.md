@@ -1,0 +1,1 @@
+- Record the same identities for each in-scope child repository.

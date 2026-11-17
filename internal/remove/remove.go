@@ -97,7 +97,7 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 		module = repository.ModulePath(cwd)
 	}
 	name := repository.Name(cwd, module, cfg.RepoName)
-	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module})
+	files, err := canon.Render(canon.Config{Flavor: flavor, RepoName: name, Stack: stack, ModulePath: module, Children: len(children) > 0})
 	if err != nil {
 		fmt.Fprintf(stderr, "rm: %v\n", err)
 		return 1
@@ -215,7 +215,36 @@ func runChild(arg string, children []string, flavor canon.Flavor, stdout, stderr
 			return 1
 		}
 	}
-	body := []byte(buildChildAC(stub, programVersion, entry))
+	// Dropping the last child changes the parent's profile. The removal AC
+	// carries that update, so check it can be applied before anything is written.
+	var profile *emission.ParentProfile
+	if len(children) == 1 {
+		access, err := repository.Open(cwd)
+		if err != nil {
+			fmt.Fprintf(stderr, "rm: open %s: %v\n", cwd, err)
+			return 1
+		}
+		stack := repository.Stack(cwd)
+		module := ""
+		if stack == "Go" {
+			module = repository.ModulePath(cwd)
+		}
+		current, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: repository.Name(cwd, module, ""), Stack: stack, ModulePath: module, Children: true})
+		if err != nil {
+			access.Close()
+			fmt.Fprintf(stderr, "rm: %v\n", err)
+			return 1
+		}
+		update, kept, err := access.ChildProfileFiles(current)
+		access.Close()
+		if err != nil {
+			fmt.Fprintf(stderr, "rm: %v\n", err)
+			return 1
+		}
+		p := emission.NewParentProfile(false, update, kept)
+		profile = &p
+	}
+	body := []byte(buildChildAC(stub, programVersion, entry, profile))
 	return writeStub(stub, full, reused, existing, programVersion, body, stdout, stderr)
 }
 
@@ -255,7 +284,7 @@ func childSlug(entry string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-func buildChildAC(stub, programVersion, entry string) string {
+func buildChildAC(stub, programVersion, entry string, profile *emission.ParentProfile) string {
 	number := ""
 	if rest, ok := strings.CutPrefix(filepath.Base(stub), "ac"); ok {
 		if before, _, ok := strings.Cut(rest, "-"); ok {
@@ -263,18 +292,34 @@ func buildChildAC(stub, programVersion, entry string) string {
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# AC%s Drop Child Repository %s\n\n## Summary\n\nGovna executable v%s created this plan from its embedded governance files (canon v%s). This AC drops the child repository `%s` from this parent: it rewrites the child's `AGENTS.md` to the orphan note and removes the child from `%s`. Every other file stays unchanged.\n\n### Removal Instructions\n\n", number, entry, programVersion, canon.Version, entry, repository.ChildRegistryPath)
+	fmt.Fprintf(&b, "# AC%s Drop Child Repository %s\n\n## Summary\n\nGovna executable v%s created this plan from its embedded governance files (canon v%s). This AC drops the child repository `%s` from this parent: it rewrites the child's `AGENTS.md` to the orphan note and removes the child from `%s`.%s Every other file stays unchanged.\n\n### Removal Instructions\n\n", number, entry, programVersion, canon.Version, entry, repository.ChildRegistryPath, profileSummary(profile))
 	b.WriteString("- Create the orphan note with `govna render --orphan <orphan-scratch>`.\n")
 	fmt.Fprintf(&b, "- Copy `<orphan-scratch>/AGENTS.md` to `%s/AGENTS.md`.\n", entry)
 	fmt.Fprintf(&b, "- Remove the `%s` line from `%s`.\n", entry, repository.ChildRegistryPath)
+	if profile != nil {
+		b.WriteString("\n")
+		b.WriteString(strings.TrimRight(profile.Instructions, "\n"))
+		b.WriteString("\n")
+	}
 	b.WriteString("\n### Routing Decisions\n\n`None` — no review items.\n\n## In Scope\n\n")
-	writeRoutes(&b, []Route{
+	routes := []Route{
 		{entry + "/AGENTS.md", "rewrite to the orphan note", "the child repository loses its parent"},
 		{repository.ChildRegistryPath, "remove entry `" + entry + "`", "the parent stops governing the child"},
-	})
+	}
+	if profile != nil {
+		for _, path := range profile.Paths {
+			routes = append(routes, Route{path, "update from the temporary copy", "the parent loses the child rules"})
+		}
+	}
+	writeRoutes(&b, routes)
 	b.WriteString("\n## Out Of Scope\n\n- Every other parent and child file.\n\n## Migration findings\n\n- None.\n\n## Acceptance Tests\n\n")
 	fmt.Fprintf(&b, "**AT1** [Automated] [Pre-release gate] — Verify `%s/AGENTS.md` matches `govna render --orphan`.\n\n", entry)
 	fmt.Fprintf(&b, "**AT2** [Automated] [Pre-release gate] — Verify `%s` no longer lists `%s`.\n", repository.ChildRegistryPath, entry)
+	if profile != nil {
+		b.WriteString("\n")
+		b.WriteString(strings.TrimRight(profile.Tests(3), "\n"))
+		b.WriteString("\n")
+	}
 	b.WriteString("\n## Status\n\n`PENDING` — removal emission; awaiting explicit Director Audit.\n")
 	return b.String()
 }
@@ -483,6 +528,9 @@ func buildAC(stub, programVersion, canonVersion string, flavor canon.Flavor, sta
 	if flavor == canon.Code {
 		recipe += " --stack " + stack
 	}
+	if a.orphans > 0 {
+		recipe += " --with-children"
+	}
 	recipe += " <scratch>"
 	if a.orphans > 0 {
 		b.WriteString("- Create the orphan note with `govna render --orphan <orphan-scratch>`.\n")
@@ -525,4 +573,13 @@ func writeRoutes(b *strings.Builder, routes []Route) {
 	for _, r := range routes {
 		fmt.Fprintf(b, "- `%s` — %s; %s.\n", r.Path, r.Kind, r.Reason)
 	}
+}
+
+// profileSummary returns the Summary sentence for a removal AC that also
+// removes the child rules from the parent.
+func profileSummary(profile *emission.ParentProfile) string {
+	if profile == nil {
+		return ""
+	}
+	return " It also removes the child rules from the parent's contract and documents."
 }

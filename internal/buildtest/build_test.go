@@ -57,7 +57,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			},
 		},
 		{
-			name: "Go", claimsPath: "govna/code-stacks.md",
+			name: "Go", claimsPath: "govna/canon-spec.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
@@ -74,7 +74,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			},
 		},
 		{
-			name: "Rust", claimsPath: "govna/code-stacks.md",
+			name: "Rust", claimsPath: "govna/canon-spec.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Rust"},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh tests/build_cli.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
@@ -90,7 +90,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			},
 		},
 		{
-			name: "Swift", claimsPath: "govna/code-stacks.md",
+			name: "Swift", claimsPath: "govna/canon-spec.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Swift"},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
@@ -105,7 +105,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			},
 		},
 		{
-			name: "Terraform", claimsPath: "govna/code-stacks.md",
+			name: "Terraform", claimsPath: "govna/canon-spec.md",
 			config: canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Terraform"},
 			bindings: []binding{
 				{claim: "Run each declared child's `build.sh` before the parent's own build steps during a full build.", implementation: "_build_children \"$child_scoped\" build.sh", regression: "TestChildBuildHelperRunsMatchingChildren"},
@@ -154,6 +154,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 	root := repoRoot(t)
 	goRegressions := string(mustRead(t, filepath.Join(root, "internal/buildtest/build_test.go")))
 	rustRegressions := string(mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/rust/tests/build_cli.sh.tmpl")))
+	spec := string(mustRead(t, filepath.Join(root, "govna/canon-spec.md")))
 	for _, profile := range profiles {
 		t.Run(profile.name, func(t *testing.T) {
 			files, err := canon.Render(profile.config)
@@ -164,8 +165,14 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			for _, file := range files {
 				rendered[file.Path] = string(file.Content)
 			}
+			// The tool specification is repository-owned, so no render carries
+			// it. Claims come from it and from the rendered release document.
+			rendered["govna/canon-spec.md"] = spec
 			script := rendered["build.sh"]
 			claims := rendered[profile.claimsPath]
+			if profile.claimsPath != "govna/canon-spec.md" {
+				claims += "\n" + spec
+			}
 			if script == "" || claims == "" {
 				t.Fatalf("render omits build.sh or %s", profile.claimsPath)
 			}

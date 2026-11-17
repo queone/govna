@@ -4,6 +4,8 @@ This overlay owns code-repo artifacts and rules only. Not rendered to consumers 
 
 Current concrete templates live under `files/`, stack-specific build tooling under `stacks/<name>/`.
 
+Profile text lives under `../../profile/`: the child-repository rules render only for a parent that declares a child, and the validation-token rules only for Rust. Text that only maintains the canon belongs in no asset.
+
 Current contents (`files/`):
 
 - `.gitignore`
@@ -12,12 +14,10 @@ Current contents (`files/`):
 - `govna/ac-template.md`
 - `govna/build-release.md`
 - `govna/canon-cycle.md`
-- `govna/code-stacks.md`
 - `govna/development-cycle.md`
 - `govna/development-guidelines.md`
 - `govna/audit.md`
 - `govna/metadata.txt`
-- `govna/operator-contract-rationale.md`
 - `govna/README.md`
 - `govna/roles.md`
 - `plan.md`

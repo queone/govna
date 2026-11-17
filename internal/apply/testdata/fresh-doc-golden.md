@@ -23,7 +23,6 @@ Files Govna processed:
 - `govna/editing-cycle.md` (written)
 - `govna/editing-guidelines.md` (written)
 - `govna/metadata.txt` (written)
-- `govna/operator-contract-rationale.md` (written)
 - `govna/release.md` (written)
 - `govna/roles.md` (written)
 - `plan.md` (written)

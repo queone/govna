@@ -1,0 +1,5 @@
+- Use `go work init . <child>` for a child override.
+- Set the `go.work` `go` line to the `go.mod` `go` line with `go work edit -go=<version>`.
+- Detect a child override in a `go.mod` `replace` directive and in the workspace that `go env GOWORK` names.
+- Move a pin with `go mod edit -dropreplace=<module>` when a replace exists, then `go get <module>@<tag>`.
+- Set `GOPRIVATE` or `GOPROXY=direct` when `go get` cannot see a just-pushed tag.

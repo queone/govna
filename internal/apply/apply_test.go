@@ -1088,3 +1088,201 @@ func TestApplySpacesCompactPlanIdeas(t *testing.T) {
 		})
 	}
 }
+
+// parentProfile reads the parent files that hold child profile text, plus the
+// saved baseline.
+func parentProfile(t *testing.T, parent string) map[string][]byte {
+	t.Helper()
+	out := map[string][]byte{}
+	for _, path := range append(canon.ChildProfilePaths(), "govna/canon-baseline.txt") {
+		data, err := os.ReadFile(filepath.Join(parent, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[path] = data
+	}
+	return out
+}
+
+func appendFixture(t *testing.T, path, text string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, path, append(data, []byte(text)...))
+}
+
+func TestApplyFirstChildLeavesTheParentProfileToTheReviewAC(t *testing.T) {
+	parent, _ := childParentFixture(t, "Go")
+	appendFixture(t, filepath.Join(parent, "AGENTS.md"), "\n- Keep the widget blue.\n")
+	appendFixture(t, filepath.Join(parent, "govna", "build-release.md"), "\n- Release on Fridays.\n")
+	before := parentProfile(t, parent)
+	out, errOut, code := runAt(t, parent, "--child", "../engine")
+	if code != 0 || errOut != "" {
+		t.Fatalf("code=%d stdout=%s stderr=%s", code, out, errOut)
+	}
+	for path, want := range before {
+		got, err := os.ReadFile(filepath.Join(parent, filepath.FromSlash(path)))
+		if err != nil || !bytes.Equal(got, want) {
+			t.Errorf("apply --child changed the parent file %s: %v", path, err)
+		}
+	}
+	ac, err := os.ReadFile(filepath.Join(parent, "govna", "ac1-govna-apply-child.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path := range before {
+		if !strings.Contains(string(ac), "- `"+path+"` (update: child rules)\n") {
+			t.Errorf("review AC omits the parent file %s", path)
+		}
+	}
+	for _, want := range []string{
+		"### Parent Profile Update\n",
+		"- Complete this section before any other work in this AC.\n",
+		"- Create a temporary copy of the parent's Govna files with `govna render --with-children <scratch>`.\n",
+		"- Keep that boundary heading and every line below it.\n",
+	} {
+		if !strings.Contains(string(ac), want) {
+			t.Errorf("review AC omits %q", want)
+		}
+	}
+	// Follow the emitted steps, then check the repository-owned text and the baseline.
+	with, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "zq-private-parent", Stack: "Go", ModulePath: "example.com/zq-private-parent", Children: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := map[string][]byte{}
+	for _, file := range with {
+		rendered[file.Path] = file.Content
+	}
+	baseline := string(before["govna/canon-baseline.txt"])
+	for _, path := range canon.ChildProfilePaths() {
+		updated := rendered[path]
+		if _, mixed := canon.Boundary(path); mixed {
+			merged, ok := merge(before[path], rendered[path], path)
+			if !ok {
+				t.Fatalf("%s lost its boundary", path)
+			}
+			oldTail, _ := canon.ProtectedRegion(path, before[path])
+			newTail, _ := canon.ProtectedRegion(path, merged)
+			if !bytes.Equal(oldTail, newTail) {
+				t.Errorf("%s repository-owned text changed", path)
+			}
+			updated = merged
+		}
+		if bytes.Equal(updated, before[path]) {
+			t.Errorf("%s gains no child rules", path)
+		}
+		gotRegion, _ := canon.ComparisonRegion(path, updated)
+		wantRegion, _ := canon.ComparisonRegion(path, rendered[path])
+		if !bytes.Equal(gotRegion, wantRegion) {
+			t.Errorf("%s canon region differs from the render with children", path)
+		}
+		baseline = replaceBaselineLine(t, baseline, string(rendered["govna/canon-baseline.txt"]), path)
+	}
+	if baseline != string(rendered["govna/canon-baseline.txt"]) {
+		t.Error("the baseline differs from the render with children after the listed lines are replaced")
+	}
+}
+
+// replaceBaselineLine replaces path's line in baseline with its line in fresh.
+func replaceBaselineLine(t *testing.T, baseline, fresh, path string) string {
+	t.Helper()
+	find := func(text string) string {
+		for line := range strings.SplitSeq(text, "\n") {
+			if strings.HasPrefix(line, path+"\t") {
+				return line
+			}
+		}
+		t.Fatalf("baseline omits %s", path)
+		return ""
+	}
+	return strings.Replace(baseline, find(baseline), find(fresh), 1)
+}
+
+func TestApplyFirstChildStopsBeforeWritingForAnUnsafeProfileFile(t *testing.T) {
+	for name, tc := range map[string]struct {
+		damage func(t *testing.T, parent string)
+		want   string
+	}{
+		"boundary-less": {func(t *testing.T, parent string) {
+			path := filepath.Join(parent, "AGENTS.md")
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFixture(t, path, bytes.Replace(data, []byte("\n## Project Rules\n"), []byte("\n"), 1))
+		}, "AGENTS.md lacks its \"## Project Rules\" heading"},
+		"stale": {func(t *testing.T, parent string) {
+			path := filepath.Join(parent, "govna", "development-cycle.md")
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFixture(t, path, append([]byte("local edit\n"), data...))
+		}, "govna/development-cycle.md differs from this executable's Govna files"},
+		"linked": {func(t *testing.T, parent string) {
+			path := filepath.Join(parent, "govna", "audit.md")
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink("roles.md", path); err != nil {
+				t.Fatal(err)
+			}
+		}, "govna/audit.md is a symbolic link"},
+		"unreadable": {func(t *testing.T, parent string) {
+			if err := os.Chmod(filepath.Join(parent, "govna", "audit.md"), 0); err != nil {
+				t.Fatal(err)
+			}
+		}, "govna/audit.md cannot be read"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if name == "unreadable" && os.Geteuid() == 0 {
+				t.Skip("root reads every file")
+			}
+			parent, child := childParentFixture(t, "Go")
+			tc.damage(t, parent)
+			_, errOut, code := runAt(t, parent, "--child", "../engine")
+			if code != 1 || !strings.Contains(errOut, tc.want) || !strings.Contains(errOut, "retry") {
+				t.Fatalf("code=%d stderr=%s", code, errOut)
+			}
+			if _, err := os.Stat(filepath.Join(parent, "govna", "children.txt")); !os.IsNotExist(err) {
+				t.Errorf("apply wrote the registry: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(child, "AGENTS.md")); !os.IsNotExist(err) {
+				t.Errorf("apply wrote the child pointer: %v", err)
+			}
+			if matches, _ := filepath.Glob(filepath.Join(parent, "govna", "ac*-govna-apply-child.md")); len(matches) != 0 {
+				t.Errorf("apply wrote a review AC: %v", matches)
+			}
+		})
+	}
+}
+
+func TestApplyChildProfileKeepsPreservedFilesAndLaterChildren(t *testing.T) {
+	parent, _ := childParentFixture(t, "Go")
+	writeFixture(t, filepath.Join(parent, "govna", "preserve.txt"), []byte("govna-preserve-v1\ngovna/audit.md\n"))
+	if _, errOut, code := runAt(t, parent, "--child", "../engine"); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut)
+	}
+	first, err := os.ReadFile(filepath.Join(parent, "govna", "ac1-govna-apply-child.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(first), "Files left unchanged:\n\n- `govna/audit.md` (listed in `govna/preserve.txt`)\n") || strings.Contains(string(first), "- `govna/audit.md` (update: child rules)") {
+		t.Errorf("review AC does not leave the preserved file alone:\n%s", first)
+	}
+	manifest := childManifests["Go"]
+	writeFixture(t, filepath.Join(filepath.Dir(parent), "tools", manifest[0]), []byte("module example.com/tools\n\ngo 1.27.0\n"))
+	if _, errOut, code := runAt(t, parent, "--child", "../tools"); code != 0 {
+		t.Fatalf("second child code=%d stderr=%s", code, errOut)
+	}
+	second, err := os.ReadFile(filepath.Join(parent, "govna", "ac2-govna-apply-child.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(second), "Parent Profile Update") {
+		t.Error("a later child repeats the parent profile update")
+	}
+}

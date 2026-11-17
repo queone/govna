@@ -16,7 +16,7 @@ import (
 	"github.com/queone/govna/internal/update"
 )
 
-const programVersion = "0.66.1"
+const programVersion = "0.67.0"
 
 // canonVersion is the embedded canon version, owned by internal/canon.
 const canonVersion = canon.Version
@@ -204,6 +204,7 @@ func renderPage() help.Page {
 			{Form: "-f, --flavor code|doc", Meaning: "select Govna file set: CODE or DOC (default: inferred from cwd)"},
 			{Form: "-s, --stack NAME", Meaning: "select CODE stack (default: inferred from cwd manifests)"},
 			{Form: "-m, --module-path PATH", Meaning: "module path for Go CODE files (default: read from cwd's go.mod)"},
+			{Form: "-k, --with-children", Meaning: "include the rules for a CODE parent that declares a child repository"},
 			{Form: "-c, --child", Meaning: "write only the child repository files for the CODE stack"},
 			{Form: "-o, --orphan", Meaning: "write only the orphan note for a dropped child repository"},
 		}},

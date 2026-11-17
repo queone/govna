@@ -2,10 +2,62 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.67.0
+
+Added:
+- `govna render --with-children` (`-k`) includes the child-repository rules for a CODE parent.
+- `govna/canon-maintenance.md` holds the procedures for a canon change; no consumer receives it.
+- `govna/canon-spec.md` holds the specification of `govna audit` and the build scripts; no consumer receives it.
+- `AGENTS.md` `### Canon Maintenance` holds the rules that only this repository follows.
+- `arch.md` gains `### Canon Audiences` and `### Contract Rationale`.
+- Each consumer's `govna/README.md` links to the Govna-only documents as background reading.
+- Decision re-entry: Implement resumes after a Refine that records only decisions the Director gave during it.
+- Tests fail when a render holds maintenance text or profile text outside its profile.
+
+Changed:
+- Canon v0.103.0 splits canon text by audience: consumer, profile, and Govna-only.
+- Child-repository rules render only for a CODE parent that declares a child in `govna/children.txt`.
+- Validation-token rules render only for the Rust stack.
+- `### Contract Growth` is now `### Rule Review`; each revision first looks for a rule to retire, merge,
+  or enforce mechanically.
+- A rule that a repository can never act on, or that slowed real work, counts as review evidence.
+- `govna apply --child` for a first child and `govna rm --child` for a last child emit the parent's
+  profile update in their AC; neither command writes a parent profile file.
+- Both commands stop before writing when a profile file is unreadable, linked, boundary-less,
+  or different from current canon.
+- `govna/audit.md`, `govna/canon-cycle.md`, `govna/build-release.md`, and DOC `govna/release.md` keep only
+  consumer text.
+- Three contract pointers became read instructions with a recognizable trigger.
+
+Removed:
+- `govna/code-stacks.md` and `govna/operator-contract-rationale.md` left the canon; their text moved to
+  `govna/canon-spec.md` and `arch.md`.
+- `govna/contract-composition-findings.md`; tag v0.66.1 keeps it.
+- Thirteen maintenance rules left the consumer contract.
+- Two restated rules left `govna/roles.md` and `govna/development-cycle.md`.
+
+Deferred:
+- A byte budget, a reusable scenario set, and further mechanical checks; `plan.md` holds the entries.
+- Profile rendering for command-line rules, data and integration guidance, and audit-adoption rules.
+
+Decisions:
+- Consumer text is text that a consumer's agent or Director acts on.
+- Govna-only text is in no canon asset.
+- The review AC, not the command, changes a parent's contract, so the Director approves it first.
+- The reading-list links point at `main` and do not specify a consumer's installed version.
+- Consumers stop counting lines and bullets for their own governance edits.
+- A Go consumer without children: `AGENTS.md` canon went from 50,770 to 49,434 bytes, and its documents
+  from 84,019 to 37,240 bytes.
+
+Risks:
+- Each existing consumer's next audit asks its Director to keep, move, or delete the two retired documents.
+- A parent has a child but no child rules until the first child's review AC is implemented.
+- The moved specification text was compared by line, not by meaning.
+
 ## v0.66.1
 
 Added:
-- [`govna/contract-composition-findings.md`](govna/contract-composition-findings.md) records a 2026-11-17 trial of
+- `govna/contract-composition-findings.md` at tag v0.66.1 records a 2026-11-17 trial of
   a smaller `AGENTS.md`, with its evidence limits.
 - `README.md` tells a Codex user to raise `project_doc_max_bytes` above its 32 KiB default.
 - `README.md` states that the line `Govna contract loaded.` does not prove a full load.
