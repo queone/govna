@@ -488,7 +488,7 @@ Pass `--json` to print a machine-readable report (`header`: invocation, canon SH
 - Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.
 - Count a symbolic link by its own path.
 - Run the scan at the start of every prep, before any write or dry-run report.
-- Stop prep on each identifier that `AGENTS.md` `### AC Mechanics` does not allow.
+- Stop prep on each identifier that the `AGENTS.md` bare-identifier rules do not allow.
 - Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.
 - Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.
 - Skip `tests/fixtures/` and every `testdata/` directory.

@@ -2,6 +2,18 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.70.1
+
+Changed:
+- The identifier scan message cites "the AGENTS.md bare-identifier rules" in place of
+  `### AC Mechanics`, a heading that DOC `AGENTS.md` does not have.
+- The scan block comment uses the same wording.
+- Canon v0.107.0.
+
+Decisions:
+- The message names no heading, so the scan block stays identical in every build script.
+- CODE documents keep their `### AC Mechanics` citations, because CODE has that heading.
+
 ## v0.70.0
 
 Changed:

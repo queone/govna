@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.70.1 | Identifier scan message cites rules DOC has, not a missing heading; canon 0.107 |
 | 0.70.0 | AC96 Identifier scan checks only governed Markdown; AC sizing gate; canon 0.106 |
 | 0.69.1 | Adoption AC review drops the retired contract-growth step |
 | 0.69.0 | AC95 Consumer docs lose unusable text; audit deletes retired files; canon 0.105 |

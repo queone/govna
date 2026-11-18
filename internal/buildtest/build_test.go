@@ -136,7 +136,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 		profiles[i].bindings = append(profiles[i].bindings, sharedScan...)
 		if profiles[i].name == "DOC" {
 			profiles[i].bindings = append(profiles[i].bindings,
-				binding{claim: "Stop prep on each identifier that `AGENTS.md` `### AC Mechanics` does not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
+				binding{claim: "Stop prep on each identifier that the `AGENTS.md` bare-identifier rules do not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
 				binding{claim: "Prep runs one automated check: the Markdown identifier scan of governed Markdown.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
 			)
 			continue
@@ -4490,7 +4490,7 @@ func bareIdentifierScripts() []bareIdentifierScript {
 
 // bareIdentifierFinding formats one indented scan finding as the build prints it.
 func bareIdentifierFinding(path string, line int, id string) string {
-	return fmt.Sprintf("    %s:%d: bare identifier %s; replace it with plain words or a placeholder such as AC<N>, or move it to a place AGENTS.md ### AC Mechanics allows", path, line, id)
+	return fmt.Sprintf("    %s:%d: bare identifier %s; replace it with plain words or a placeholder such as AC<N>, or move it to a place the AGENTS.md bare-identifier rules allow", path, line, id)
 }
 
 // bareIdentifierFindings returns the sorted finding lines in scan output.
