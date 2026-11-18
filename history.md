@@ -2,6 +2,30 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.71.0
+
+Changed:
+- The DOC `build.sh` scan checks root `AGENTS.md`, `README.md`, `plan.md`, `CHANGELOG.md`, and `govna/` only;
+  DOC governs neither `arch.md` nor `history.md`.
+- `govna audit` applies the same DOC list to the adoption AC.
+- The scan source lives in one fragment, `internal/canon/assets/build-scan/bare-id-scan.sh`.
+- Each build script template holds a placeholder, and the render inserts the fragment with the flavor's file list.
+- `canon.GovernedRootMarkdown` is the one source of the file list for the render and for `govna audit`.
+- Canon v0.108.0.
+
+Removed:
+- The plan idea for a DOC scan without `arch.md` and `history.md`; this release delivers it.
+
+Decisions:
+- The Director reopened the v0.56.0 decision: the DOC scan block may differ from the CODE block in its file list.
+- The rendered DOC block differs from the CODE block in three lines: its marker, one comment, and the file list.
+- A script reads no repository-type setting at run time; the render chooses the list.
+- The refactor keeps every rendered `build.sh` byte-identical.
+
+Risks:
+- Govna's own `build.sh` still requires synchronization with the rendered Go script;
+  existing tests detect disagreement.
+
 ## v0.70.1
 
 Changed:

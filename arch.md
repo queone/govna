@@ -222,7 +222,7 @@ Canon text has three classes:
 - Profile text renders only where it applies. The child-repository rules render for a CODE parent that declares a child in `govna/children.txt`. The validation-token rules render for the Rust stack. The command-line sections render for a Go, Rust, or Swift repository that has an installable utility; a repository of those stacks without one carries a single rule that asks for `govna audit --with-utilities` before the first utility, and a Terraform repository carries no command-line rule. The DOC flavor has its own contract template.
 - Govna-only text is in no canon asset. It holds maintenance rules, the candidate-canon review, and the specifications of `govna audit` and the build scripts.
 
-The render fills each profile placeholder from `internal/canon/assets/profile/` or with nothing. A child block carries its own exceptions to other sections, so no shared section names a heading that a render may omit. Automated tests check that no render holds maintenance terms, that each profile block renders only for its profile, and that every heading reference resolves in every render.
+The render fills each profile placeholder from `internal/canon/assets/profile/` or with nothing. It fills the scan placeholder in every build script template from one shared fragment, `internal/canon/assets/build-scan/bare-id-scan.sh`, with the flavor's file list; `govna audit` reads the same list. A child block carries its own exceptions to other sections, so no shared section names a heading that a render may omit. Automated tests check that no render holds maintenance terms, that each profile block renders only for its profile, and that every heading reference resolves in every render.
 
 Accepted costs:
 

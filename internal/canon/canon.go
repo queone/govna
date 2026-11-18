@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.107.0"
+const Version = "0.108.0"
 
 const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
@@ -141,6 +141,11 @@ func Render(cfg Config) ([]File, error) {
 	if err := profileValues(values, stack, cfg.Flavor == Code && cfg.Children, cfg.Utilities); err != nil {
 		return nil, err
 	}
+	scan, err := scanBlock(cfg.Flavor)
+	if err != nil {
+		return nil, err
+	}
+	values[scanBlockKey] = scan
 	out := map[string][]byte{}
 	base, err := renderAsset("assets/base/AGENTS.md.tmpl", values)
 	if err != nil {
@@ -185,6 +190,42 @@ func Render(cfg Config) ([]File, error) {
 		files = append(files, File{Path: path, Content: out[path]})
 	}
 	return files, nil
+}
+
+// scanBlockKey is the placeholder that every build script template carries in
+// place of the Markdown identifier scan.
+const scanBlockKey = "{{BARE_ID_SCAN}}"
+
+// GovernedRootMarkdown returns the root Markdown files that flavor governs, in
+// the order the Markdown identifier scan names them. Every Markdown file under
+// govna/ is governed too. DOC governs neither arch.md nor history.md.
+func GovernedRootMarkdown(flavor Flavor) []string {
+	if flavor == Doc {
+		return []string{"AGENTS.md", "README.md", "plan.md", "CHANGELOG.md"}
+	}
+	return []string{"AGENTS.md", "README.md", "arch.md", "plan.md", "history.md", "CHANGELOG.md"}
+}
+
+// scanBlock returns the Markdown identifier scan for flavor's build script:
+// the one shared fragment with flavor's file list filled in.
+func scanBlock(flavor Flavor) (string, error) {
+	raw, err := fs.ReadFile(assets, "assets/build-scan/bare-id-scan.sh")
+	if err != nil {
+		return "", usererr.Errorf("Govna could not load the Markdown identifier scan: %w", err)
+	}
+	files := GovernedRootMarkdown(flavor)
+	label := "identical in every build script"
+	if flavor == Doc {
+		label = "the CODE block with the DOC file list"
+	}
+	last := len(files) - 1
+	names := strings.Join(files[:last], ", ") + ", and " + files[last]
+	text := strings.NewReplacer(
+		"{{BARE_ID_SCAN_LABEL}}", label,
+		"{{BARE_ID_SCAN_FILE_NAMES}}", names,
+		"{{BARE_ID_SCAN_FILE_PATTERNS}}", strings.Join(files, " | "),
+	).Replace(string(raw))
+	return strings.TrimSuffix(text, "\n"), nil
 }
 
 const (

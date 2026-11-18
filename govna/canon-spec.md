@@ -328,7 +328,7 @@ Pass `--json` to print a machine-readable report (`header`: invocation, canon SH
 - Treat a repository as a child when its `AGENTS.md` has a line that starts with `This repository is a Govna child repository.`.
 - Skip `tests/fixtures/` and every `testdata/` directory.
 - Name the file, line, identifier, and a placeholder fix such as `AC<N>` in each finding.
-- Keep the scan in one helper block that is identical in every build script.
+- Keep the scan in one helper block that is identical in every CODE build script.
 
 ## Go
 
@@ -485,7 +485,7 @@ Pass `--json` to print a machine-readable report (`header`: invocation, canon SH
 
 ### Markdown Identifier Check
 
-- Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.
+- Scan only root `AGENTS.md`, `README.md`, `plan.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.
 - Count a symbolic link by its own path.
 - Run the scan at the start of every prep, before any write or dry-run report.
 - Stop prep on each identifier that the `AGENTS.md` bare-identifier rules do not allow.
@@ -493,4 +493,4 @@ Pass `--json` to print a machine-readable report (`header`: invocation, canon SH
 - Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.
 - Skip `tests/fixtures/` and every `testdata/` directory.
 - Name the file, line, identifier, and a placeholder fix such as `AC<N>` in each finding.
-- Keep the scan in one helper block that is identical in every build script.
+- Keep the scan in one helper block that differs from the CODE block only in its file list.

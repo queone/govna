@@ -123,19 +123,19 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 
 	scanTest := "TestBareIdentifierScanFindsOnlyDisallowedIdentifiers"
 	sharedScan := []binding{
-		{claim: "Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.", implementation: "AGENTS.md | README.md | arch.md | plan.md | history.md | CHANGELOG.md | govna/*) ;;", regression: scanTest},
 		{claim: "Count a symbolic link by its own path.", implementation: "[ -f \"$rel\" ] || continue", regression: scanTest},
 		{claim: "Run the scan at the start of every prep, before any write or dry-run report.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
 		{claim: "Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.", implementation: "match(rest, /(AC|AT|IE)[0-9]+/)", regression: scanTest},
 		{claim: "Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.", implementation: "rest ~ /^[ \\t]*Historical:/", regression: scanTest},
 		{claim: "Skip `tests/fixtures/` and every `testdata/` directory.", implementation: "tests/fixtures/* | testdata/* | */testdata/*) continue", regression: scanTest},
 		{claim: "Name the file, line, identifier, and a placeholder fix such as `AC<N>` in each finding.", implementation: "bare identifier %s; replace it with plain words or a placeholder such as AC<N>", regression: scanTest},
-		{claim: "Keep the scan in one helper block that is identical in every build script.", implementation: strings.TrimSuffix(bareIdentifierBlockStart, "\n"), regression: "TestBareIdentifierScanIsSharedByEveryScript"},
 	}
 	for i := range profiles {
 		profiles[i].bindings = append(profiles[i].bindings, sharedScan...)
 		if profiles[i].name == "DOC" {
 			profiles[i].bindings = append(profiles[i].bindings,
+				binding{claim: "Scan only root `AGENTS.md`, `README.md`, `plan.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.", implementation: "AGENTS.md | README.md | plan.md | CHANGELOG.md | govna/*) ;;", regression: scanTest},
+				binding{claim: "Keep the scan in one helper block that differs from the CODE block only in its file list.", implementation: strings.TrimSuffix(bareIdentifierDocBlockStart, "\n"), regression: "TestBareIdentifierScanIsSharedByEveryScript"},
 				binding{claim: "Stop prep on each identifier that the `AGENTS.md` bare-identifier rules do not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
 				binding{claim: "Prep runs one automated check: the Markdown identifier scan of governed Markdown.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
 			)
@@ -146,6 +146,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 			formatting = "TestRenderedGoBuildExecutesWithoutNetwork"
 		}
 		profiles[i].bindings = append(profiles[i].bindings,
+			binding{claim: "Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.", implementation: "AGENTS.md | README.md | arch.md | plan.md | history.md | CHANGELOG.md | govna/*) ;;", regression: scanTest},
+			binding{claim: "Keep the scan in one helper block that is identical in every CODE build script.", implementation: strings.TrimSuffix(bareIdentifierBlockStart, "\n"), regression: "TestBareIdentifierScanIsSharedByEveryScript"},
 			binding{claim: "Run the scan before the first formatting step of every full and scoped build.", implementation: "_bare_id_check || return 1", regression: formatting},
 			binding{claim: "Fail on each identifier that `AGENTS.md` `### AC Mechanics` and `### Child Repositories` do not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
 			binding{claim: "Treat a repository as a child when its `AGENTS.md` has a line that starts with `This repository is a Govna child repository.`.", implementation: "_bare_id_is_child", regression: scanTest},
@@ -230,10 +232,7 @@ func TestRenderedGoBuildMatchesRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := mustRead(t, filepath.Join(root, "internal/canon/assets/overlays/code/stacks/go/build.sh.tmpl"))
 	for _, marker := range []string{"Validate compiled utility versions", "Install validated utilities", "Compile release utilities", "resulting paths differ from the planned transformations"} {
 		if !strings.Contains(string(a), marker) || !strings.Contains(string(b), marker) {
 			t.Fatalf("root/rendered Go build scripts lack shared marker %q", marker)
@@ -2929,13 +2928,42 @@ func writeBuildFixture(t *testing.T, path string, content []byte, mode os.FileMo
 	}
 }
 
+// mustRead returns the file at path. For a build script template it returns
+// the rendered script instead, because a template holds a placeholder where
+// the render inserts the Markdown identifier scan.
 func mustRead(t *testing.T, path string) []byte {
 	t.Helper()
+	if filepath.Base(path) == "build.sh.tmpl" {
+		return renderedBuildScript(t, path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return data
+}
+
+// renderedBuildScript renders the profile that owns the template at path and
+// returns its build.sh.
+func renderedBuildScript(t *testing.T, path string) []byte {
+	t.Helper()
+	slash := filepath.ToSlash(path)
+	config := canon.Config{Flavor: canon.Doc, RepoName: "handbook"}
+	if !strings.Contains(slash, "/overlays/doc/") {
+		stack := filepath.Base(filepath.Dir(slash))
+		config = canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: stack, ModulePath: "example.com/widget"}
+	}
+	files, err := canon.Render(config)
+	if err != nil {
+		t.Fatalf("render %s: %v", path, err)
+	}
+	for _, file := range files {
+		if file.Path == "build.sh" {
+			return file.Content
+		}
+	}
+	t.Fatalf("render for %s omits build.sh", path)
+	return nil
 }
 
 func gitFixture(t *testing.T, dir string, args ...string) {
@@ -4461,8 +4489,15 @@ func TestGoBuildReadsOneModulePathInAWorkspace(t *testing.T) {
 const (
 	bareIdentifierBlockStart = "# --- bare identifier scan (identical in every build script) ---\n"
 	bareIdentifierBlockEnd   = "# --- end bare identifier scan ---\n"
-	bareIdentifierStepHeader = "==> Check markdown for bare AC, AT, and IE identifiers"
-	bareIdentifierCleanLine  = "    No bare AC, AT, or IE identifiers found."
+	// The DOC block differs from the CODE block in exactly these three lines,
+	// because DOC governs neither arch.md nor history.md.
+	bareIdentifierDocBlockStart = "# --- bare identifier scan (the CODE block with the DOC file list) ---\n"
+	bareIdentifierDocComment    = "# AGENTS.md, README.md, plan.md, and CHANGELOG.md, plus\n"
+	bareIdentifierCodeComment   = "# AGENTS.md, README.md, arch.md, plan.md, history.md, and CHANGELOG.md, plus\n"
+	bareIdentifierDocList       = "      AGENTS.md | README.md | plan.md | CHANGELOG.md | govna/*) ;;\n"
+	bareIdentifierCodeList      = "      AGENTS.md | README.md | arch.md | plan.md | history.md | CHANGELOG.md | govna/*) ;;\n"
+	bareIdentifierStepHeader    = "==> Check markdown for bare AC, AT, and IE identifiers"
+	bareIdentifierCleanLine     = "    No bare AC, AT, or IE identifiers found."
 )
 
 // bareIdentifierScript names one build script that carries the shared bare
@@ -4516,6 +4551,27 @@ func TestBareIdentifierScanIsSharedByEveryScript(t *testing.T) {
 	var want string
 	for _, script := range bareIdentifierScripts() {
 		text := string(mustRead(t, filepath.Join(root, script.path)))
+		if strings.HasSuffix(script.path, ".tmpl") {
+			// A template carries only the placeholder; the scan source lives
+			// in one shared fragment that the render fills per flavor.
+			raw, err := os.ReadFile(filepath.Join(root, script.path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Count(string(raw), "{{BARE_ID_SCAN}}\n") != 1 || strings.Contains(string(raw), "_bare_id_scan() {") {
+				t.Errorf("%s template requires one scan placeholder and no scan source", script.name)
+			}
+		}
+		if script.name == "DOC" {
+			// Map the three DOC lines to their CODE forms, so the rest of the
+			// block must match the CODE blocks exactly.
+			for _, pair := range [][2]string{{bareIdentifierDocBlockStart, bareIdentifierBlockStart}, {bareIdentifierDocComment, bareIdentifierCodeComment}, {bareIdentifierDocList, bareIdentifierCodeList}} {
+				if strings.Count(text, pair[0]) != 1 || strings.Contains(text, pair[1]) {
+					t.Fatalf("DOC scan block requires one %q and no %q", pair[0], pair[1])
+				}
+				text = strings.Replace(text, pair[0], pair[1], 1)
+			}
+		}
 		start := strings.Index(text, bareIdentifierBlockStart)
 		end := strings.Index(text, bareIdentifierBlockEnd)
 		if strings.Count(text, bareIdentifierBlockStart) != 1 || strings.Count(text, bareIdentifierBlockEnd) != 1 || end < start {
@@ -4537,6 +4593,7 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 		"README.md":                "# Widget\n\nUse `Package AC70+AC71` to release.\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, and AC1x hold none.\nThe player decodes AC3 audio.\n",
 		"history.md":               "# History\n\nShipped in AT3.\n<!-- Historical: AC12 shipped this -->\n",
 		"govna/notes.md":           "See AC4.\n",
+		"arch.md":                  "See AT6.\n",
 		"docs/guide.md":            "# Guide\n\nSupports IE11.\n",
 		"index.md":                 "Published under AT7.\n",
 		"life/prompt-cards.md":     "Copy video, AC3 audio at 640k.\n",
@@ -4553,6 +4610,7 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 		bareIdentifierFinding("history.md", 3, "AT3"),
 		bareIdentifierFinding("README.md", 6, "AC3"),
 		bareIdentifierFinding("govna/notes.md", 1, "AC4"),
+		bareIdentifierFinding("arch.md", 1, "AT6"),
 		bareIdentifierFinding("govna/ac-template.md", 3, "IE2"),
 		bareIdentifierFinding("plan.md", 3, "AC3"),
 	}
@@ -4581,8 +4639,22 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 			t.Fatalf("%s scan omits the step header:\n%s", label, output)
 		}
 	}
+	// DOC governs neither arch.md nor history.md, so its scan skips both.
+	docOnly := func(findings []string) []string {
+		var kept []string
+		for _, finding := range findings {
+			if !strings.HasPrefix(finding, "    arch.md:") && !strings.HasPrefix(finding, "    history.md:") {
+				kept = append(kept, finding)
+			}
+		}
+		return kept
+	}
 	for _, script := range bareIdentifierScripts() {
 		t.Run(script.name, func(t *testing.T) {
+			shared, child := shared, child
+			if script.name == "DOC" {
+				shared, child = docOnly(shared), docOnly(child)
+			}
 			tooling := mustRead(t, filepath.Join(root, script.path))
 			write := func(dir string, extra map[string]string) {
 				writeBuildFixture(t, filepath.Join(dir, "build.sh"), tooling, 0o755)
@@ -4624,6 +4696,7 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 				"history.md":           "# History\n\n<!-- Historical: AC12 shipped this -->\n",
 				"govna/ac-template.md": "**AT1** [Automated]\n",
 				"govna/notes.md":       "See the note.\n",
+				"arch.md":              "# Architecture\n",
 				"plan.md":              "# Plan\n\n- IE5: Explore a scan after IE9.\nNext: IE5.\n",
 				"govna/draft.md":       "A note\n",
 			}
@@ -4672,7 +4745,7 @@ func TestPrepStopsOnBareIdentifierBeforeAnyWrite(t *testing.T) {
 			dir := t.TempDir()
 			writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, script.path)), 0o755)
 			writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte(changelog), 0o644)
-			writeBuildFixture(t, filepath.Join(dir, "history.md"), []byte("# History\n\nShipped in AC12.\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte("# Plan\n\nShipped in AC12.\n"), 0o644)
 			writeBuildFixture(t, filepath.Join(dir, "life", "prompt-cards.md"), []byte("Copy video, AC3 audio at 640k.\n"), 0o644)
 			writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
 			gitFixture(t, dir, "init", "-q")
@@ -4682,9 +4755,9 @@ func TestPrepStopsOnBareIdentifierBeforeAnyWrite(t *testing.T) {
 			for _, args := range [][]string{{"prep", "v1.0.0", "Fix docs"}, {"prep", "-n", "v1.0.0", "Fix docs"}} {
 				out, err := run(t, dir, "", append([]string{"./build.sh"}, args...)...)
 				if err == nil {
-					t.Fatalf("%v passed with a bare identifier in history.md:\n%s", args, out)
+					t.Fatalf("%v passed with a bare identifier in plan.md:\n%s", args, out)
 				}
-				if !strings.Contains(out, bareIdentifierFinding("history.md", 3, "AC12")+"\n") || !strings.Contains(out, "bare identifier scan found 1 issue(s)\n") {
+				if !strings.Contains(out, bareIdentifierFinding("plan.md", 3, "AC12")+"\n") || !strings.Contains(out, "bare identifier scan found 1 issue(s)\n") {
 					t.Fatalf("%v output omits the finding:\n%s", args, out)
 				}
 				if strings.Contains(out, "./build.sh v1.0.0") {
@@ -4694,7 +4767,7 @@ func TestPrepStopsOnBareIdentifierBeforeAnyWrite(t *testing.T) {
 					t.Fatalf("%v changed the repository: before=%q after=%q", args, before, after)
 				}
 			}
-			writeBuildFixture(t, filepath.Join(dir, "history.md"), []byte("# History\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(dir, "plan.md"), []byte("# Plan\n"), 0o644)
 			out, _ := run(t, dir, "", "./build.sh", "prep", "-n", "v1.0.0", "Fix docs")
 			if !strings.Contains(out, bareIdentifierCleanLine+"\n") {
 				t.Fatalf("prep scan rejected a content entry outside governed Markdown:\n%s", out)

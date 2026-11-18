@@ -18,4 +18,4 @@ Ideas captured for future reference. [`govna/development-cycle.md`](govna/develo
 
 - IE19: Explore distribution child repositories, such as a Homebrew tap, a GitHub Action, or a docs site, which use the parent's release and so release after it with no pin; most have no govna stack and so no canonical `build.sh`; research in `brainstorm.md`.
 
-- IE28: Explore a DOC build script whose Markdown identifier scan leaves out root `arch.md` and `history.md`, because DOC governs neither file.
+- IE29: Explore measuring an agent with and without Govna on the same prompts in one repository: two worktrees at one commit, one with the contract files removed; compare tokens, turns, time, diff, build result, and unrequested writes. Use the data to decide between a physical `govna suspend` and `govna resume` pair and a lighter lane that keeps the approval boundaries and drops AC ceremony; a contract mode that only tells the agent to ignore the contract is not a true comparison.

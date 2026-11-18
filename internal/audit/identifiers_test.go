@@ -48,6 +48,19 @@ var identifierParentFindings = []string{
 	"plan.md:3:AC3", "plan.md:6:AT2",
 }
 
+// identifierDocFindings returns the parent findings that a DOC repository
+// keeps: DOC governs neither arch.md nor history.md.
+func identifierDocFindings() []string {
+	var kept []string
+	for _, finding := range identifierParentFindings {
+		if !strings.HasPrefix(finding, "arch.md:") && !strings.HasPrefix(finding, "history.md:") {
+			kept = append(kept, finding)
+		}
+	}
+	sort.Strings(kept)
+	return kept
+}
+
 var identifierChildOnlyFindings = []string{
 	"CHANGELOG.md:6:AC12",
 	"govna/ac81-example.md:1:AC81",
@@ -89,10 +102,15 @@ func writeIdentifierFixture(t *testing.T, dir string, files map[string]string) {
 
 var shellFindingRE = regexp.MustCompile(`^(.+):([0-9]+): bare identifier ([A-Z]+[0-9]+);`)
 
-// shellIdentifierFindings runs the rendered Go build script's scan in dir.
-func shellIdentifierFindings(t *testing.T, dir string) []string {
+// shellIdentifierFindings runs the rendered Go build script's scan in dir, or
+// the rendered DOC build script's scan when doc is set.
+func shellIdentifierFindings(t *testing.T, dir string, doc bool) []string {
 	t.Helper()
-	files, err := canon.Render(canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"})
+	config := canon.Config{Flavor: canon.Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"}
+	if doc {
+		config = canon.Config{Flavor: canon.Doc, RepoName: "handbook"}
+	}
+	files, err := canon.Render(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,14 +138,14 @@ func shellIdentifierFindings(t *testing.T, dir string) []string {
 }
 
 // goIdentifierFindings runs the Go scan over dir with no adoption results.
-func goIdentifierFindings(t *testing.T, dir string, child bool) []string {
+func goIdentifierFindings(t *testing.T, dir string, child, doc bool) []string {
 	t.Helper()
 	access, err := repository.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer access.Close()
-	found, err := scanKeptMarkdown(access, "", child, map[string]FileResult{})
+	found, err := scanKeptMarkdown(access, "", child, doc, map[string]FileResult{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,8 +202,11 @@ func TestIdentifierScanAgreesWithShellScan(t *testing.T) {
 		name  string
 		dir   string
 		child bool
+		doc   bool
 		want  []string
 	}{
+		{name: "DOC directory outside Git", dir: plain, doc: true, want: identifierDocFindings()},
+		{name: "DOC git repository", dir: repo, doc: true, want: sortedCopy(identifierDocFindings(), identifierDiscoveryFindings, []string{"govna/draft.md:1:AT9"})},
 		{name: "git repository", dir: repo, want: sortedCopy(identifierParentFindings, identifierDiscoveryFindings, []string{"govna/draft.md:1:AT9"})},
 		{name: "directory outside Git", dir: plain, want: sortedCopy(identifierParentFindings)},
 		{name: "child repository", dir: repo, child: true, want: sortedCopy(identifierParentFindings, identifierChildOnlyFindings, identifierDiscoveryFindings, []string{"govna/draft.md:1:AT9", "govna/linked.md:4:AC12"})},
@@ -195,8 +216,8 @@ func TestIdentifierScanAgreesWithShellScan(t *testing.T) {
 				writeAuditFile(t, filepath.Join(tc.dir, "AGENTS.md"), []byte(childPointer))
 				defer os.Remove(filepath.Join(tc.dir, "AGENTS.md"))
 			}
-			shell := shellIdentifierFindings(t, tc.dir)
-			got := goIdentifierFindings(t, tc.dir, tc.child)
+			shell := shellIdentifierFindings(t, tc.dir, tc.doc)
+			got := goIdentifierFindings(t, tc.dir, tc.child, tc.doc)
 			if strings.Join(got, "\n") != strings.Join(shell, "\n") {
 				t.Fatalf("Go scan:\n%s\nshell scan:\n%s", strings.Join(got, "\n"), strings.Join(shell, "\n"))
 			}
@@ -394,6 +415,23 @@ func TestAuditSkipsRetiredLinkForIdentifiers(t *testing.T) {
 	report, _ := runAuditFixture(t, root, []string{"--json"})
 	got := findingsByPath(report.IdentifierFindings)
 	if _, linked := got["CLAUDE.md"]; linked || got["govna/notes.md"] != "1:AT3" {
+		t.Fatalf("identifier_findings=%v, want only govna/notes.md", got)
+	}
+}
+
+// TestAuditSkipsCodeOnlyFilesInDocRepository checks that a DOC audit selects
+// the DOC file list: root arch.md and history.md are content there.
+func TestAuditSkipsCodeOnlyFilesInDocRepository(t *testing.T) {
+	root := fixtureFor(t, canon.Doc, "")
+	writeAuditFile(t, filepath.Join(root, "history.md"), []byte("Shipped in AT3.\n"))
+	writeAuditFile(t, filepath.Join(root, "arch.md"), []byte("See AC4.\n"))
+	writeAuditFile(t, filepath.Join(root, "govna", "notes.md"), []byte("See AC9.\n"))
+	report, _ := runAuditFixture(t, root, []string{"--json"})
+	if report.Header.Flavor != "doc" {
+		t.Fatalf("flavor=%q, want doc", report.Header.Flavor)
+	}
+	got := findingsByPath(report.IdentifierFindings)
+	if got["govna/notes.md"] != "1:AC9" || got["history.md"] != "" || got["arch.md"] != "" {
 		t.Fatalf("identifier_findings=%v, want only govna/notes.md", got)
 	}
 }

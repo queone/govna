@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.71.0 | DOC scan skips arch.md and history.md; one shared scan fragment; canon 0.108 |
 | 0.70.1 | Identifier scan message cites rules DOC has, not a missing heading; canon 0.107 |
 | 0.70.0 | AC96 Identifier scan checks only governed Markdown; AC sizing gate; canon 0.106 |
 | 0.69.1 | Adoption AC review drops the retired contract-growth step |

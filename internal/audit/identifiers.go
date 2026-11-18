@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ func identifierFindings(access *repository.Access, report Report) ([]IdentifierF
 	for _, file := range report.Files {
 		byPath[file.Path] = file
 	}
-	findings, err := scanKeptMarkdown(access, "", false, byPath)
+	findings, err := scanKeptMarkdown(access, "", false, report.Header.Flavor == "doc", byPath)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +57,7 @@ func identifierFindings(access *repository.Access, report Report) ([]IdentifierF
 		if err != nil {
 			return nil, fmt.Errorf("open child %s: %w", entry, err)
 		}
-		found, err := scanKeptMarkdown(child, entry+"/", true, byPath)
+		found, err := scanKeptMarkdown(child, entry+"/", true, false, byPath)
 		child.Close()
 		if err != nil {
 			return nil, err
@@ -69,14 +70,14 @@ func identifierFindings(access *repository.Access, report Report) ([]IdentifierF
 
 // scanKeptMarkdown scans the Markdown files that access lists. prefix turns a
 // child's paths into parent-relative paths, and child drops every allowance.
-func scanKeptMarkdown(access *repository.Access, prefix string, child bool, byPath map[string]FileResult) ([]IdentifierFinding, error) {
+func scanKeptMarkdown(access *repository.Access, prefix string, child, doc bool, byPath map[string]FileResult) ([]IdentifierFinding, error) {
 	paths, err := markdownPaths(access.Dir())
 	if err != nil {
 		return nil, fmt.Errorf("list Markdown files in %s: %w; fix the listed directory and retry", access.Dir(), err)
 	}
 	var findings []IdentifierFinding
 	for _, rel := range paths {
-		if identifierSkipped(rel, child) {
+		if identifierSkipped(rel, child, doc) {
 			continue
 		}
 		// Follow a symbolic link and skip anything but a regular file, as the
@@ -181,10 +182,14 @@ func markdownPaths(dir string) ([]string, error) {
 }
 
 // identifierGoverned reports whether rel is governed Markdown: a root file that
-// Govna governs or any Markdown file under govna/.
-func identifierGoverned(rel string) bool {
-	switch rel {
-	case "AGENTS.md", "README.md", "arch.md", "plan.md", "history.md", "CHANGELOG.md":
+// Govna governs or any Markdown file under govna/. A DOC repository governs
+// neither arch.md nor history.md.
+func identifierGoverned(rel string, doc bool) bool {
+	flavor := canon.Code
+	if doc {
+		flavor = canon.Doc
+	}
+	if slices.Contains(canon.GovernedRootMarkdown(flavor), rel) {
 		return true
 	}
 	return strings.HasPrefix(rel, "govna/")
@@ -192,8 +197,8 @@ func identifierGoverned(rel string) bool {
 
 // identifierSkipped reports whether the identifier scan skips rel: every path
 // outside governed Markdown, and every path that markdownExempt names.
-func identifierSkipped(rel string, child bool) bool {
-	return !identifierGoverned(rel) || markdownExempt(rel, child)
+func identifierSkipped(rel string, child, doc bool) bool {
+	return !identifierGoverned(rel, doc) || markdownExempt(rel, child)
 }
 
 // markdownExempt reports whether rel is exempt from Markdown checks: test
