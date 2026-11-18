@@ -3274,9 +3274,8 @@ func TestCanonCycleDocumentIsRetired(t *testing.T) {
 
 func TestConsumersHoldNoDesignNotesOrMachineTools(t *testing.T) {
 	const (
-		caveat   = "This model assumes the Operator can hold both creation and review across long horizons without colluding with itself."
-		roadmap  = "Keep the two-role model closed until first-class delegated review exists."
-		toolList = "- Reach for `rg` (not `grep`/`ack`), `fd` (not `find`), `jq` (not `awk`/`python -c` on JSON), `sd` (not `sed -i`), `sqlite-utils` (not raw `sqlite3` cli), `ast-grep` (not regex on code), and `pup` (not regex on HTML).\n"
+		caveat  = "This model assumes the Operator can hold both creation and review across long horizons without colluding with itself."
+		roadmap = "Keep the two-role model closed until first-class delegated review exists."
 	)
 	retired := []string{"## Caveat", caveat, roadmap, "Recommended contents to add", "## Required Artifacts", "Reach for `rg`", "the Tool Use rule"}
 	for path, text := range embeddedText(t) {
@@ -3305,14 +3304,5 @@ func TestConsumersHoldNoDesignNotesOrMachineTools(t *testing.T) {
 		if strings.Count(arch, note) != 1 || !strings.Contains(rationale, note) {
 			t.Errorf("arch.md ### Contract Rationale needs %q once", note)
 		}
-	}
-	agents := repoFile(t, "AGENTS.md")
-	_, project, ok := strings.Cut(agents, "\n## Project Rules\n")
-	if !ok {
-		t.Fatal("AGENTS.md has no ## Project Rules")
-	}
-	first, _, _ := strings.Cut(project, "\n### ")
-	if strings.Count(agents, toolList) != 1 || !strings.Contains(first, toolList) {
-		t.Error("the first list of ## Project Rules needs the machine tool list once")
 	}
 }

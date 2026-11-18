@@ -2,6 +2,17 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.71.1
+
+Removed:
+- The machine tool list in this repository's `## Project Rules`.
+- The test requirement that this repository holds that list once.
+
+Decisions:
+- The Director reopened the v0.69.0 decision: the tool list is a personal agent preference, not a repository rule.
+- The test still rejects the tool list in every canon asset and every rendered profile.
+- The canon is unchanged at v0.108.0.
+
 ## v0.71.0
 
 Changed:
