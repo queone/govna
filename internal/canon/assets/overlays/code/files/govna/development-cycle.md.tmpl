@@ -8,14 +8,6 @@ The lifecycle makes recurring programming checkpoints and their settled context 
 
 - Apply `AGENTS.md` `### Four-Phase Workflow`, `### Phase-Advancement Rules`, and `### Audit Adoption` to this cycle.
 
-## Required Artifacts
-
-- `AGENTS.md`
-- `README.md`
-- `arch.md`
-- `plan.md`
-- `govna/`
-
 ## Cycle
 
 ### Implement Evidence Snapshot

@@ -40,6 +40,7 @@ Every emitted audit AC uses these shared explanations:
 | `target-has-no-canon` | The file is absent from the selected current canon but specific repository evidence connects it to Govna. |
 | `migration-required` | A required Govna control file is missing and must be added through the AC. |
 | `retired-link` | A Govna link that Claude Code no longer needs and the AC deletes. |
+| `retired-file` | A document that left the Govna files, that the repository never edited, and that the AC deletes. |
 | `force-sync` | This file's governed structure always syncs to canon, regardless of local edits or the preserve list. |
 
 ## Mixed-content boundary registry
@@ -52,8 +53,6 @@ Files with a documented canon-above/local-below boundary, compared only above th
 | CODE `govna/build-release.md` | `## Project Practices` |
 | `govna/development-guidelines.md` | `## Project Practices` |
 | `govna/editing-guidelines.md` | `## Project Practices` |
-
-Treat an existing CODE `govna/build-release.md` without its registered boundary as a one-time reviewed migration. Route it to `ambiguity` for full-file review even when a legacy whole-file preserve phrase exists, and retain that phrase as migration evidence. During reapply, leave the boundary-less file unchanged and emit a manual migration item. Place reviewed repository-specific release mechanics below the new boundary, sync rendered canon above it, and remove any obsolete registry entry and exact legacy phrase only through the consumer's authorized adoption cycle. Keep DOC `govna/release.md` outside this mixed-content model.
 
 ## Preserve registry
 
@@ -68,23 +67,6 @@ Require a final newline. Keep entries nonempty, slash-normalized, unique, and by
 
 Add an exact path for a resolved preserve outcome. Remove an exact path for a resolved sync, delete, or canon-backed migration outcome. Preserve unrelated entries. Leave the registry absent or unchanged when its state already satisfies every resolved outcome. Verify registry changes before installing the canon baseline.
 
-- Classify an existing target-only path named in the preserve registry as `preserve`.
-- Keep that preserved target-only path visible in audit and JSON results.
-- Omit another routing question for that preserved target-only path.
-
-Exclude `govna/preserve.txt` from rendered canon, canon baselines, ordinary audit drift, name-referenced target-only evidence, and ordinary rm target-only content. Include it in rm only as the final control-state deletion after applying all registered preserve decisions.
-
-Treat only exact legacy preserve phrases in the Unreleased CHANGELOG Summary as migration evidence: `preserve <path>`, `do not sync <path>`, `intentional divergence: <path>`, and `<path>: keep local`. Route each phrase under `### Routing capabilities`. Remove it only after verifying its required target and registry state. Preserve unrelated Summary text and historical rows. Ignore matching prose in historical CHANGELOG rows, emitted ACs, and every other governance document.
-
-- Read the Summary from the canonical `| Unreleased | <summary> |` table row, where each `\|` pair is one escaped pipe.
-- Read the Summary from a legacy `## Unreleased` heading section as well.
-- Combine both sources in table-then-heading order.
-- Drop a duplicate phrase-and-path pair.
-- Ignore a phrase whose path is not a normalized repository-relative path.
-- Accept LF or CRLF line endings in the changelog.
-
-A registry entry on a missing current-canon file suppresses `missing-in-target` to a suppressed `match`; an entry on a divergent current-canon file or an existing target-only file routes it to `preserve` instead of a review classification. Exceptions are an eligible stale-version-only `govna/metadata.txt`, whose canon-owned `canon_version` cannot be pinned, and a boundary-less CODE `govna/build-release.md`, which remains a reviewed migration.
-
 ## Repository-check registry
 
 Use optional `govna/repo-check.txt` as the Director's standing repository-check resolution. Treat an absent file as no configuration. Require an existing file to use this exact schema:
@@ -98,11 +80,6 @@ Require a final newline. Require exactly one non-empty command line after the he
 
 - Require explicit Director authorization for every `govna/repo-check.txt` creation or modification.
 - Treat a valid configured command as the standing Director resolution for the emitted repository check.
-- Name `govna/repo-check.txt` as the standing-resolution source in the emitted acceptance test.
-- Keep the no-baseline-migration `Not applicable` outcome ahead of the configured command.
-- Prefer the configured command over inferred validation evidence.
-- Require the configured check to succeed before `govna/canon-baseline.txt` installation.
-- Exclude `govna/repo-check.txt` from rendered canon, canon baselines, ordinary audit drift, and name-referenced target-only evidence.
 
 ## Emitted AC stub
 
@@ -133,18 +110,6 @@ Note: the executable ends after deterministic comparison and emission. JSON rema
 - Install an exact current-canon replacement before retired-source routing.
 - Offer only these outcomes for that retired source: preserve, explicitly named migration, delete.
 - Omit restore as a routing outcome.
-- Define marker-only evidence as an exact Unreleased CHANGELOG preserve phrase whose referenced path has no independent file action.
-- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.
-- Add the referenced path to `govna/preserve.txt` for a conversion choice.
-- Leave the referenced target unchanged during marker-only conversion.
-- Remove the converted phrase after registry verification.
-- Remove only the exact phrase for a marker-only removal choice.
-- Preserve the referenced target during marker-only phrase removal.
-- Preserve unrelated registry state during marker-only phrase removal.
-- Apply each independently actionable file's capability-specific route before legacy-phrase cleanup.
-- Treat a preserve choice on that file as conversion of its legacy phrase.
-- Verify the result of every resolved sync, migration, or deletion before legacy-phrase cleanup.
-- Remove the exact legacy phrase after that verification.
 
 ### Mixed-content sync verification
 
@@ -155,6 +120,12 @@ Note: the executable ends after deterministic comparison and emission. JSON rema
 - Keep whole-file Audit Review comparison when either file lacks the exact registered boundary.
 - Preserve existing missing-target and target-only Audit Review commands.
 - Avoid comparing the repository-owned tail with rendered defaults.
+
+## Canon and local text
+
+- Treat `govna/metadata.txt` as the record of a repository's Govna file version and CODE or DOC type.
+- Pause when a canon update introduces an Instruction Style violation.
+- Skip local rewrites of canon-owned text unless an explicit AC declares intentional divergence.
 
 ## Adoption procedure
 
@@ -178,4 +149,7 @@ Note: the executable ends after deterministic comparison and emission. JSON rema
 - Verify each resolved delete target is absent.
 - Delete the `CLAUDE.md` link for a `retired-link` item.
 - Verify the retired `CLAUDE.md` link is absent.
+- Delete each file listed under `### Retired Govna files` of the emitted AC.
+- Verify each of those files is absent.
+- Remove or repoint each reference listed under `### References to retired files` of the emitted AC.
 - Verify each resolved preserve target remains and its exact path occurs in `govna/preserve.txt`.

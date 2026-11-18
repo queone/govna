@@ -21,7 +21,6 @@ Files Govna processed:
 - `govna/audit.md` (written)
 - `govna/build-release.md` (written)
 - `govna/canon-baseline.txt` (written)
-- `govna/canon-cycle.md` (written)
 - `govna/development-cycle.md` (written)
 - `govna/development-guidelines.md` (written)
 - `govna/metadata.txt` (written)

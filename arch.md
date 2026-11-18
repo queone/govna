@@ -95,6 +95,9 @@ Audit emits each adoption AC in the shape below. These rules bind `internal/audi
 - Emit each adoption instruction as one imperative bullet.
 - Emit the adoption rules that apply only while an emitted AC is implemented in `### Adoption Instructions`, not in every contract.
 - Emit the full baseline condition: every other applicable acceptance test and routing outcome passes, and the repository check succeeds or its `Not applicable` evidence holds.
+- List each unedited retired file under `### Retired Govna files` as a deletion with no routing question.
+- List each kept Markdown file that names a retired file under `### References to retired files`, with one acceptance test per file.
+- Emit the boundary placement instructions for a CODE build guide that lacks its registered boundary.
 - Format every numbered routing entry as one Director decision question.
 - End every numbered routing entry with `?`.
 - Keep shared implementation procedure out of routing questions.
@@ -227,7 +230,8 @@ Accepted costs:
 - Between the adoption of the command-line rules and the first utility, a plain `govna audit` offers to remove those rules again.
 - An adoption AC from an executable older than canon v0.104.0 lacks the moved adoption instructions; a repository adopts each canon under its previous contract, which still holds them.
 - `govna apply --child` and `govna rm --child` stop for a first or last child when a profile file differs from current canon, until `govna audit` is adopted.
-- A repository that adopted an earlier canon is asked once whether to keep, move, or delete each document that left the canon.
+- A document that left the canon is deleted through the adoption AC with no Director choice when the repository never edited it. The Director still authorizes that AC. An edited one is asked once: keep, move, or delete.
+- The audit lists references to a retired document only in Markdown files, and not in `CHANGELOG.md`, `history.md`, or AC documents.
 - The reading list in a consumer's `govna/README.md` links to current documents, not to the documents of its installed canon version.
 
 ### Contract Rationale
@@ -269,6 +273,8 @@ A decision re-entry follows the same reasoning. When the Director gives a decisi
 Missing, incomplete, stale, or uncertain evidence still requires applicable revalidation. An inline correction also invalidates the evidence it affects. Evidence freshness never upgrades a failed, pending, manual, or unexercised disposition, and clean reuse never replaces Ratify's final review or contract-integrity check.
 
 **Why Draft And Clean Audit Advance Automatically.** A completed Draft flows into Audit, and a clean Audit flows into Refine, because those actions mutate nothing except the active AC document and stay cheap to redo before implementation. Automatic Refine entry requires every finding to be advancement-eligible: outside every Director-owned category with exactly one materially valid correction. Refine-to-Implement, Ratify, and Package stay Director-gated because they mutate the repository, accept work, or prepare a release.
+
+**Two-Role Caveat.** This model assumes the Operator can hold both creation and review across long horizons without colluding with itself. If standards slip or obvious issues are missed, do not reshuffle roles — give the Operator better tools (persistent docs, checklists, contract docs) and tighter scope. Keep the two-role model closed until first-class delegated review exists.
 
 **Canon Versus Local Flexibility.** Canon fixes shared roles, workflow, approvals, discipline, and review behavior. Consumers own non-conflicting `## Project Rules`, additional local governance documents, tooling, build scripts, and CI. Propose disputed canon upstream instead of creating permanent local drift.
 

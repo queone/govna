@@ -41,13 +41,6 @@ func notApplicableOutcome(evidence, reason string) validationOutcome {
 	return validationOutcome{kind: validationNotApplicable, evidence: evidence, reason: reason}
 }
 
-// retiredCanonDocuments lists the documents that no consumer receives any
-// more. A repository that adopted an earlier canon still holds them.
-var retiredCanonDocuments = map[string]bool{
-	"govna/code-stacks.md":                 true,
-	"govna/operator-contract-rationale.md": true,
-}
-
 func fixture(t *testing.T) string {
 	return fixtureFor(t, canon.Code, "Go")
 }
@@ -2893,6 +2886,9 @@ func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 
 			report, body := runAuditFixture(t, root, []string{"--json", "--flavor", strings.ToLower(string(profile.flavor)), "--repo-name", name})
 			wantEmitted := len(update) > 0 && !versionOnly
+			if wantEmitted && strings.Contains(body, "### Routing Decisions") {
+				t.Errorf("a clean %s adoption asks the Director a routing question", tag)
+			}
 			if (report.Emitted != nil) != wantEmitted {
 				t.Fatalf("emitted=%v, want %v for updates %v", report.Emitted != nil, wantEmitted, update)
 			}
@@ -2916,14 +2912,13 @@ func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 			}
 			for _, file := range report.Files {
 				switch file.Classification {
-				case "target-has-no-canon":
-					// A document that left the canon after the tag is the one
-					// expected Director choice: keep it, move it, or delete it.
-					if retiredCanonDocuments[file.Path] {
-						continue
+				case "retired-file":
+					// A document that left the canon after the tag, and that the
+					// repository never edited, is deleted with no Director choice.
+					if wantEmitted && !strings.Contains(body, "- `"+file.Path+"` — `retired-file`: ") {
+						t.Errorf("emitted AC omits the retired file %s", file.Path)
 					}
-					t.Errorf("%s needs a Director choice after a clean %s adoption: %s", file.Path, tag, file.Classification)
-				case "ambiguity", "migration-required":
+				case "target-has-no-canon", "ambiguity", "migration-required":
 					t.Errorf("%s needs a Director choice after a clean %s adoption: %s", file.Path, tag, file.Classification)
 				}
 			}

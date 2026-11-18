@@ -19,7 +19,6 @@ Files Govna processed:
 - `govna/ac-template.md` (written)
 - `govna/audit.md` (written)
 - `govna/canon-baseline.txt` (written)
-- `govna/canon-cycle.md` (written)
 - `govna/editing-cycle.md` (written)
 - `govna/editing-guidelines.md` (written)
 - `govna/metadata.txt` (written)

@@ -84,8 +84,13 @@ type Report struct {
 	VersionOnly bool         `json:"version_only"`
 	// IdentifierFindings lists bare identifiers only when audit writes an adoption AC.
 	IdentifierFindings []IdentifierFinding `json:"identifier_findings,omitempty"`
-	selectedStack      string
-	repoCheck          string
+	// RetiredReferences lists references to a retired canon document only when audit writes an adoption AC.
+	RetiredReferences []ReferenceFinding `json:"retired_references,omitempty"`
+	// retiredPaths lists each path that the recorded baseline holds and the
+	// selected current canon no longer does.
+	retiredPaths  []string
+	selectedStack string
+	repoCheck     string
 	// withChildren reports that the repository declares a child, so every
 	// render that this report names needs --with-children.
 	withChildren bool
@@ -237,6 +242,12 @@ func Run(args []string, stdout, stderr io.Writer, cwd, programVersion string) in
 			return 1
 		}
 		report.IdentifierFindings = findings
+		references, err := referenceFindings(access, report)
+		if err != nil {
+			fmt.Fprintf(stderr, "audit: %v\n", err)
+			return 1
+		}
+		report.RetiredReferences = references
 		body := emission.AuditBody(programVersion, canon.Version, []byte(buildAC(report, path, validationDisposition(cwd, report))))
 		if err := access.WriteFile(path, body, 0o644); err != nil {
 			fmt.Fprintf(stderr, "audit: write %s: %v\n", path, err)
@@ -559,6 +570,14 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	if err != nil {
 		return report, false, err
 	}
+	if prior != nil {
+		for path := range prior.Entries {
+			if _, current := canonMap[path]; !current {
+				report.retiredPaths = append(report.retiredPaths, path)
+			}
+		}
+		sort.Strings(report.retiredPaths)
+	}
 	for path, evidence := range extra {
 		classification := "target-has-no-canon"
 		if preserve[path] {
@@ -573,6 +592,13 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 			return report, false, inspectError(path, err)
 		}
 		fr.Diff = diffText(nil, data, path, cfg.DiffLines)
+		if fr.Classification == "target-has-no-canon" && len(legacy[path]) == 0 && unmodifiedRetired(prior, path, data) {
+			// The repository never edited this retired document, so no local
+			// text is lost and the AC deletes it without a Director choice.
+			fr.Classification = "retired-file"
+			fr.Diff = ""
+			fr.CompareCommand = "confirm " + path + " still matches its saved baseline hash"
+		}
 		if markers := legacy[path]; len(markers) > 0 {
 			fr.LegacyPreserveMarkers = markers
 			if preserve[path] {
@@ -625,6 +651,20 @@ func inspect(cfg Config, root string) (Report, bool, error) {
 	}
 	report.VersionOnly = !clean && versionOnly(report.Files, metadata["canon_version"], baseBytes, canonMap[baselinePath], basePresent)
 	return report, clean, nil
+}
+
+// unmodifiedRetired reports whether data is a whole file that the recorded
+// baseline installed and that the repository left unchanged.
+func unmodifiedRetired(prior *baseline, path string, data []byte) bool {
+	if prior == nil {
+		return false
+	}
+	entry, ok := prior.Entries[path]
+	if !ok || entry.Scope != "full" {
+		return false
+	}
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("%x", hash) == entry.Hash
 }
 
 func readMetadata(access *repository.Access) (map[string]string, bool, error) {
@@ -1206,7 +1246,7 @@ func comparisonDescription(f FileResult, path string) string {
 	}
 }
 func actionable(c string) bool {
-	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon" || c == "retired-link" || c == "manual-fix"
+	return c == "clear-sync" || c == "missing-in-target" || c == "migration-required" || c == "ambiguity" || c == "target-has-no-canon" || c == "retired-link" || c == "retired-file" || c == "manual-fix"
 }
 
 type classificationInfo struct{ singular, plural, meaning string }
@@ -1214,7 +1254,7 @@ type classificationInfo struct{ singular, plural, meaning string }
 // classificationOrder fixes the rendering order for plainTally; classificationInfos is the
 // single source of truth for plainTally and classificationMeaning, plus the synthetic
 // "force-sync" entry used for a file whose Classification is overridden by forceSync.
-var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "manual-fix", "retired-link", "force-sync"}
+var classificationOrder = []string{"match", "expected-divergence", "preserve", "ambiguity", "clear-sync", "missing-in-target", "target-has-no-canon", "migration-required", "manual-fix", "retired-link", "retired-file", "force-sync"}
 
 var classificationInfos = map[string]classificationInfo{
 	"match":               {"file needs no update", "files need no update", "the file already needs no Govna update"},
@@ -1227,6 +1267,7 @@ var classificationInfos = map[string]classificationInfo{
 	"migration-required":  {"missing required control file", "missing required control files", "a required Govna control file is missing and must be added through the AC"},
 	"manual-fix":          {"child file needs a manual fix", "child files need a manual fix", "the child's CHANGELOG.md breaks the canonical table shape, and only a manual edit that keeps every row can restore it"},
 	"retired-link":        {"retired Govna link", "retired Govna links", "a Govna link that Claude Code no longer needs and the AC deletes"},
+	"retired-file":        {"retired Govna file", "retired Govna files", "a document that left the Govna files, that the repository never edited, and that the AC deletes"},
 	"force-sync":          {"file always synced regardless of local edits", "files always synced regardless of local edits", "this file's governed structure always syncs to canon, regardless of local edits or the preserve list"},
 }
 
@@ -1369,7 +1410,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	if m := regexp.MustCompile(`^ac([0-9]+)-`).FindStringSubmatch(base); m != nil {
 		number = m[1]
 	}
-	var sync, migrate, preserve, review, retired, manual, spacing []FileResult
+	var sync, migrate, preserve, review, retired, retiredFiles, manual, spacing []FileResult
 	for _, f := range report.Files {
 		if f.IdeaSpacing {
 			spacing = append(spacing, f)
@@ -1390,6 +1431,8 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 			review = append(review, f)
 		case "retired-link":
 			retired = append(retired, f)
+		case "retired-file":
+			retiredFiles = append(retiredFiles, f)
 		case "manual-fix":
 			manual = append(manual, f)
 		}
@@ -1400,6 +1443,12 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	fmt.Fprintf(&b, "Govna found %s, %s, %s, and %s.\n\n", countPhrase(len(sync), "file ready to update", "files ready to update"), countPhrase(len(migrate), "required control file to add", "required control files to add"), countPhrase(len(review), "file needing a Director decision", "files needing a Director decision"), countPhrase(len(preserve), "file that will stay unchanged", "files that will stay unchanged"))
 	if len(retired) > 0 {
 		b.WriteString("Govna also found 1 retired Govna link that this AC deletes.\n\n")
+	}
+	if len(retiredFiles) > 0 {
+		fmt.Fprintf(&b, "Govna also found %s that this AC deletes.\n\n", countPhrase(len(retiredFiles), "retired Govna file", "retired Govna files"))
+	}
+	if len(report.RetiredReferences) > 0 {
+		fmt.Fprintf(&b, "Govna also found %s.\n\n", countPhrase(len(report.RetiredReferences), "file with references to retired files", "files with references to retired files"))
 	}
 	if len(manual) > 0 {
 		fmt.Fprintf(&b, "Govna also found %s.\n\n", countPhrase(len(manual), "child file needing a manual fix", "child files needing a manual fix"))
@@ -1436,6 +1485,20 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	if len(retired) > 0 {
 		b.WriteString("### Retired Govna link\n\n- `CLAUDE.md` — delete the retired Govna link; Claude Code v2.1.277 or later reads `AGENTS.md` directly.\n\n")
 	}
+	if len(retiredFiles) > 0 {
+		writeGroup("Retired Govna files", retiredFiles)
+	}
+	if len(report.RetiredReferences) > 0 {
+		b.WriteString("### References to retired files\n\nRemove or repoint each reference below. Each pre-adoption line number locates the reference in the file as it is before this AC's file updates.\n\n")
+		for _, f := range report.RetiredReferences {
+			fmt.Fprintf(&b, "- `%s` — %s", f.Path, referenceLines(f.References))
+			if f.Conditional {
+				b.WriteString("; fix each reference to a file that needs a Director choice only when the resolved action removes that file")
+			}
+			b.WriteString(".\n")
+		}
+		b.WriteString("\n")
+	}
 	if len(report.IdentifierFindings) > 0 {
 		b.WriteString("### Bare identifiers to fix\n\nRewrite each bare identifier below in plain words or a placeholder such as `AC<N>`. Each pre-adoption line number locates the identifier in the file as it is before this AC's file updates.\n\n")
 		for _, f := range report.IdentifierFindings {
@@ -1454,7 +1517,7 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 		}
 		b.WriteString("\n")
 	}
-	writeAuditReview(&b, report.selectedStack, report.withChildren, report.forcedUtilities, sync, migrate, review)
+	writeAuditReview(&b, report.selectedStack, report.withChildren, report.forcedUtilities, sync, migrate, review, retiredFiles)
 	renderCommand := "govna render"
 	if report.withChildren {
 		renderCommand += " --with-children"
@@ -1482,6 +1545,18 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	b.WriteString("- Do not re-run `govna audit` as an implementation gate for the emitted AC.\n")
 	for _, f := range spacing {
 		fmt.Fprintf(&b, "- Space the IE items in `%s` as listed under `### IE items to space`.\n", f.Path)
+	}
+	for _, f := range review {
+		if boundaryless(report, f) {
+			fmt.Fprintf(&b, "- Place the reviewed repository-specific release mechanics of `%s` below a new `## Project Practices` heading for an update choice.\n", f.Path)
+			fmt.Fprintf(&b, "- Replace the text of `%s` above that heading with the rendered canon region for an update choice.\n", f.Path)
+		}
+	}
+	for _, f := range retiredFiles {
+		fmt.Fprintf(&b, "- Delete `%s`, as listed under `### Retired Govna files`.\n", f.Path)
+	}
+	if len(report.RetiredReferences) > 0 {
+		b.WriteString("- Remove or repoint each reference listed under `### References to retired files`.\n")
 	}
 	b.WriteString("- Write `govna/canon-baseline.txt` from the scratch render only after every other applicable acceptance test and routing outcome passes and the resolved repository check succeeds or its `Not applicable` evidence holds.\n")
 	for _, f := range sync {
@@ -1589,6 +1664,16 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	for _, f := range spacing {
 		writeAT(&b, &at, "Verify `%s` keeps every non-blank line in order (`diff <(git show HEAD:%s | tr -d '\\r' | grep -v '^$') <(tr -d '\\r' <%s | grep -v '^$')` prints nothing) and has exactly one blank line between each pair of adjacent IE items (`%s %s` exits `0`).", f.Path, f.Path, f.Path, ideaSpacingCheck, f.Path)
 	}
+	for _, f := range retiredFiles {
+		writeAT(&b, &at, "Verify `%s` no longer exists.", f.Path)
+	}
+	for _, f := range report.RetiredReferences {
+		if f.Conditional {
+			writeAT(&b, &at, "Verify `%s`, if it remains, names no retired file that this AC or a resolved action removes: %s.", f.Path, quotedList(f.retired()))
+			continue
+		}
+		writeAT(&b, &at, "Verify `%s`, if it remains, no longer names %s.", f.Path, quotedList(f.retired()))
+	}
 	if len(retired) > 0 {
 		writeAT(&b, &at, "Verify CLAUDE.md no longer exists.")
 	}
@@ -1613,6 +1698,12 @@ func buildAC(report Report, path string, validation validationOutcome) string {
 	}
 	fmt.Fprintf(&b, "**AT%d** [Automated] [Pre-release gate] — Verify the final file update installed `govna/canon-baseline.txt` from the same temporary render.\n\n## Status\n\n`PENDING` — immutable audit emission; workflow state is tracked in the active session.\n", at)
 	return b.String()
+}
+
+// boundaryless reports whether f is a CODE build guide that still lacks its
+// registered boundary, which the adoption AC migrates as a reviewed update.
+func boundaryless(report Report, f FileResult) bool {
+	return report.Header.Flavor == "code" && f.Path == "govna/build-release.md" && f.Classification == "ambiguity" && f.targetPresent && f.Boundary == "" && !f.legacyOnly
 }
 
 // ideaSpacingCheck is the awk program that exits 0 only when exactly one
@@ -1801,7 +1892,7 @@ func auditReviewCanonPresent(file FileResult) bool {
 	if file.canonPresent {
 		return true
 	}
-	if file.Classification == "target-has-no-canon" {
+	if file.Classification == "target-has-no-canon" || file.Classification == "retired-file" {
 		return false
 	}
 	return !file.legacyOnly || file.CanonReference != ""

@@ -12,7 +12,6 @@ Current contents:
 - `CHANGELOG.md`
 - `README.md`
 - `govna/ac-template.md`
-- `govna/canon-cycle.md`
 - `govna/audit.md`
 - `govna/editing-cycle.md`
 - `govna/editing-guidelines.md`

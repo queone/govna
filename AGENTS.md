@@ -638,7 +638,6 @@ Note: the Director triggers those actions; Ratify names what is pending.
 
 ### Tool Use
 
-- Reach for `rg` (not `grep`/`ack`), `fd` (not `find`), `jq` (not `awk`/`python -c` on JSON), `sd` (not `sed -i`), `sqlite-utils` (not raw `sqlite3` cli), `ast-grep` (not regex on code), and `pup` (not regex on HTML).
 - Send independent shell calls in a single message so they run in parallel.
 - Reuse content from files already in conversation context.
 - Reach for `Read` only to fetch unseen content or check for recent changes.
@@ -652,6 +651,7 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Prohibit a top-level `tests/` directory.
 - Run the consumer-equivalent candidate-canon review in `govna/canon-maintenance.md` before completing any canon change.
 - Treat canon changes as product facts in `history.md`.
+- Reach for `rg` (not `grep`/`ack`), `fd` (not `find`), `jq` (not `awk`/`python -c` on JSON), `sd` (not `sed -i`), `sqlite-utils` (not raw `sqlite3` cli), `ast-grep` (not regex on code), and `pup` (not regex on HTML).
 
 ### Canon Maintenance
 

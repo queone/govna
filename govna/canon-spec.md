@@ -113,6 +113,107 @@ Audit prints two hints to stderr on every run. The hints leave the exit code, st
 - Skip the upgrade hint when `claude` is absent, fails, exceeds two seconds, or prints an unreadable version.
 - Print a deletable hint when the repository root holds its own regular file or symbolic link named `CLAUDE.md`.
 
+## Boundary-less build guide
+
+Treat an existing CODE `govna/build-release.md` without its registered boundary as a one-time reviewed migration. Route it to `ambiguity` for full-file review even when a legacy whole-file preserve phrase exists, and retain that phrase as migration evidence. During reapply, leave the boundary-less file unchanged and emit a manual migration item. Place reviewed repository-specific release mechanics below the new boundary, sync rendered canon above it, and remove any obsolete registry entry and exact legacy phrase only through the consumer's authorized adoption cycle. Keep DOC `govna/release.md` outside this mixed-content model.
+
+## Preserve registry handling
+
+`govna/audit.md` `## Preserve registry` gives a consumer the registry format and its add and remove rules.
+
+- Classify an existing target-only path named in the preserve registry as `preserve`.
+- Keep that preserved target-only path visible in audit and JSON results.
+- Omit another routing question for that preserved target-only path.
+
+Exclude `govna/preserve.txt` from rendered canon, canon baselines, ordinary audit drift, name-referenced target-only evidence, and ordinary rm target-only content. Include it in rm only as the final control-state deletion after applying all registered preserve decisions.
+
+Treat only exact legacy preserve phrases in the Unreleased CHANGELOG Summary as migration evidence: `preserve <path>`, `do not sync <path>`, `intentional divergence: <path>`, and `<path>: keep local`. Route each phrase under `## Legacy phrase routing`. Remove it only after verifying its required target and registry state. Preserve unrelated Summary text and historical rows. Ignore matching prose in historical CHANGELOG rows, emitted ACs, and every other governance document.
+
+- Read the Summary from the canonical `| Unreleased | <summary> |` table row, where each `\|` pair is one escaped pipe.
+- Read the Summary from a legacy `## Unreleased` heading section as well.
+- Combine both sources in table-then-heading order.
+- Drop a duplicate phrase-and-path pair.
+- Ignore a phrase whose path is not a normalized repository-relative path.
+- Accept LF or CRLF line endings in the changelog.
+
+A registry entry on a missing current-canon file suppresses `missing-in-target` to a suppressed `match`; an entry on a divergent current-canon file or an existing target-only file routes it to `preserve` instead of a review classification. Exceptions are an eligible stale-version-only `govna/metadata.txt`, whose canon-owned `canon_version` cannot be pinned, and a boundary-less CODE `govna/build-release.md`, which remains a reviewed migration.
+
+## Legacy phrase routing
+
+- Define marker-only evidence as an exact Unreleased CHANGELOG preserve phrase whose referenced path has no independent file action.
+- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.
+- Add the referenced path to `govna/preserve.txt` for a conversion choice.
+- Leave the referenced target unchanged during marker-only conversion.
+- Remove the converted phrase after registry verification.
+- Remove only the exact phrase for a marker-only removal choice.
+- Preserve the referenced target during marker-only phrase removal.
+- Preserve unrelated registry state during marker-only phrase removal.
+- Apply each independently actionable file's capability-specific route before legacy-phrase cleanup.
+- Treat a preserve choice on that file as conversion of its legacy phrase.
+- Verify the result of every resolved sync, migration, or deletion before legacy-phrase cleanup.
+- Remove the exact legacy phrase after that verification.
+
+## Repository-check handling
+
+`govna/audit.md` `## Repository-check registry` gives a consumer the file format and its authorization rules.
+
+- Name `govna/repo-check.txt` as the standing-resolution source in the emitted acceptance test.
+- Keep the no-baseline-migration `Not applicable` outcome ahead of the configured command.
+- Prefer the configured command over inferred validation evidence.
+- Require the configured check to succeed before `govna/canon-baseline.txt` installation.
+- Exclude `govna/repo-check.txt` from rendered canon, canon baselines, ordinary audit drift, and name-referenced target-only evidence.
+
+## Child registry in audit
+
+A CODE parent lists each child repository in optional `govna/children.txt`:
+
+```text
+govna-children-v1
+<parent-relative-path>
+```
+
+- Require the header, a final newline, and nonempty, unique, byte-sorted entries.
+- Require each entry to be a slash-normalized path relative to the parent root, with `..` components only at its start.
+- Reject absolute paths, backslashes, control characters, `.` components, and leading or trailing slashes.
+- Require each entry to resolve to a real directory outside the parent worktree that does not contain the parent.
+- Stop audit before emission when the registry is malformed or a child cannot be read.
+- Stop audit and rm before emission when a DOC repository has the registry.
+- Exclude the registry from rendered canon, canon baselines, ordinary audit drift, and target-only evidence.
+- Compare each child's files with `govna render --child` for the parent's stack.
+- Name each child file by its parent-relative path in the Markdown and JSON file lists.
+- Force-sync a differing or missing child pointer or build tooling file.
+- Give a differing child `.gitignore` the ordinary Director choices.
+- Check only the canonical heading and two-column table shape of a child `CHANGELOG.md`.
+- Classify a child `CHANGELOG.md` with a broken shape as `manual-fix`.
+- Write the orphan note from `govna render --orphan` when the parent drops a child.
+
+## Retired files
+
+A retired file is a path that the recorded baseline holds and the selected current canon no longer does.
+
+- Classify an existing retired file as `retired-file` when its recorded scope is `full` and its content matches its recorded hash.
+- Keep `target-has-no-canon` and its routing question for a retired file that the repository edited, that has a legacy preserve phrase, or that has a bounded scope.
+- Classify a retired file named in the preserve registry as `preserve`.
+- List each `retired-file` under `### Retired Govna files` in the emitted AC as a deletion with no Director choice.
+- Add the acceptance test ``Verify `<path>` no longer exists.`` for each `retired-file`.
+- Treat a `retired-file` as work that writes an adoption AC and rules out a version-only result.
+
+## References to retired files
+
+- Apply these rules only when audit writes an adoption AC for another reason.
+- Scan the Markdown text that the repository keeps after the adoption AC for the path of each retired file, present or absent.
+- Treat the text from the boundary heading to the end of the file as the kept text of a file that the AC updates from canon.
+- Skip a file that the AC replaces whole with canon or deletes.
+- Skip `CHANGELOG.md`, `history.md`, AC documents, and test fixtures, because they record past work.
+- Count the repository-relative path anywhere on a line, unless a longer path contains it.
+- Count a Markdown link that uses the bare file name from a file in the same directory.
+- Attach each match to its file without changing the file's classification.
+- List each file with matches under `### References to retired files`, with each line number and retired path.
+- Add one acceptance test per listed file.
+- Mark a file's matches as conditional when one names a retired file that waits on a Director choice.
+- Set `retired_references` in the JSON report only when audit writes an adoption AC.
+- Write no adoption AC for matches alone, for an up-to-date clean result or a version-only update.
+
 ## Canon baseline manifest
 
 `govna/canon-baseline.txt` is the baseline: the saved hashes of the Govna-managed file regions previously installed in the repository. Its first line is `govna-canon-baseline-v1`, its second line is `canon_version = vMAJOR.MINOR.PATCH`, and each sorted remaining line is `<path><TAB><scope><TAB><sha256>`. Scope is `full` or `before:<boundary-heading>`. The manifest excludes itself and `govna/preserve.txt`; neither is classified as an ordinary governed file.
@@ -145,13 +246,15 @@ Audit skips target comparison when any coherence rule fails. The error names the
 
 ## Emitted AC stub
 
-Audit writes `govna/ac<N>-audit-<canon-version>.md` only when the repository has files ready to update, required control files to add, files needing a Director choice, a retired Govna link to delete, or `plan.md` IE items to space. The canon version identifies the embedded governance-file version; `N` follows the monotonic AC-numbering rule. Clear-sync, missing-target, migration-required, ambiguity, target-has-no-canon, retired-link, and format-defining forced-sync results require work. Match, expected-divergence, and ordinary preserve results do not. The generated AC follows `govna/ac-template.md` and groups every non-`match` file as follows:
+Audit writes `govna/ac<N>-audit-<canon-version>.md` only when the repository has files ready to update, required control files to add, files needing a Director choice, a retired Govna link or file to delete, or `plan.md` IE items to space. The canon version identifies the embedded governance-file version; `N` follows the monotonic AC-numbering rule. Clear-sync, missing-target, migration-required, ambiguity, target-has-no-canon, retired-link, retired-file, and format-defining forced-sync results require work. Match, expected-divergence, and ordinary preserve results do not. The generated AC follows `govna/ac-template.md` and groups every non-`match` file as follows:
 
 - **Files ready to update** — `clear-sync`, `missing-in-target`, and any format-defining file forced to sync.
 - **Required control files** — `migration-required` items under `## Migration findings`.
 - **Out of scope** — files that stay unchanged: `preserve` and `expected-divergence`.
 - **Files needing a Director choice** — `ambiguity` and `target-has-no-canon`.
 - **Retired Govna link** — `retired-link`: the `CLAUDE.md` link that the AC deletes with no Director choice.
+- **Retired Govna files** — `retired-file`: each unedited retired file that the AC deletes with no Director choice.
+- **References to retired files** — each kept Markdown file that names a retired file.
 - **IE items to space** — a `plan.md` flagged under `## IE spacing`.
 
 The stub carries an edit-detection marker (SHA-256 body hash). Re-running audit against an unedited stub for the same canon version reuses the same AC number. When audit writes an AC, it replaces each unedited stub for an older canon version: the new stub keeps that stub's AC number when no stub for the current canon exists, and audit deletes the older stub after writing and reports the replacement. An edited older stub, or more than one older stub without a current one, stops audit before it writes anything. Re-running it against an edited stub fails and directs the Director to delete or rename that generated file before retrying.
@@ -160,7 +263,7 @@ An audit with no updates or Director choices exits successfully and prints `No G
 
 A check-mode audit (`-c` or `--check`) runs the same comparison and writes nothing. It performs no AC-number allocation, stub inspection, directory creation, or file write. A clean result prints the clean-result line above and exits `0`. An actionable result prints `Govna updates or Director choices found`, followed by a plain result tally and `Run govna audit without --check to write the review AC.`, and exits `3`. With `--json`, the complete report is printed with `emitted` set to `null` and no additional prose. Because check mode emits no AC, it starts no agent-mediated adoption review.
 
-A version-only update writes nothing either. When the only actionable results are `govna/metadata.txt` and `govna/canon-baseline.txt`, `govna/metadata.txt` differs only in `canon_version`, and the recorded baseline differs from the rendered one only in its version line and the `govna/metadata.txt` hash, both audit and check-mode audit print `Only the canon version changed: canon v<new> changes no Govna file in this <profile> repository (recorded v<old>). No AC was written.` and exit `0`. The profile is the CODE stack or `DOC`. Preserved files still count; child drift, a retired link, or a forced update rules a version-only result out. The two stamps keep the last canon version that changed the repository until a real update moves them. With `--json`, `version_only` is `true` and `emitted` is `null`.
+A version-only update writes nothing either. When the only actionable results are `govna/metadata.txt` and `govna/canon-baseline.txt`, `govna/metadata.txt` differs only in `canon_version`, and the recorded baseline differs from the rendered one only in its version line and the `govna/metadata.txt` hash, both audit and check-mode audit print `Only the canon version changed: canon v<new> changes no Govna file in this <profile> repository (recorded v<old>). No AC was written.` and exit `0`. The profile is the CODE stack or `DOC`. Preserved files still count; child drift, a retired link, a retired file, or a forced update rules a version-only result out. The two stamps keep the last canon version that changed the repository until a real update moves them. With `--json`, `version_only` is `true` and `emitted` is `null`.
 
 Emitted acceptance tests verify updates, required control files, every offered routing outcome, replacement ordering, legacy-phrase cleanup, and preservation according to the Director's choices. The pre-install rendered-file check covers declared update items except `govna/canon-baseline.txt`, review targets selected for update, and migration destinations backed by embedded Govna files. After all selected work, the chosen repository command must succeed, or the `Not applicable` evidence must hold. Only after every other applicable automated AT and routing outcome passes does the baseline get installed and verified separately from the same temporary render as the final step.
 

@@ -2,6 +2,44 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.69.0
+
+Added:
+- Audit classification `retired-file`: a document that left the canon, that the repository never
+  edited, is deleted through the adoption AC with no Director choice.
+- The adoption AC lists each kept Markdown file that names a retired document under
+  `### References to retired files`, by line, with one acceptance test per file.
+- The adoption AC carries the boundary placement instructions for a CODE build guide that lacks
+  its `## Project Practices` boundary.
+- `govna/audit.md` `## Canon and local text` holds the three rules kept from the retired document.
+
+Changed:
+- Canon v0.105.0.
+- `govna/audit.md` keeps only what a consumer acts on; the tool specification and the
+  legacy-migration text moved to `govna/canon-spec.md`.
+- The child profile of `govna/audit.md` is one preserve rule under `## Preserve registry`.
+- The two-role caveat and roadmap rule moved from `govna/roles.md` to `arch.md`.
+- The machine tool list moved from the canon to this repository's `## Project Rules`.
+
+Removed:
+- `govna/canon-cycle.md`, in both flavors; the other documents already state its remaining rules.
+- The Rust evidence item of that document; the stale-evidence rule of the build guide covers it.
+- `## Required Artifacts` in the cycle documents, and the scaffolding list in `govna/README.md`.
+- The exception list of the previous-canon upgrade test.
+
+Decisions:
+- An unedited retired document needs no routing question; the Director still authorizes the
+  adoption AC. This loosens an approval boundary, and the Director approved it.
+- A retired document that was edited, preserved, or named by a legacy phrase keeps its question.
+- The tool list is a repository rule, not canon and not an agent-specific preference.
+- The reference scan skips `CHANGELOG.md`, `history.md`, AC documents, and test fixtures, because
+  they record past work.
+
+Risks:
+- A consumer loses the tool list at its next adoption until it adds the rule to `## Project Rules`.
+- The audit scans only Markdown files for references to a retired document.
+- A reference is listed only by the adoption that retires the document.
+
 ## v0.68.0
 
 Added:

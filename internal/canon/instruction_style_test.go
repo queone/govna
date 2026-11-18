@@ -1702,9 +1702,6 @@ var stateEachRuleOnceRules = map[string][]string{
 		"Do not set backlog priority.",
 		"Do not approve the roadmap.",
 	},
-	"govna/canon-cycle.md": {
-		"Keep the review record in the closure-audit working record.",
-	},
 	"govna/audit.md": {
 		"Require `AGENTS.md` to carry the integrated-audit Refine-entry exemption and pre-Implement stop.",
 	},

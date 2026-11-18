@@ -13,7 +13,6 @@ Current contents (`files/`):
 - `CHANGELOG.md`
 - `govna/ac-template.md`
 - `govna/build-release.md`
-- `govna/canon-cycle.md`
 - `govna/development-cycle.md`
 - `govna/development-guidelines.md`
 - `govna/audit.md`

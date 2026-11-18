@@ -12,7 +12,7 @@ import (
 	"github.com/queone/govna/internal/usererr"
 )
 
-const Version = "0.104.0"
+const Version = "0.105.0"
 
 const SupportedStackChoices = "Go, Rust, Swift, or Terraform"
 
@@ -276,7 +276,7 @@ var childBlocks = []profileBlock{
 	{"{{CHILD_AGENTS_SECTION}}", "children/agents.md", true},
 	{"{{CHILD_CYCLE_SECTION}}", "children/development-cycle.md", true},
 	{"{{CHILD_SNAPSHOT_RULE}}", "children/snapshot-rule.md", false},
-	{"{{CHILD_AUDIT_SECTION}}", "children/audit.md", true},
+	{"{{CHILD_PRESERVE_RULE}}", "children/audit.md", true},
 	{"{{CHILD_AUDIT_CLASSIFICATION_ROW}}", "children/audit-classification-row.md", false},
 	{"{{CHILD_RELEASES_SECTION}}", "children/build-release.md", true},
 }
@@ -308,7 +308,6 @@ var rustBlocks = []profileBlock{
 	{"{{RUST_AGENTS_RULES}}", "rust/agents.md", false},
 	{"{{RUST_PREP_TOKEN_LINE}}", "rust/build-release-token.md", false},
 	{"{{RUST_PREP_EVIDENCE_LINES}}", "rust/build-release-evidence.md", false},
-	{"{{RUST_CANON_CYCLE_ITEM}}", "rust/canon-cycle.md", false},
 }
 
 // profileValues fills every profile placeholder: with its asset when the

@@ -198,7 +198,7 @@ func keptText(path string, data []byte, byPath map[string]FileResult) ([]byte, i
 	if !listed {
 		return data, 1, true
 	}
-	if file.Classification == "retired-link" {
+	if file.Classification == "retired-link" || file.Classification == "retired-file" {
 		return nil, 0, false
 	}
 	if !file.forceSync && file.Classification != "clear-sync" && file.Classification != "missing-in-target" {

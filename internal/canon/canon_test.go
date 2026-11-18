@@ -272,7 +272,7 @@ func TestAuthorityMirrorsAndBoundarySeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, authority := range []string{"govna/ac-template.md", "govna/audit.md", "govna/canon-cycle.md", "govna/development-cycle.md", "govna/README.md", "govna/roles.md"} {
+	for _, authority := range []string{"govna/ac-template.md", "govna/audit.md", "govna/development-cycle.md", "govna/README.md", "govna/roles.md"} {
 		if fileText(t, goFiles, authority) != repoFile(t, authority) {
 			t.Errorf("the Go render of %s does not mirror the repository copy", authority)
 		}
@@ -749,7 +749,6 @@ func TestImmutableAuditACVerificationContract(t *testing.T) {
 		}
 		for _, rule := range []string{
 			"- Install an exact current-canon replacement before retired-source routing.",
-			"- Remove the exact legacy phrase after that verification.",
 		} {
 			if count := strings.Count(string(content), rule); count != 1 {
 				t.Errorf("%s rule count=%d, want 1 for %q", path, count, rule)
@@ -2831,8 +2830,8 @@ func TestRustProfileRendersOnlyForRust(t *testing.T) {
 		blocks = append(blocks, block.asset)
 	}
 	lines := profileLines(t, blocks...)
-	if len(lines) != 6 {
-		t.Fatalf("the Rust profile holds %d lines, want 6", len(lines))
+	if len(lines) != 5 {
+		t.Fatalf("the Rust profile holds %d lines, want 5", len(lines))
 	}
 	for _, profile := range dedupProfiles() {
 		files, err := Render(profile.config)
@@ -3114,5 +3113,206 @@ func TestContractScenariosStayInThisRepository(t *testing.T) {
 				t.Errorf("%s %s holds the scenario set", profile.name, path)
 			}
 		}
+	}
+}
+
+// movedAuditSpecification lists text that specifies the audit tool or a
+// legacy migration. A consumer cannot act on it, so only the specification
+// document of this repository holds it.
+var movedAuditSpecification = []string{
+	"Treat an existing CODE `govna/build-release.md` without its registered boundary as a one-time reviewed migration.",
+	"- Classify an existing target-only path named in the preserve registry as `preserve`.",
+	"- Keep that preserved target-only path visible in audit and JSON results.",
+	"- Omit another routing question for that preserved target-only path.",
+	"Exclude `govna/preserve.txt` from rendered canon, canon baselines, ordinary audit drift, name-referenced target-only evidence, and ordinary rm target-only content.",
+	"Treat only exact legacy preserve phrases in the Unreleased CHANGELOG Summary as migration evidence:",
+	"- Read the Summary from the canonical `| Unreleased | <summary> |` table row, where each `\\|` pair is one escaped pipe.",
+	"- Read the Summary from a legacy `## Unreleased` heading section as well.",
+	"- Combine both sources in table-then-heading order.",
+	"- Drop a duplicate phrase-and-path pair.",
+	"- Ignore a phrase whose path is not a normalized repository-relative path.",
+	"- Accept LF or CRLF line endings in the changelog.",
+	"A registry entry on a missing current-canon file suppresses `missing-in-target` to a suppressed `match`;",
+	"- Name `govna/repo-check.txt` as the standing-resolution source in the emitted acceptance test.",
+	"- Keep the no-baseline-migration `Not applicable` outcome ahead of the configured command.",
+	"- Prefer the configured command over inferred validation evidence.",
+	"- Require the configured check to succeed before `govna/canon-baseline.txt` installation.",
+	"- Exclude `govna/repo-check.txt` from rendered canon, canon baselines, ordinary audit drift, and name-referenced target-only evidence.",
+	"A CODE parent lists each child repository in optional `govna/children.txt`:",
+	"- Require the header, a final newline, and nonempty, unique, byte-sorted entries.",
+	"- Stop audit before emission when the registry is malformed or a child cannot be read.",
+	"- Compare each child's files with `govna render --child` for the parent's stack.",
+	"- Force-sync a differing or missing child pointer or build tooling file.",
+	"- Write the orphan note from `govna render --orphan` when the parent drops a child.",
+	"- Define marker-only evidence as an exact Unreleased CHANGELOG preserve phrase whose referenced path has no independent file action.",
+	"- Offer conversion to `govna/preserve.txt` or exact-phrase removal for marker-only evidence.",
+	"- Add the referenced path to `govna/preserve.txt` for a conversion choice.",
+	"- Leave the referenced target unchanged during marker-only conversion.",
+	"- Remove the converted phrase after registry verification.",
+	"- Remove only the exact phrase for a marker-only removal choice.",
+	"- Preserve the referenced target during marker-only phrase removal.",
+	"- Preserve unrelated registry state during marker-only phrase removal.",
+	"- Apply each independently actionable file's capability-specific route before legacy-phrase cleanup.",
+	"- Treat a preserve choice on that file as conversion of its legacy phrase.",
+	"- Verify the result of every resolved sync, migration, or deletion before legacy-phrase cleanup.",
+	"- Remove the exact legacy phrase after that verification.",
+}
+
+// keptAuditGuide lists what every consumer still needs from govna/audit.md.
+var keptAuditGuide = []string{
+	"## Usage\n",
+	"## Classification\n",
+	"| `retired-file` | A document that left the Govna files, that the repository never edited, and that the AC deletes. |\n",
+	"## Mixed-content boundary registry\n",
+	"| `AGENTS.md` | `## Project Rules` |\n",
+	"## Preserve registry\n",
+	"govna-preserve-v1\n",
+	"Add an exact path for a resolved preserve outcome. Remove an exact path for a resolved sync, delete, or canon-backed migration outcome.",
+	"## Repository-check registry\n",
+	"govna-repo-check-v1\n",
+	"- Require explicit Director authorization for every `govna/repo-check.txt` creation or modification.\n",
+	"- Treat a valid configured command as the standing Director resolution for the emitted repository check.\n",
+	"## Emitted AC stub\n",
+	"### Agent-mediated review\n",
+	"### Routing capabilities\n",
+	"- Offer only these outcomes for a canon-backed ambiguity: sync, preserve, explicitly named migration, delete.\n",
+	"- Offer only these outcomes for an ordinary `target-has-no-canon` item: preserve, explicitly named migration, delete.\n",
+	"- Require the Director to name every migration destination in the routing response.\n",
+	"- Install an exact current-canon replacement before retired-source routing.\n",
+	"- Offer only these outcomes for that retired source: preserve, explicitly named migration, delete.\n",
+	"- Omit restore as a routing outcome.\n",
+	"### Mixed-content sync verification\n",
+	"## Canon and local text\n",
+	"## Adoption procedure\n",
+	"- Delete each file listed under `### Retired Govna files` of the emitted AC.\n",
+	"- Remove or repoint each reference listed under `### References to retired files` of the emitted AC.\n",
+}
+
+func TestAuditGuideKeepsOnlyConsumerText(t *testing.T) {
+	spec := repoFile(t, "govna/canon-spec.md")
+	for _, moved := range movedAuditSpecification {
+		if count := strings.Count(spec, moved); count != 1 {
+			t.Errorf("govna/canon-spec.md holds %q %d times, want 1", moved, count)
+		}
+		for path, text := range embeddedText(t) {
+			if strings.Contains(text, moved) {
+				t.Errorf("asset %s still carries the specification text %q", path, moved)
+			}
+		}
+	}
+	const childPreserve = "Accept a `govna/preserve.txt` entry that starts with `..` only when it names the `.gitignore` of a child declared in `govna/children.txt`"
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		guide := fileText(t, files, "govna/audit.md")
+		for _, moved := range movedAuditSpecification {
+			for path, text := range governanceText(files) {
+				if strings.Contains(text, moved) {
+					t.Errorf("%s %s carries the specification text %q", profile.name, path, moved)
+				}
+			}
+		}
+		for _, kept := range keptAuditGuide {
+			if count := strings.Count(guide, kept); count != 1 {
+				t.Errorf("%s govna/audit.md holds %q %d times, want 1", profile.name, kept, count)
+			}
+		}
+		if strings.Contains(guide, "## Child repositories") {
+			t.Errorf("%s govna/audit.md still carries the child registry specification", profile.name)
+		}
+		want := 0
+		if profile.config.Children {
+			want = 1
+		}
+		if count := strings.Count(guide, childPreserve); count != want {
+			t.Errorf("%s govna/audit.md holds the child preserve rule %d times, want %d", profile.name, count, want)
+		}
+		if want == 1 && !strings.Contains(headingSection(t, guide, "## Preserve registry"), childPreserve) {
+			t.Errorf("%s keeps the child preserve rule outside ## Preserve registry", profile.name)
+		}
+	}
+}
+
+func TestCanonCycleDocumentIsRetired(t *testing.T) {
+	const retired = "canon-cycle"
+	for path, text := range embeddedText(t) {
+		if strings.Contains(path, retired) || strings.Contains(text, retired) {
+			t.Errorf("asset %s still names the retired canon-cycle document", path)
+		}
+	}
+	rules := []string{
+		"- Treat `govna/metadata.txt` as the record of a repository's Govna file version and CODE or DOC type.",
+		"- Pause when a canon update introduces an Instruction Style violation.",
+		"- Skip local rewrites of canon-owned text unless an explicit AC declares intentional divergence.",
+	}
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			if strings.Contains(file.Path, retired) || strings.Contains(string(file.Content), retired) {
+				t.Errorf("%s %s still names the retired canon-cycle document", profile.name, file.Path)
+			}
+		}
+		section := headingSection(t, fileText(t, files, "govna/audit.md"), "## Canon and local text")
+		if count := strings.Count(section, "\n- "); count != len(rules) {
+			t.Errorf("%s ## Canon and local text holds %d rules, want %d", profile.name, count, len(rules))
+		}
+		for _, rule := range rules {
+			if count := countLine(governanceText(files), rule); count != 1 {
+				t.Errorf("%s renders %q %d times, want 1", profile.name, rule, count)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join("..", "..", "govna", "canon-cycle.md")); err == nil {
+		t.Error("this repository still holds govna/canon-cycle.md")
+	}
+}
+
+func TestConsumersHoldNoDesignNotesOrMachineTools(t *testing.T) {
+	const (
+		caveat   = "This model assumes the Operator can hold both creation and review across long horizons without colluding with itself."
+		roadmap  = "Keep the two-role model closed until first-class delegated review exists."
+		toolList = "- Reach for `rg` (not `grep`/`ack`), `fd` (not `find`), `jq` (not `awk`/`python -c` on JSON), `sd` (not `sed -i`), `sqlite-utils` (not raw `sqlite3` cli), `ast-grep` (not regex on code), and `pup` (not regex on HTML).\n"
+	)
+	retired := []string{"## Caveat", caveat, roadmap, "Recommended contents to add", "## Required Artifacts", "Reach for `rg`", "the Tool Use rule"}
+	for path, text := range embeddedText(t) {
+		for _, term := range retired {
+			if strings.Contains(text, term) {
+				t.Errorf("asset %s still carries %q", path, term)
+			}
+		}
+	}
+	for _, profile := range dedupProfiles() {
+		files, err := Render(profile.config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			for _, term := range retired {
+				if strings.Contains(string(file.Content), term) {
+					t.Errorf("%s %s still carries %q", profile.name, file.Path, term)
+				}
+			}
+		}
+	}
+	arch := repoFile(t, "arch.md")
+	rationale := headingSection(t, arch, "### Contract Rationale")
+	for _, note := range []string{caveat, roadmap} {
+		if strings.Count(arch, note) != 1 || !strings.Contains(rationale, note) {
+			t.Errorf("arch.md ### Contract Rationale needs %q once", note)
+		}
+	}
+	agents := repoFile(t, "AGENTS.md")
+	_, project, ok := strings.Cut(agents, "\n## Project Rules\n")
+	if !ok {
+		t.Fatal("AGENTS.md has no ## Project Rules")
+	}
+	first, _, _ := strings.Cut(project, "\n### ")
+	if strings.Count(agents, toolList) != 1 || !strings.Contains(first, toolList) {
+		t.Error("the first list of ## Project Rules needs the machine tool list once")
 	}
 }
