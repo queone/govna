@@ -1748,7 +1748,6 @@ func writeAuditReview(b *strings.Builder, stack string, withChildren, forcedUtil
 	b.WriteString("- Review the exact proposed rules.\n")
 	b.WriteString("- Check rule overlap and placement.\n")
 	b.WriteString("- Resolve every candidate reference.\n")
-	b.WriteString("- Measure prospective contract growth.\n")
 	b.WriteString("- Verify target-side acceptance evidence.\n")
 	b.WriteString("- Keep this emitted AC and every consumer file unchanged.\n")
 	b.WriteString("- Remove the exact scratch directory before reporting Audit completion or a blocker.\n")

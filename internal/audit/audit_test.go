@@ -2906,6 +2906,10 @@ func TestPreviousCanonUpgradeNeedsGovernanceUpdates(t *testing.T) {
 				}
 			}
 			for _, path := range match {
+				// Audit reports the baseline only when it is missing or differs.
+				if path == baselinePath {
+					continue
+				}
 				if file := results[path]; file.Classification != "match" {
 					t.Errorf("%s classification=%q, want match", path, file.Classification)
 				}

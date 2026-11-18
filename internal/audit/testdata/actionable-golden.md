@@ -34,7 +34,6 @@ Govna found 2 files ready to update, 0 required control files to add, 1 file nee
 - Review the exact proposed rules.
 - Check rule overlap and placement.
 - Resolve every candidate reference.
-- Measure prospective contract growth.
 - Verify target-side acceptance evidence.
 - Keep this emitted AC and every consumer file unchanged.
 - Remove the exact scratch directory before reporting Audit completion or a blocker.

@@ -2,6 +2,16 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.69.1
+
+Removed:
+- The emitted `### Audit Review` instruction "Measure prospective contract growth"; it named the
+  size reporting that v0.68.0 retired.
+
+Changed:
+- The previous-canon upgrade test accepts a baseline that equals the current one, so the build
+  passes after a release that leaves the canon unchanged.
+
 ## v0.69.0
 
 Added:

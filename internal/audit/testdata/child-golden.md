@@ -41,7 +41,6 @@ Govna also found 1 child file needing a manual fix.
 - Review the exact proposed rules.
 - Check rule overlap and placement.
 - Resolve every candidate reference.
-- Measure prospective contract growth.
 - Verify target-side acceptance evidence.
 - Keep this emitted AC and every consumer file unchanged.
 - Remove the exact scratch directory before reporting Audit completion or a blocker.

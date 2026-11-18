@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.69.1 | Adoption AC review drops the retired contract-growth step |
 | 0.69.0 | AC95 Consumer docs lose unusable text; audit deletes retired files; canon 0.105 |
 | 0.68.0 | AC94 Adoption steps travel in the adoption AC; CLI rules by profile; canon 0.104 |
 | 0.67.0 | AC93 Consumers get only rules they act on; child rules by profile; canon 0.103.0 |

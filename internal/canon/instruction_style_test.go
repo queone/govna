@@ -274,7 +274,7 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I65", "Review the exact proposed rules."},
 	{"I66", "Check rule overlap and placement."},
 	{"I67", "Resolve every candidate reference."},
-	{"I68", "Measure prospective contract growth."},
+	{"I68", "Do not re-run govna audit as an implementation gate for the emitted AC."},
 	{"I69", "Verify target-side acceptance evidence."},
 	{"I70", "Keep this emitted AC and every consumer file unchanged."},
 	{"I71", "Remove the exact scratch directory before reporting Audit completion or a blocker."},
@@ -304,7 +304,6 @@ var generatedInstructionManifest = []generatedInstructionTemplate{
 	{"I95", "Preserve the boundary heading and every line below it as repo-owned content."},
 	{"I96", "Resolve an unresolved emitted repository check in chat."},
 	{"I97", "Cite repository evidence when choosing Not applicable for the repository check."},
-	{"I98", "Do not re-run govna audit as an implementation gate for the emitted AC."},
 }
 
 var generatedSecondAction = regexp.MustCompile(`(?i)(?:\b(?:and|or|then)\s+(?:also\s+)?|;\s*|[.!?]\s+)(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify)(?:\s|$)|\b(?:before|after)\s+(?:apply|choose|compare|create|install|leave|preserve|remove|render|resolve|satisfy|verify|applying|choosing|comparing|creating|installing|leaving|preserving|removing|rendering|resolving|satisfying|verifying)(?:\s|$)`)
@@ -379,8 +378,8 @@ var generatedProseStarters = func() map[string]bool {
 }()
 
 func TestGeneratedInstructionManifest(t *testing.T) {
-	if len(generatedInstructionManifest) != 98 {
-		t.Fatalf("generated instruction manifest has %d entries, want 98", len(generatedInstructionManifest))
+	if len(generatedInstructionManifest) != 97 {
+		t.Fatalf("generated instruction manifest has %d entries, want 97", len(generatedInstructionManifest))
 	}
 	seenText := map[string]string{}
 	for index, instruction := range generatedInstructionManifest {
@@ -481,15 +480,15 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/fresh-doc-golden.md":  {"I01": 1},
 		"internal/apply/testdata/existing-golden.md":   {"I01": 1, "I02": 1, "I04": 1},
 		"internal/audit/testdata/actionable-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I98": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I68": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 2,
 			"I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
-			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I64": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1,
+			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I64": 1, "I65": 1, "I66": 1, "I67": 1,
 			"I69": 1, "I70": 1, "I71": 1, "I72": 1,
 		},
 		"internal/audit/testdata/unresolved-validation-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I98": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 2, "I28": 1, "I29": 1,
+			"I05": 1, "I06": 1, "I07": 1, "I08": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I68": 1, "I15": 1, "I16": 1, "I18": 1, "I23": 2, "I28": 1, "I29": 1,
 			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
-			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
+			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I69": 1,
 			"I70": 1, "I71": 1, "I72": 1, "I73": 1,
 		},
 		"internal/remove/testdata/removal-golden.md": {
@@ -498,9 +497,9 @@ func TestGeneratedGoldenInstructionGate(t *testing.T) {
 		"internal/apply/testdata/child-golden.md":          {"I77": 1, "I78": 1, "I87": 1, "I88": 1, "I91": 1, "I92": 1, "I93": 1},
 		"internal/remove/testdata/child-removal-golden.md": {"I79": 1, "I80": 1, "I81": 1, "I82": 1, "I83": 1},
 		"internal/audit/testdata/child-golden.md": {
-			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I98": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
+			"I05": 1, "I06": 1, "I07": 1, "I09": 1, "I10": 1, "I94": 1, "I95": 1, "I96": 1, "I97": 1, "I68": 1, "I15": 1, "I17": 1, "I18": 1, "I23": 3,
 			"I42": 1, "I43": 1, "I44": 1, "I45": 1, "I46": 1, "I47": 1, "I48": 1, "I49": 1, "I50": 1, "I51": 1, "I52": 1,
-			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I68": 1, "I69": 1,
+			"I59": 1, "I60": 1, "I61": 1, "I62": 1, "I63": 1, "I65": 1, "I66": 1, "I67": 1, "I69": 1,
 			"I70": 1, "I71": 1, "I72": 1, "I74": 1, "I75": 1, "I76": 1, "I85": 1, "I86": 1,
 		},
 	}
