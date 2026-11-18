@@ -180,9 +180,26 @@ func markdownPaths(dir string) ([]string, error) {
 	return paths, nil
 }
 
-// identifierSkipped reports whether the scan skips rel: test fixtures always,
-// and the CHANGELOG and active AC documents outside a child repository.
+// identifierGoverned reports whether rel is governed Markdown: a root file that
+// Govna governs or any Markdown file under govna/.
+func identifierGoverned(rel string) bool {
+	switch rel {
+	case "AGENTS.md", "README.md", "arch.md", "plan.md", "history.md", "CHANGELOG.md":
+		return true
+	}
+	return strings.HasPrefix(rel, "govna/")
+}
+
+// identifierSkipped reports whether the identifier scan skips rel: every path
+// outside governed Markdown, and every path that markdownExempt names.
 func identifierSkipped(rel string, child bool) bool {
+	return !identifierGoverned(rel) || markdownExempt(rel, child)
+}
+
+// markdownExempt reports whether rel is exempt from Markdown checks: test
+// fixtures always, and the CHANGELOG and active AC documents outside a child
+// repository.
+func markdownExempt(rel string, child bool) bool {
 	if strings.HasPrefix(rel, "tests/fixtures/") || strings.HasPrefix(rel, "testdata/") || strings.Contains(rel, "/testdata/") {
 		return true
 	}

@@ -2,6 +2,43 @@
 
 One section per release, newest first: what the release added, changed, removed, or deferred in the product, its design, and its code, and why. Governance, toolchain, and release mechanics stay in `CHANGELOG.md` and git. Settled design is in `arch.md`. Search it to learn why a release changed the product.
 
+## v0.70.0
+
+Changed:
+- The Markdown identifier scan checks only governed Markdown, in every `build.sh` and in `govna audit`.
+- Governed Markdown is root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`,
+  and every Markdown file under `govna/`.
+- `### AC Mechanics` names that set and applies no bare-identifier rule to any other Markdown file.
+- The DOC rule omits `arch.md` and `history.md`, because DOC governs neither file.
+- A symbolic link counts by its own path.
+- The adoption AC lists bare identifiers only in governed Markdown.
+- DOC `govna/release.md` calls the scan an automated check of governed Markdown.
+- `### Four-Phase Workflow` gates Draft and changed-Refine completion on the sizing rules
+  in `govna/ac-template.md`.
+- Canon v0.106.0.
+
+Removed:
+- The `### Session Entry` rule to check each changed AC section for stale or repeated wording;
+  the completion gate replaces it.
+
+Deferred:
+- A DOC scan block without `arch.md` and `history.md` waits in `plan.md`.
+
+Decisions:
+- The change limits scan scope; the scan still cannot tell a legitimate term from an identifier.
+- The scan was blocking release prep in a DOC repository whose content entry names an audio codec.
+- Losing the scan in a CODE repository's `docs/` folder is accepted.
+- The retired-file reference list keeps its previous file set.
+- The completion gate adds no report line and no word cap; Audit stays the independent check.
+- The scan block stays identical in every build script.
+
+Risks:
+- A legitimate term that looks like an identifier still fails in governed Markdown,
+  such as a codec name in `README.md`.
+- A DOC repository with a root content entry named `arch.md` or `history.md` is still scanned.
+- Bare identifiers in a CODE repository's `docs/` folder go unreported.
+- The completion gate depends on the agent that runs it.
+
 ## v0.69.1
 
 Removed:

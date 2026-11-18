@@ -123,7 +123,8 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 
 	scanTest := "TestBareIdentifierScanFindsOnlyDisallowedIdentifiers"
 	sharedScan := []binding{
-		{claim: "Scan every tracked or unignored Markdown file for bare AC, AT, and IE identifiers.", implementation: "git ls-files -z --cached --others --exclude-standard -- '*.md'", regression: scanTest},
+		{claim: "Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.", implementation: "AGENTS.md | README.md | arch.md | plan.md | history.md | CHANGELOG.md | govna/*) ;;", regression: scanTest},
+		{claim: "Count a symbolic link by its own path.", implementation: "[ -f \"$rel\" ] || continue", regression: scanTest},
 		{claim: "Run the scan at the start of every prep, before any write or dry-run report.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
 		{claim: "Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.", implementation: "match(rest, /(AC|AT|IE)[0-9]+/)", regression: scanTest},
 		{claim: "Treat a one-line `<!-- Historical: ... -->` comment as a Markdown `Historical:` comment.", implementation: "rest ~ /^[ \\t]*Historical:/", regression: scanTest},
@@ -136,7 +137,7 @@ func TestSupportedProfileCommandParity(t *testing.T) {
 		if profiles[i].name == "DOC" {
 			profiles[i].bindings = append(profiles[i].bindings,
 				binding{claim: "Stop prep on each identifier that `AGENTS.md` `### AC Mechanics` does not allow.", implementation: "bare identifier scan found %s issue(s)", regression: scanTest},
-				binding{claim: "Prep runs one automated content check: the Markdown identifier scan.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
+				binding{claim: "Prep runs one automated check: the Markdown identifier scan of governed Markdown.", implementation: "_bare_id_check || return 1", regression: "TestPrepStopsOnBareIdentifierBeforeAnyWrite"},
 			)
 			continue
 		}
@@ -4533,9 +4534,12 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 	root := repoRoot(t)
 	changelog := "# Changelog\n\n| Version | Summary |\n|---------|---------|\n| Unreleased | |\n| 1.0.0 | AC12 shipped |\n"
 	files := map[string]string{
-		"README.md":                "# Widget\n\nUse `Package AC70+AC71` to release.\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, and AC1x hold none.\n",
-		"history.md":               "# History\n\nShipped in AT3.\n",
-		"docs/guide.md":            "# Guide\n\nSupports IE11.\n<!-- Historical: AC12 shipped this -->\n",
+		"README.md":                "# Widget\n\nUse `Package AC70+AC71` to release.\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, and AC1x hold none.\nThe player decodes AC3 audio.\n",
+		"history.md":               "# History\n\nShipped in AT3.\n<!-- Historical: AC12 shipped this -->\n",
+		"govna/notes.md":           "See AC4.\n",
+		"docs/guide.md":            "# Guide\n\nSupports IE11.\n",
+		"index.md":                 "Published under AT7.\n",
+		"life/prompt-cards.md":     "Copy video, AC3 audio at 640k.\n",
 		"govna/ac-template.md":     "**AT1** [Automated]\n\nSee IE2.\n",
 		"govna/ac81-example.md":    "# AC81 Example\n",
 		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3 and IE9.\nNext: IE5.\n",
@@ -4547,11 +4551,12 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 		bareIdentifierFinding("README.md", 3, "AC70"),
 		bareIdentifierFinding("README.md", 3, "AC71"),
 		bareIdentifierFinding("history.md", 3, "AT3"),
-		bareIdentifierFinding("docs/guide.md", 3, "IE11"),
+		bareIdentifierFinding("README.md", 6, "AC3"),
+		bareIdentifierFinding("govna/notes.md", 1, "AC4"),
 		bareIdentifierFinding("govna/ac-template.md", 3, "IE2"),
 		bareIdentifierFinding("plan.md", 3, "AC3"),
 	}
-	untracked := bareIdentifierFinding("notes.md", 1, "AT9")
+	untracked := bareIdentifierFinding("govna/draft.md", 1, "AT9")
 	child := []string{
 		bareIdentifierFinding("CHANGELOG.md", 6, "AC12"),
 		bareIdentifierFinding("govna/ac81-example.md", 1, "AC81"),
@@ -4559,7 +4564,7 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 		bareIdentifierFinding("plan.md", 3, "IE5"),
 		bareIdentifierFinding("plan.md", 3, "IE9"),
 		bareIdentifierFinding("plan.md", 4, "IE5"),
-		bareIdentifierFinding("docs/guide.md", 4, "AC12"),
+		bareIdentifierFinding("history.md", 4, "AC12"),
 	}
 	pointer := mustRead(t, filepath.Join(root, "internal/canon/assets/child/pointer-AGENTS.md.tmpl"))
 	expect := func(t *testing.T, label, output string, err error, want []string) {
@@ -4590,10 +4595,15 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 			}
 
 			repo := t.TempDir()
-			write(repo, map[string]string{".gitignore": "ignored.md\n", "ignored.md": "AT8 ignored\n"})
+			write(repo, map[string]string{".gitignore": "govna/ignored.md\n", "govna/ignored.md": "AT8 ignored\n"})
 			gitFixture(t, repo, "init", "-q")
 			gitFixture(t, repo, "add", "-A")
-			writeBuildFixture(t, filepath.Join(repo, "notes.md"), []byte("AT9 note\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(repo, "govna", "draft.md"), []byte("AT9 note\n"), 0o644)
+			// A link outside governed Markdown counts by its own path, so the
+			// scan skips it even though it points at a governed file.
+			if err := os.Symlink("README.md", filepath.Join(repo, "readme-link.md")); err != nil {
+				t.Fatal(err)
+			}
 			out, err := runBareIdentifierScan(t, repo, script)
 			expect(t, "git repository", out, err, append(append([]string{}, shared...), untracked))
 
@@ -4611,11 +4621,11 @@ func TestBareIdentifierScanFindsOnlyDisallowedIdentifiers(t *testing.T) {
 
 			clean := map[string]string{
 				"README.md":            "# Widget\n\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, and AC1x hold none.\n",
-				"history.md":           "# History\n",
-				"docs/guide.md":        "# Guide\n\n<!-- Historical: AC12 shipped this -->\n",
+				"history.md":           "# History\n\n<!-- Historical: AC12 shipped this -->\n",
 				"govna/ac-template.md": "**AT1** [Automated]\n",
+				"govna/notes.md":       "See the note.\n",
 				"plan.md":              "# Plan\n\n- IE5: Explore a scan after IE9.\nNext: IE5.\n",
-				"notes.md":             "A note\n",
+				"govna/draft.md":       "A note\n",
 			}
 			for path, body := range clean {
 				writeBuildFixture(t, filepath.Join(repo, filepath.FromSlash(path)), []byte(body), 0o644)
@@ -4663,6 +4673,7 @@ func TestPrepStopsOnBareIdentifierBeforeAnyWrite(t *testing.T) {
 			writeBuildFixture(t, filepath.Join(dir, "build.sh"), mustRead(t, filepath.Join(root, script.path)), 0o755)
 			writeBuildFixture(t, filepath.Join(dir, "CHANGELOG.md"), []byte(changelog), 0o644)
 			writeBuildFixture(t, filepath.Join(dir, "history.md"), []byte("# History\n\nShipped in AC12.\n"), 0o644)
+			writeBuildFixture(t, filepath.Join(dir, "life", "prompt-cards.md"), []byte("Copy video, AC3 audio at 640k.\n"), 0o644)
 			writeBuildFixture(t, filepath.Join(dir, "go.mod"), []byte("module example.com/widget\n\ngo 1.27.0\n"), 0o644)
 			gitFixture(t, dir, "init", "-q")
 			gitFixture(t, dir, "add", "-A")
@@ -4682,6 +4693,11 @@ func TestPrepStopsOnBareIdentifierBeforeAnyWrite(t *testing.T) {
 				if after := string(gitFixtureOutput(t, dir, "status", "--porcelain")); after != before {
 					t.Fatalf("%v changed the repository: before=%q after=%q", args, before, after)
 				}
+			}
+			writeBuildFixture(t, filepath.Join(dir, "history.md"), []byte("# History\n"), 0o644)
+			out, _ := run(t, dir, "", "./build.sh", "prep", "-n", "v1.0.0", "Fix docs")
+			if !strings.Contains(out, bareIdentifierCleanLine+"\n") {
+				t.Fatalf("prep scan rejected a content entry outside governed Markdown:\n%s", out)
 			}
 		})
 	}

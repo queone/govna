@@ -23,7 +23,11 @@ func identifierFixtureFiles() map[string]string {
 	return map[string]string{
 		"README.md":                "# Widget\n\nUse `Package AC70+AC71` to release.\nUse `Package AC<N>+AC<M>` instead.\nACs, FAT32, " + "_" + "AT1, AC1x, AC1AT2, and \xc3\xa9AT5.\n",
 		"history.md":               "# History\r\n\r\nShipped in AT3.\r\n",
+		"arch.md":                  "# Guide\n\nSupports IE11.\n<!-- Historical: AC12 shipped this --> then AT4 <!-- note AC9 -->\n<!-- Historical: AC14 without a close\n",
 		"docs/guide.md":            "# Guide\n\nSupports IE11.\n<!-- Historical: AC12 shipped this --> then AT4 <!-- note AC9 -->\n<!-- Historical: AC14 without a close\n",
+		"govna/notes.md":           "See AC4.\n",
+		"index.md":                 "Published under AT7.\n",
+		"life/prompt-cards.md":     "Copy video, AC3 audio at 640k.\n",
 		"govna/ac-template.md":     "**AT1** [Automated]\n\nSee IE2.\n",
 		"govna/ac81-example.md":    "# AC81 Example\n",
 		"plan.md":                  "# Plan\n\n- IE5: Explore a scan; see AC3 and IE9.\n* IE6: Another, after IE114.\n  - IE7: Nested.\nNext: IE5 and AT2.\n",
@@ -38,7 +42,8 @@ func identifierFixtureFiles() map[string]string {
 var identifierParentFindings = []string{
 	"README.md:3:AC70", "README.md:3:AC71", "README.md:5:AT5",
 	"history.md:3:AT3",
-	"docs/guide.md:3:IE11", "docs/guide.md:4:AT4", "docs/guide.md:4:AC9", "docs/guide.md:5:AC14",
+	"arch.md:3:IE11", "arch.md:4:AT4", "arch.md:4:AC9", "arch.md:5:AC14",
+	"govna/notes.md:1:AC4",
 	"govna/ac-template.md:3:IE2",
 	"plan.md:3:AC3", "plan.md:6:AT2",
 }
@@ -48,25 +53,27 @@ var identifierChildOnlyFindings = []string{
 	"govna/ac81-example.md:1:AC81",
 	"govna/ac-template.md:1:AT1",
 	"plan.md:3:IE5", "plan.md:3:IE9", "plan.md:4:IE6", "plan.md:4:IE114", "plan.md:5:IE7", "plan.md:6:IE5",
-	"docs/guide.md:4:AC12",
+	"arch.md:4:AC12",
 }
 
 // identifierDiscoveryFindings are the findings that only Git-listed discovery
 // produces: a followed link and directories that find prunes.
 var identifierDiscoveryFindings = []string{
-	"linked.md:3:IE11", "linked.md:4:AT4", "linked.md:4:AC9", "linked.md:5:AC14",
-	"outside.md:1:AT6",
-	"vendor/lib.md:1:AT10",
-	"node_modules/pkg/readme.md:1:AC20",
+	"govna/linked.md:3:IE11", "govna/linked.md:4:AT4", "govna/linked.md:4:AC9", "govna/linked.md:5:AC14",
+	"govna/outside.md:1:AT6",
+	"govna/vendor/lib.md:1:AT10",
+	"govna/node_modules/pkg/readme.md:1:AC20",
 }
 
-// writeIdentifierDiscovery adds the link and pruned-directory cases: a link to
-// a Markdown file, a link outside dir, a dangling link, a link to a directory,
-// and Markdown under vendor and node_modules.
+// writeIdentifierDiscovery adds the link and pruned-directory cases under
+// govna/: a link to a Markdown file outside governed Markdown, a link outside
+// dir, a dangling link, a link to a directory, and Markdown under vendor and
+// node_modules. It also adds a link outside governed Markdown that points into
+// it, which the scan skips because a link counts by its own path.
 func writeIdentifierDiscovery(t *testing.T, dir, outside string) {
 	t.Helper()
-	writeIdentifierFixture(t, dir, map[string]string{"vendor/lib.md": "AT10 vendored\n", "node_modules/pkg/readme.md": "AC20 package\n"})
-	for link, target := range map[string]string{"linked.md": "docs/guide.md", "outside.md": outside, "dangling.md": "missing.md", "dirlink.md": "docs"} {
+	writeIdentifierFixture(t, dir, map[string]string{"govna/vendor/lib.md": "AT10 vendored\n", "govna/node_modules/pkg/readme.md": "AC20 package\n"})
+	for link, target := range map[string]string{"govna/linked.md": "../docs/guide.md", "govna/outside.md": outside, "govna/dangling.md": "missing.md", "govna/dirlink.md": "../docs", "readme-link.md": "README.md"} {
 		if err := os.Symlink(target, filepath.Join(dir, link)); err != nil {
 			t.Fatal(err)
 		}
@@ -164,10 +171,10 @@ func TestIdentifierScanAgreesWithShellScan(t *testing.T) {
 	repo := t.TempDir()
 	writeIdentifierFixture(t, repo, identifierFixtureFiles())
 	writeIdentifierDiscovery(t, repo, outside)
-	writeIdentifierFixture(t, repo, map[string]string{".gitignore": "ignored.md\n", "ignored.md": "AT8 ignored\n"})
+	writeIdentifierFixture(t, repo, map[string]string{".gitignore": "govna/ignored.md\n", "govna/ignored.md": "AT8 ignored\n"})
 	git(t, repo, "init", "-q")
 	git(t, repo, "add", "-A")
-	writeAuditFile(t, filepath.Join(repo, "notes.md"), []byte("AT9 note"))
+	writeAuditFile(t, filepath.Join(repo, "govna", "draft.md"), []byte("AT9 note"))
 
 	plain := t.TempDir()
 	writeIdentifierFixture(t, plain, identifierFixtureFiles())
@@ -179,9 +186,9 @@ func TestIdentifierScanAgreesWithShellScan(t *testing.T) {
 		child bool
 		want  []string
 	}{
-		{name: "git repository", dir: repo, want: sortedCopy(identifierParentFindings, identifierDiscoveryFindings, []string{"notes.md:1:AT9"})},
+		{name: "git repository", dir: repo, want: sortedCopy(identifierParentFindings, identifierDiscoveryFindings, []string{"govna/draft.md:1:AT9"})},
 		{name: "directory outside Git", dir: plain, want: sortedCopy(identifierParentFindings)},
-		{name: "child repository", dir: repo, child: true, want: sortedCopy(identifierParentFindings, identifierChildOnlyFindings, identifierDiscoveryFindings, []string{"notes.md:1:AT9", "linked.md:4:AC12"})},
+		{name: "child repository", dir: repo, child: true, want: sortedCopy(identifierParentFindings, identifierChildOnlyFindings, identifierDiscoveryFindings, []string{"govna/draft.md:1:AT9", "govna/linked.md:4:AC12"})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.child {
@@ -320,7 +327,7 @@ func TestAuditListsBareIdentifiersInAdoptionAC(t *testing.T) {
 	readme := appendAuditFile(t, path("README.md"), "\nUse `Package AC70+AC71` to release.\n")
 	setBaselineHash(t, root, "README.md", readme)
 	appendAuditFile(t, path("govna/roles.md"), "\nSee AC9.\n")
-	for link, target := range map[string]string{"docs/agents-link.md": "../AGENTS.md", "docs/readme-link.md": "../README.md", "docs/roles-link.md": "../govna/roles.md"} {
+	for link, target := range map[string]string{"docs/agents-link.md": "../AGENTS.md", "docs/readme-link.md": "../README.md", "docs/roles-link.md": "../govna/roles.md", "govna/roles-link.md": "roles.md"} {
 		if err := os.Symlink(target, path(link)); err != nil {
 			t.Fatal(err)
 		}
@@ -341,14 +348,12 @@ func TestAuditListsBareIdentifiersInAdoptionAC(t *testing.T) {
 	agentsLine := lineOf(t, path("AGENTS.md"), "Keep the AC5 rule")
 	rolesLine := lineOf(t, path("govna/roles.md"), "See AC9")
 	want := map[string]string{
-		"docs/agents-link.md":    fmt.Sprintf("%d:AC5", agentsLine),
-		"docs/roles-link.md":     fmt.Sprintf("%d:AC9", rolesLine),
 		"arch.md":                fmt.Sprintf("%d:AC70,%d:AC71", archLine, archLine),
 		"history.md":             "3:AT3",
-		"docs/guide.md":          "3:IE11",
 		"AGENTS.md":              fmt.Sprintf("%d:AC5", agentsLine),
 		"govna/build-release.md": fmt.Sprintf("%d:AT7", lineOf(t, path("govna/build-release.md"), "Ship AT7 notes")),
 		"govna/roles.md":         fmt.Sprintf("%d:AC9", rolesLine),
+		"govna/roles-link.md":    fmt.Sprintf("%d:AC9", rolesLine),
 	}
 	got := findingsByPath(report.IdentifierFindings)
 	if fmt.Sprint(got) != fmt.Sprint(want) {
@@ -357,7 +362,7 @@ func TestAuditListsBareIdentifiersInAdoptionAC(t *testing.T) {
 	if !strings.Contains(body, fmt.Sprintf("Govna also found %d files with bare identifiers to fix.\n", len(want))) || !strings.Contains(body, "### Bare identifiers to fix\n") {
 		t.Fatalf("adoption AC omits the identifier count or group:\n%s", body)
 	}
-	conditional := map[string]bool{"govna/roles.md": true, "docs/roles-link.md": true}
+	conditional := map[string]bool{"govna/roles.md": true, "govna/roles-link.md": true}
 	if history := classes["history.md"]; history.Classification == "target-has-no-canon" || history.Classification == "ambiguity" {
 		conditional["history.md"] = true
 	}
@@ -385,11 +390,11 @@ func TestAuditSkipsRetiredLinkForIdentifiers(t *testing.T) {
 	if err := os.Symlink("AGENTS.md", filepath.Join(root, "CLAUDE.md")); err != nil {
 		t.Fatal(err)
 	}
-	writeAuditFile(t, filepath.Join(root, "notes.md"), []byte("Shipped in AT3.\n"))
+	writeAuditFile(t, filepath.Join(root, "govna", "notes.md"), []byte("Shipped in AT3.\n"))
 	report, _ := runAuditFixture(t, root, []string{"--json"})
 	got := findingsByPath(report.IdentifierFindings)
-	if _, linked := got["CLAUDE.md"]; linked || got["notes.md"] != "1:AT3" {
-		t.Fatalf("identifier_findings=%v, want only notes.md", got)
+	if _, linked := got["CLAUDE.md"]; linked || got["govna/notes.md"] != "1:AT3" {
+		t.Fatalf("identifier_findings=%v, want only govna/notes.md", got)
 	}
 }
 

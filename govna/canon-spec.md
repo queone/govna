@@ -318,7 +318,8 @@ Pass `--json` to print a machine-readable report (`header`: invocation, canon SH
 
 ## Markdown Identifier Check
 
-- Scan every tracked or unignored Markdown file for bare AC, AT, and IE identifiers.
+- Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.
+- Count a symbolic link by its own path.
 - Run the scan before the first formatting step of every full and scoped build.
 - Run the scan at the start of every prep, before any write or dry-run report.
 - Fail on each identifier that `AGENTS.md` `### AC Mechanics` and `### Child Repositories` do not allow.
@@ -484,7 +485,8 @@ Pass `--json` to print a machine-readable report (`header`: invocation, canon SH
 
 ### Markdown Identifier Check
 
-- Scan every tracked or unignored Markdown file for bare AC, AT, and IE identifiers.
+- Scan only root `AGENTS.md`, `README.md`, `arch.md`, `plan.md`, `history.md`, `CHANGELOG.md`, and every Markdown file under `govna/` for bare AC, AT, and IE identifiers.
+- Count a symbolic link by its own path.
 - Run the scan at the start of every prep, before any write or dry-run report.
 - Stop prep on each identifier that `AGENTS.md` `### AC Mechanics` does not allow.
 - Treat an uppercase AC, AT, or IE followed by digits, with no adjacent letter, digit, or underscore, as bare.

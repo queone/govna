@@ -68,7 +68,7 @@ func referenceFindings(access *repository.Access, report Report) ([]ReferenceFin
 	}
 	var findings []ReferenceFinding
 	for _, rel := range paths {
-		if retired[rel] || rel == "history.md" || identifierSkipped(rel, false) {
+		if retired[rel] || rel == "history.md" || markdownExempt(rel, false) {
 			continue
 		}
 		full := filepath.Join(access.Dir(), filepath.FromSlash(rel))

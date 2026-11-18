@@ -112,7 +112,6 @@ Note: an agent cannot see the terminal width, so a terminal narrower than 120 co
 - Check the gate set silently before any primary-repository file change: AC status, explicit authorization, scoped edits, tests in the same pass, and no agent-run commits outside `### Agent Release`.
 - Route ancillary-repository and path changes through `### Primary And Ancillary Scope`.
 - Treat changed-content integrity, AC-template structure, Plain Language, Instruction Style, and applicable Pre-Implementation Verification as the tests-in-the-same-pass gate when a change pass creates or edits only an active AC document.
-- Check each changed AC section for stale or repeated wording in the same pass.
 - Resolve instruction conflicts in this order: user instruction within authorized scope, then AGENTS.md, then referenced govna docs, then model defaults.
 - Follow an explicit Director workflow override without requiring contract-amendment language.
 - Treat a Director request that differs from the recommendation as the decision.
@@ -277,6 +276,7 @@ Note: this rule does not prohibit batching independent commands.
 - Pause immediately when a Director-owned decision appears.
 - Prevent automatic advancement from authorizing Implement, Ratify, Package, release preparation, publication, delegation, or commits.
 - Keep Draft outside the AC phases.
+- Remove each AC passage that fails the sizing rules in `govna/ac-template.md` before completing Draft or a Refine that changed the AC.
 - Enter Audit automatically when Draft completes the active AC with populated scope and acceptance tests.
 - Keep an unscoped stub paused until the Director scopes it.
 - Start each governed AC cycle in Audit when the AC is ready for adversarial review.
@@ -579,7 +579,9 @@ Note: the Director triggers those actions; Ratify names what is pending.
 - Reserve bare Class and Round identifiers for CHANGELOG rows, commit messages, and `Historical:` comments.
 - Reserve bare Part and IE identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, and `Historical:` comments.
 - Allow bare IE identifiers anywhere in `plan.md`.
-- Treat every other Markdown documentation file as out of bounds for bare AC, AT, Class, Part, Round, and IE identifiers.
+- Treat root `AGENTS.md`, `README.md`, `plan.md`, `CHANGELOG.md`, and every Markdown file under `govna/` as governed Markdown.
+- Treat every other bare AC, AT, Class, Part, Round, or IE identifier in governed Markdown as out of bounds.
+- Apply no bare-identifier rule to any other Markdown file.
 - Use the `Historical:` prefix only for a relevant shipped-AC comment.
 - Delete an irrelevant shipped-AC reference.
 - Send independent shell calls in a single message so they run in parallel.

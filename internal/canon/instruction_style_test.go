@@ -583,7 +583,9 @@ func TestPartAndIdeaIdentifiersAllowedInActiveACDocuments(t *testing.T) {
 	const rules = "- Reserve bare Class and Round identifiers for CHANGELOG rows, commit messages, and `Historical:` comments.\n" +
 		"- Reserve bare Part and IE identifiers for CHANGELOG rows, commit messages, active `govna/ac<N>-<slug>.md` documents, and `Historical:` comments.\n" +
 		"- Allow bare IE identifiers anywhere in `plan.md`.\n" +
-		"- Treat every other Markdown documentation file as out of bounds for bare AC, AT, Class, Part, Round, and IE identifiers.\n"
+		"- Treat root `AGENTS.md`, `README.md`, %s`plan.md`, %s`CHANGELOG.md`, and every Markdown file under `govna/` as governed Markdown.\n" +
+		"- Treat every other bare AC, AT, Class, Part, Round, or IE identifier in governed Markdown as out of bounds.\n" +
+		"- Apply no bare-identifier rule to any other Markdown file.\n"
 	contracts := map[string]string{"AGENTS.md": readSourceForLanguageTest(t, "AGENTS.md")}
 	for name, config := range map[string]Config{
 		"rendered CODE AGENTS.md": {Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
@@ -596,11 +598,43 @@ func TestPartAndIdeaIdentifiersAllowedInActiveACDocuments(t *testing.T) {
 		contracts[name] = fileText(t, files, "AGENTS.md")
 	}
 	for name, content := range contracts {
-		if strings.Count(content, rules) != 1 {
-			t.Errorf("%s requires one occurrence of the identifier rules:\n%s", name, rules)
+		// DOC has no arch.md or history.md, so its rule names neither.
+		want := fmt.Sprintf(rules, "`arch.md`, ", "`history.md`, ")
+		if name == "rendered DOC AGENTS.md" {
+			want = fmt.Sprintf(rules, "", "")
+		}
+		if strings.Count(content, want) != 1 {
+			t.Errorf("%s requires one occurrence of the identifier rules:\n%s", name, want)
 		}
 		if strings.Contains(content, "Reserve bare Class, Part, and Round identifiers") {
 			t.Errorf("%s keeps the rule that bars Part identifiers from active AC documents", name)
+		}
+	}
+}
+
+// TestACCompletionRequiresSizingPass checks that every contract gates Draft and
+// changed-Refine completion on the AC template's sizing rules, and that the
+// retired same-pass wording check is gone.
+func TestACCompletionRequiresSizingPass(t *testing.T) {
+	const gate = "- Keep Draft outside the AC phases.\n" +
+		"- Remove each AC passage that fails the sizing rules in `govna/ac-template.md` before completing Draft or a Refine that changed the AC.\n"
+	contracts := map[string]string{"AGENTS.md": readSourceForLanguageTest(t, "AGENTS.md")}
+	for name, config := range map[string]Config{
+		"rendered CODE AGENTS.md": {Flavor: Code, RepoName: "widget", Stack: "Go", ModulePath: "example.com/widget"},
+		"rendered DOC AGENTS.md":  {Flavor: Doc, RepoName: "handbook"},
+	} {
+		files, err := Render(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contracts[name] = fileText(t, files, "AGENTS.md")
+	}
+	for name, content := range contracts {
+		if strings.Count(content, gate) != 1 {
+			t.Errorf("%s requires one occurrence of the completion gate:\n%s", name, gate)
+		}
+		if strings.Contains(content, "stale or repeated wording") {
+			t.Errorf("%s keeps the retired same-pass wording check", name)
 		}
 	}
 }

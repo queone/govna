@@ -3100,8 +3100,8 @@ func TestContractScenariosStayInThisRepository(t *testing.T) {
 			}
 		}
 	}
-	if rows != 8 {
-		t.Errorf("the scenario set holds %d rows, want 8", rows)
+	if rows != 9 {
+		t.Errorf("the scenario set holds %d rows, want 9", rows)
 	}
 	for _, profile := range dedupProfiles() {
 		files, err := Render(profile.config)

@@ -18,3 +18,4 @@ Ideas captured for future reference. [`govna/development-cycle.md`](govna/develo
 
 - IE19: Explore distribution child repositories, such as a Homebrew tap, a GitHub Action, or a docs site, which use the parent's release and so release after it with no pin; most have no govna stack and so no canonical `build.sh`; research in `brainstorm.md`.
 
+- IE28: Explore a DOC build script whose Markdown identifier scan leaves out root `arch.md` and `history.md`, because DOC governs neither file.
